@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "@/contexts/AppContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Employee from "./pages/Employee";
+import ArchivedCards from "./pages/ArchivedCards";
 import CalendarPage from "./pages/CalendarPage";
 import ClientCalendar from "./pages/ClientCalendar";
 import Vault from "./pages/Vault";
@@ -25,6 +26,7 @@ const AppRoutes = () => (
     <Route path="/login" element={<Login />} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/funcionario/:id" element={<ProtectedRoute><Employee /></ProtectedRoute>} />
+    <Route path="/funcionario/:id/arquivados" element={<ProtectedRoute><ArchivedCards /></ProtectedRoute>} />
     <Route path="/calendario" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
     <Route path="/calendario/:clientId" element={<ProtectedRoute><ClientCalendar /></ProtectedRoute>} />
     <Route path="/cofre" element={<ProtectedRoute><Vault /></ProtectedRoute>} />

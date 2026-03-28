@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "@/contexts/AppContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Employee from "./pages/Employee";
+import ArchivedCards from "./pages/ArchivedCards";
 import CalendarPage from "./pages/CalendarPage";
 import ClientCalendar from "./pages/ClientCalendar";
 import Vault from "./pages/Vault";

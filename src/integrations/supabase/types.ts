@@ -14,7 +14,229 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      calendar_clients: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      calendar_tasks: {
+        Row: {
+          calendar_client_id: string
+          client_name: string
+          content_type: string
+          created_at: string
+          date: string
+          description: string
+          employee_id: string
+          id: string
+          image_url: string | null
+          status: string
+          time: string
+          updated_at: string
+        }
+        Insert: {
+          calendar_client_id: string
+          client_name: string
+          content_type?: string
+          created_at?: string
+          date: string
+          description?: string
+          employee_id: string
+          id?: string
+          image_url?: string | null
+          status?: string
+          time?: string
+          updated_at?: string
+        }
+        Update: {
+          calendar_client_id?: string
+          client_name?: string
+          content_type?: string
+          created_at?: string
+          date?: string
+          description?: string
+          employee_id?: string
+          id?: string
+          image_url?: string | null
+          status?: string
+          time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_tasks_calendar_client_id_fkey"
+            columns: ["calendar_client_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_tasks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credentials: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          label: string
+          password: string
+          updated_at: string
+          url: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          label: string
+          password: string
+          updated_at?: string
+          url?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          label?: string
+          password?: string
+          updated_at?: string
+          url?: string | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credentials_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employees: {
+        Row: {
+          avatar: string
+          created_at: string
+          id: string
+          name: string
+          photo_url: string | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          avatar?: string
+          created_at?: string
+          id?: string
+          name: string
+          photo_url?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          avatar?: string
+          created_at?: string
+          id?: string
+          name?: string
+          photo_url?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kanban_cards: {
+        Row: {
+          archived_at: string | null
+          client_name: string
+          column: string
+          created_at: string
+          description: string
+          employee_id: string
+          id: string
+          images: string[] | null
+          notes: string | null
+          time_spent: number
+          timer_running: boolean
+          timer_start: number | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          client_name: string
+          column?: string
+          created_at?: string
+          description?: string
+          employee_id: string
+          id?: string
+          images?: string[] | null
+          notes?: string | null
+          time_spent?: number
+          timer_running?: boolean
+          timer_start?: number | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          client_name?: string
+          column?: string
+          created_at?: string
+          description?: string
+          employee_id?: string
+          id?: string
+          images?: string[] | null
+          notes?: string | null
+          time_spent?: number
+          timer_running?: boolean
+          timer_start?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_cards_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

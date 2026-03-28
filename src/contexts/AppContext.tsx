@@ -6,7 +6,7 @@ export interface KanbanCard {
   description: string;
   imageUrl?: string;
   column: 'todo' | 'production' | 'correction' | 'done';
-  timeSpent: number; // seconds
+  timeSpent: number;
   timerRunning: boolean;
   timerStart?: number;
   employeeId: string;
@@ -14,7 +14,7 @@ export interface KanbanCard {
 
 export interface CalendarTask {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   clientName: string;
   contentType: string;
   description: string;
@@ -22,6 +22,7 @@ export interface CalendarTask {
   imageUrl?: string;
   status: string;
   employeeId: string;
+  calendarClientId: string;
 }
 
 export interface Credential {
@@ -38,6 +39,12 @@ export interface Employee {
   name: string;
   role: string;
   avatar: string;
+  photoUrl?: string;
+}
+
+export interface CalendarClient {
+  id: string;
+  name: string;
 }
 
 interface AppState {
@@ -46,8 +53,11 @@ interface AppState {
   kanbanCards: KanbanCard[];
   calendarTasks: CalendarTask[];
   credentials: Credential[];
+  calendarClients: CalendarClient[];
   login: (password: string) => boolean;
   logout: () => void;
+  addEmployee: (emp: Omit<Employee, 'id'>) => void;
+  updateEmployee: (id: string, updates: Partial<Employee>) => void;
   addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>) => void;
   deleteKanbanCard: (id: string) => void;
@@ -59,6 +69,8 @@ interface AppState {
   addCredential: (cred: Omit<Credential, 'id'>) => void;
   updateCredential: (id: string, updates: Partial<Credential>) => void;
   deleteCredential: (id: string) => void;
+  addCalendarClient: (name: string) => void;
+  deleteCalendarClient: (id: string) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -74,6 +86,10 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
+function slugify(text: string) {
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 function loadState<T>(key: string, fallback: T): T {
   try {
     const stored = localStorage.getItem(key);
@@ -83,19 +99,25 @@ function loadState<T>(key: string, fallback: T): T {
   }
 }
 
+export { slugify };
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => loadState('auth', false));
+  const [employees, setEmployees] = useState<Employee[]>(() => loadState('employees', DEFAULT_EMPLOYEES));
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>(() => loadState('kanbanCards', []));
   const [calendarTasks, setCalendarTasks] = useState<CalendarTask[]>(() => loadState('calendarTasks', []));
   const [credentials, setCredentials] = useState<Credential[]>(() => loadState('credentials', []));
+  const [calendarClients, setCalendarClients] = useState<CalendarClient[]>(() => loadState('calendarClients', []));
 
   useEffect(() => { localStorage.setItem('auth', JSON.stringify(isAuthenticated)); }, [isAuthenticated]);
+  useEffect(() => { localStorage.setItem('employees', JSON.stringify(employees)); }, [employees]);
   useEffect(() => { localStorage.setItem('kanbanCards', JSON.stringify(kanbanCards)); }, [kanbanCards]);
   useEffect(() => { localStorage.setItem('calendarTasks', JSON.stringify(calendarTasks)); }, [calendarTasks]);
   useEffect(() => { localStorage.setItem('credentials', JSON.stringify(credentials)); }, [credentials]);
+  useEffect(() => { localStorage.setItem('calendarClients', JSON.stringify(calendarClients)); }, [calendarClients]);
 
   const login = (password: string) => {
-    if (password === 'agencia2024') {
+    if (password === 'Mudar@123') {
       setIsAuthenticated(true);
       return true;
     }
@@ -103,6 +125,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => setIsAuthenticated(false);
+
+  const addEmployee = (emp: Omit<Employee, 'id'>) => {
+    setEmployees(prev => [...prev, { ...emp, id: generateId() }]);
+  };
+
+  const updateEmployee = (id: string, updates: Partial<Employee>) => {
+    setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+  };
 
   const addKanbanCard = (card: Omit<KanbanCard, 'id'>) => {
     setKanbanCards(prev => [...prev, { ...card, id: generateId() }]);
@@ -120,7 +150,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setKanbanCards(prev => prev.map(c => {
       if (c.id !== id) return c;
       const now = Date.now();
-      
       if (column === 'production' && c.column !== 'production') {
         return { ...c, column, timerRunning: true, timerStart: now };
       }
@@ -170,14 +199,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCredentials(prev => prev.filter(c => c.id !== id));
   };
 
+  const addCalendarClient = (name: string) => {
+    setCalendarClients(prev => [...prev, { id: slugify(name) || generateId(), name }]);
+  };
+
+  const deleteCalendarClient = (id: string) => {
+    setCalendarClients(prev => prev.filter(c => c.id !== id));
+    setCalendarTasks(prev => prev.filter(t => t.calendarClientId !== id));
+  };
+
   return (
     <AppContext.Provider value={{
-      isAuthenticated, employees: DEFAULT_EMPLOYEES,
-      kanbanCards, calendarTasks, credentials,
+      isAuthenticated, employees,
+      kanbanCards, calendarTasks, credentials, calendarClients,
       login, logout,
+      addEmployee, updateEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
       addCredential, updateCredential, deleteCredential,
+      addCalendarClient, deleteCalendarClient,
     }}>
       {children}
     </AppContext.Provider>

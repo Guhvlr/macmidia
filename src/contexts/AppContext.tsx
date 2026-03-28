@@ -62,6 +62,7 @@ interface AppState {
   logout: () => void;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  deleteEmployee: (id: string, deleteData?: boolean) => void;
   addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>) => void;
   deleteKanbanCard: (id: string) => void;
@@ -142,6 +143,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateEmployee = (id: string, updates: Partial<Employee>) => {
     setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+  };
+
+  const deleteEmployee = (id: string, deleteData = true) => {
+    setEmployees(prev => prev.filter(e => e.id !== id));
+    if (deleteData) {
+      setKanbanCards(prev => prev.filter(c => c.employeeId !== id));
+      setCalendarTasks(prev => prev.filter(t => t.employeeId !== id));
+      setCredentials(prev => prev.filter(c => c.employeeId !== id));
+    }
   };
 
   const addKanbanCard = (card: Omit<KanbanCard, 'id'>) => {
@@ -227,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       kanbanCards, calendarTasks, credentials, calendarClients,
       dashboardBanner, dashboardLogo,
       login, logout,
-      addEmployee, updateEmployee,
+      addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
       addCredential, updateCredential, deleteCredential,

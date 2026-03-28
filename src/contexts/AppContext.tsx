@@ -62,6 +62,7 @@ interface AppState {
   logout: () => void;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  deleteEmployee: (id: string, deleteData?: boolean) => void;
   addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>) => void;
   deleteKanbanCard: (id: string) => void;

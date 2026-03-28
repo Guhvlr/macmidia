@@ -4,6 +4,8 @@ export interface KanbanCard {
   id: string;
   clientName: string;
   description: string;
+  notes?: string;
+  images?: string[];
   imageUrl?: string;
   column: 'todo' | 'production' | 'correction' | 'done';
   timeSpent: number;
@@ -54,6 +56,8 @@ interface AppState {
   calendarTasks: CalendarTask[];
   credentials: Credential[];
   calendarClients: CalendarClient[];
+  dashboardBanner?: string;
+  dashboardLogo?: string;
   login: (password: string) => boolean;
   logout: () => void;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
@@ -71,6 +75,8 @@ interface AppState {
   deleteCredential: (id: string) => void;
   addCalendarClient: (name: string) => void;
   deleteCalendarClient: (id: string) => void;
+  setDashboardBanner: (url: string) => void;
+  setDashboardLogo: (url: string) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -108,8 +114,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [calendarTasks, setCalendarTasks] = useState<CalendarTask[]>(() => loadState('calendarTasks', []));
   const [credentials, setCredentials] = useState<Credential[]>(() => loadState('credentials', []));
   const [calendarClients, setCalendarClients] = useState<CalendarClient[]>(() => loadState('calendarClients', []));
+  const [dashboardBanner, setDashboardBannerState] = useState<string | undefined>(() => loadState('dashboardBanner', undefined));
+  const [dashboardLogo, setDashboardLogoState] = useState<string | undefined>(() => loadState('dashboardLogo', undefined));
 
   useEffect(() => { localStorage.setItem('auth', JSON.stringify(isAuthenticated)); }, [isAuthenticated]);
+  useEffect(() => { if (dashboardBanner) localStorage.setItem('dashboardBanner', JSON.stringify(dashboardBanner)); }, [dashboardBanner]);
+  useEffect(() => { if (dashboardLogo) localStorage.setItem('dashboardLogo', JSON.stringify(dashboardLogo)); }, [dashboardLogo]);
   useEffect(() => { localStorage.setItem('employees', JSON.stringify(employees)); }, [employees]);
   useEffect(() => { localStorage.setItem('kanbanCards', JSON.stringify(kanbanCards)); }, [kanbanCards]);
   useEffect(() => { localStorage.setItem('calendarTasks', JSON.stringify(calendarTasks)); }, [calendarTasks]);
@@ -208,16 +218,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCalendarTasks(prev => prev.filter(t => t.calendarClientId !== id));
   };
 
+  const setDashboardBanner = (url: string) => setDashboardBannerState(url);
+  const setDashboardLogo = (url: string) => setDashboardLogoState(url);
+
   return (
     <AppContext.Provider value={{
       isAuthenticated, employees,
       kanbanCards, calendarTasks, credentials, calendarClients,
+      dashboardBanner, dashboardLogo,
       login, logout,
       addEmployee, updateEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
       addCredential, updateCredential, deleteCredential,
       addCalendarClient, deleteCalendarClient,
+      setDashboardBanner, setDashboardLogo,
     }}>
       {children}
     </AppContext.Provider>

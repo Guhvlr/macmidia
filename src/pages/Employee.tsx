@@ -4,7 +4,7 @@ import { useApp } from '@/contexts/AppContext';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { ArrowLeft, Camera, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const columns = [

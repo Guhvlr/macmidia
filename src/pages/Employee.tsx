@@ -63,7 +63,10 @@ const Employee = () => {
             <p className="text-sm text-muted-foreground">{employee.role}</p>
           </div>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate(`/funcionario/${employee.id}/arquivados`)}>
+            <Archive className="w-4 h-4 mr-1" /> Arquivados
+          </Button>
           <AddCardDialog employeeId={employee.id} />
         </div>
       </header>

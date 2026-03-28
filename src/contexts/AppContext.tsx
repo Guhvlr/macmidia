@@ -228,7 +228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       kanbanCards, calendarTasks, credentials, calendarClients,
       dashboardBanner, dashboardLogo,
       login, logout,
-      addEmployee, updateEmployee,
+      addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
       addCredential, updateCredential, deleteCredential,

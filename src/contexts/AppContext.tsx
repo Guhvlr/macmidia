@@ -56,6 +56,8 @@ interface AppState {
   calendarTasks: CalendarTask[];
   credentials: Credential[];
   calendarClients: CalendarClient[];
+  dashboardBanner?: string;
+  dashboardLogo?: string;
   login: (password: string) => boolean;
   logout: () => void;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
@@ -73,6 +75,8 @@ interface AppState {
   deleteCredential: (id: string) => void;
   addCalendarClient: (name: string) => void;
   deleteCalendarClient: (id: string) => void;
+  setDashboardBanner: (url: string) => void;
+  setDashboardLogo: (url: string) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);

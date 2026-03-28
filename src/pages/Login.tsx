@@ -44,11 +44,11 @@ const Login = () => {
             />
           </div>
           {error && <p className="text-destructive text-sm text-center">Senha incorreta</p>}
-          <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button type="submit" className="w-full">
             Entrar
           </Button>
         </form>
-        <p className="text-xs text-muted-foreground text-center">Senha padrão: agencia2024</p>
+        <p className="text-xs text-muted-foreground text-center">Senha padrão: Mudar@123</p>
       </div>
     </div>
   );

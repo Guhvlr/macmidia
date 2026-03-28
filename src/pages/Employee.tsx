@@ -50,6 +50,14 @@ const Employee = () => {
             </div>
             <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
           </label>
+          {employee.photoUrl && (
+            <button
+              onClick={() => updateEmployee(employee.id, { photoUrl: undefined })}
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Remover foto
+            </button>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-foreground">{employee.name}</h1>
             <p className="text-sm text-muted-foreground">{employee.role}</p>

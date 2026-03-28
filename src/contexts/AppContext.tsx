@@ -4,6 +4,8 @@ export interface KanbanCard {
   id: string;
   clientName: string;
   description: string;
+  notes?: string;
+  images?: string[];
   imageUrl?: string;
   column: 'todo' | 'production' | 'correction' | 'done';
   timeSpent: number;

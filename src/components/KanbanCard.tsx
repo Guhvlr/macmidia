@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { KanbanCard as KanbanCardType, useApp } from '@/contexts/AppContext';
 import Timer from './Timer';
-import { Trash2, Image } from 'lucide-react';
+import CardDetailDialog from './CardDetailDialog';
+import { Trash2, ImageIcon } from 'lucide-react';
 
 interface Props {
   card: KanbanCardType;
@@ -8,6 +10,10 @@ interface Props {
 
 const KanbanCard = ({ card }: Props) => {
   const { updateKanbanCard, deleteKanbanCard } = useApp();
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
+  const thumbImage = images[0];
 
   const toggleTimer = () => {
     const now = Date.now();
@@ -20,28 +26,40 @@ const KanbanCard = ({ card }: Props) => {
   };
 
   return (
-    <div
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('cardId', card.id)}
-      className="glass-card p-3 space-y-2 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors"
-    >
-      {card.imageUrl && (
-        <img src={card.imageUrl} alt="" className="w-full h-24 object-cover rounded-lg" />
-      )}
-      <h4 className="font-medium text-sm text-card-foreground">{card.clientName}</h4>
-      <p className="text-xs text-muted-foreground line-clamp-2">{card.description}</p>
-      <div className="flex items-center justify-between">
-        <Timer
-          timeSpent={card.timeSpent}
-          timerRunning={card.timerRunning}
-          timerStart={card.timerStart}
-          onToggle={toggleTimer}
-        />
-        <button onClick={() => deleteKanbanCard(card.id)} className="p-1 hover:text-destructive transition-colors">
-          <Trash2 className="w-3 h-3" />
-        </button>
+    <>
+      <div
+        draggable
+        onDragStart={(e) => e.dataTransfer.setData('cardId', card.id)}
+        onClick={() => setDetailOpen(true)}
+        className="glass-card p-3 space-y-2 cursor-pointer hover:border-primary/30 transition-colors active:cursor-grabbing"
+      >
+        {thumbImage && (
+          <img src={thumbImage} alt="" className="w-full h-24 object-cover rounded-lg" />
+        )}
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-sm text-card-foreground flex-1">{card.clientName}</h4>
+          {images.length > 1 && (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <ImageIcon className="w-3 h-3" /> {images.length}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground line-clamp-2">{card.description}</p>
+        <div className="flex items-center justify-between" onClick={e => e.stopPropagation()}>
+          <Timer
+            timeSpent={card.timeSpent}
+            timerRunning={card.timerRunning}
+            timerStart={card.timerStart}
+            onToggle={toggleTimer}
+          />
+          <button onClick={() => deleteKanbanCard(card.id)} className="p-1 hover:text-destructive transition-colors">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
-    </div>
+
+      <CardDetailDialog card={card} open={detailOpen} onOpenChange={setDetailOpen} />
+    </>
   );
 };
 

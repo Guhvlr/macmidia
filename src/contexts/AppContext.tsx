@@ -218,16 +218,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCalendarTasks(prev => prev.filter(t => t.calendarClientId !== id));
   };
 
+  const setDashboardBanner = (url: string) => setDashboardBannerState(url);
+  const setDashboardLogo = (url: string) => setDashboardLogoState(url);
+
   return (
     <AppContext.Provider value={{
       isAuthenticated, employees,
       kanbanCards, calendarTasks, credentials, calendarClients,
+      dashboardBanner, dashboardLogo,
       login, logout,
       addEmployee, updateEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
       addCredential, updateCredential, deleteCredential,
       addCalendarClient, deleteCalendarClient,
+      setDashboardBanner, setDashboardLogo,
     }}>
       {children}
     </AppContext.Provider>

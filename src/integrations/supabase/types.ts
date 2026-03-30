@@ -219,6 +219,36 @@ export type Database = {
           },
         ]
       }
+      kanban_columns: {
+        Row: {
+          color: string
+          column_key: string
+          created_at: string
+          employee_id: string
+          id: string
+          position: number
+          title: string
+        }
+        Insert: {
+          color?: string
+          column_key: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          position?: number
+          title: string
+        }
+        Update: {
+          color?: string
+          column_key?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          position?: number
+          title?: string
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           key: string

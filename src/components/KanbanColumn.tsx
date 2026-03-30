@@ -25,7 +25,7 @@ const KanbanColumn = ({ id, title, color, children, count, onEdit, onDelete }: P
     <div
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="flex flex-col min-h-[300px] flex-1 min-w-[250px]"
+      className="flex flex-col min-h-[300px] min-w-[280px] w-[300px] flex-shrink-0"
     >
       <div className="flex items-center gap-2 mb-3 group">
         <div className={`w-2 h-2 rounded-full ${color}`} />

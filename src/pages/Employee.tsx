@@ -131,7 +131,7 @@ const Employee = () => {
         />
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin" style={{ scrollbarColor: 'hsl(var(--muted-foreground)) transparent' }}>
         {columns.map(col => (
           <KanbanColumn
             key={col.id}

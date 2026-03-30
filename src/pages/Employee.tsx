@@ -4,7 +4,7 @@ import { useApp } from '@/contexts/AppContext';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
-import { ArrowLeft, Camera, Archive } from 'lucide-react';
+import { ArrowLeft, Camera, Archive, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const columns = [
@@ -17,20 +17,35 @@ const columns = [
 const Employee = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { employees, kanbanCards, updateEmployee } = useApp();
+  const { employees, kanbanCards, updateEmployee, loading } = useApp();
 
   const employee = employees.find(e => e.id === id);
-  if (!employee) return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Funcionário não encontrado</div>;
-
   const cards = kanbanCards.filter(c => c.employeeId === id);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !employee) return;
     const reader = new FileReader();
     reader.onload = () => updateEmployee(employee.id, { photoUrl: reader.result as string });
     reader.readAsDataURL(file);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!employee) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Funcionário não encontrado</p>
+        <Button variant="outline" onClick={() => navigate('/')}>Voltar ao início</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

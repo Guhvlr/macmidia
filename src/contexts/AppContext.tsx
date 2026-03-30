@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface KanbanCard {
   id: string;
@@ -60,6 +61,7 @@ interface AppState {
   calendarClients: CalendarClient[];
   dashboardBanner?: string;
   dashboardLogo?: string;
+  loading: boolean;
   login: (password: string) => boolean;
   logout: () => void;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
@@ -88,7 +90,6 @@ export function slugify(text: string) {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
-// Helper to map DB row to app model
 function mapEmployee(row: any): Employee {
   return { id: row.id, name: row.name, role: row.role, avatar: row.avatar, photoUrl: row.photo_url || undefined };
 }
@@ -101,8 +102,8 @@ function mapKanbanCard(row: any): KanbanCard {
     notes: row.notes || undefined,
     images: row.images || [],
     column: row.column as KanbanCard['column'],
-    timeSpent: row.time_spent,
-    timerRunning: row.timer_running,
+    timeSpent: row.time_spent ?? 0,
+    timerRunning: row.timer_running ?? false,
     timerStart: row.timer_start || undefined,
     employeeId: row.employee_id,
     archivedAt: row.archived_at || undefined,
@@ -112,9 +113,9 @@ function mapKanbanCard(row: any): KanbanCard {
 function mapCalendarTask(row: any): CalendarTask {
   return {
     id: row.id, date: row.date, clientName: row.client_name,
-    contentType: row.content_type, description: row.description,
-    time: row.time, imageUrl: row.image_url || undefined,
-    status: row.status, employeeId: row.employee_id,
+    contentType: row.content_type || '', description: row.description || '',
+    time: row.time || '', imageUrl: row.image_url || undefined,
+    status: row.status || 'pendente', employeeId: row.employee_id,
     calendarClientId: row.calendar_client_id,
   };
 }
@@ -138,42 +139,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [calendarClients, setCalendarClients] = useState<CalendarClient[]>([]);
   const [dashboardBanner, setDashboardBannerState] = useState<string | undefined>();
   const [dashboardLogo, setDashboardLogoState] = useState<string | undefined>();
+  const [loading, setLoading] = useState(true);
 
-  // Fetch all data
   const fetchAll = useCallback(async () => {
-    const [empRes, cardsRes, tasksRes, credsRes, clientsRes, settingsRes] = await Promise.all([
-      supabase.from('employees').select('*'),
-      supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()),
-      supabase.from('calendar_tasks').select('*'),
-      supabase.from('credentials').select('*'),
-      supabase.from('calendar_clients').select('*'),
-      supabase.from('settings').select('*'),
-    ]);
-    if (empRes.data) setEmployees(empRes.data.map(mapEmployee));
-    if (cardsRes.data) setKanbanCards(cardsRes.data.map(mapKanbanCard));
-    if (tasksRes.data) setCalendarTasks(tasksRes.data.map(mapCalendarTask));
-    if (credsRes.data) setCredentials(credsRes.data.map(mapCredential));
-    if (clientsRes.data) setCalendarClients(clientsRes.data.map(mapCalendarClient));
-    if (settingsRes.data) {
-      const banner = settingsRes.data.find((s: any) => s.key === 'dashboardBanner');
-      const logo = settingsRes.data.find((s: any) => s.key === 'dashboardLogo');
-      if (banner) setDashboardBannerState(banner.value || undefined);
-      if (logo) setDashboardLogoState(logo.value || undefined);
+    try {
+      setLoading(true);
+      const [empRes, cardsRes, tasksRes, credsRes, clientsRes, settingsRes] = await Promise.all([
+        supabase.from('employees').select('*'),
+        supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('calendar_tasks').select('*'),
+        supabase.from('credentials').select('*'),
+        supabase.from('calendar_clients').select('*'),
+        supabase.from('settings').select('*'),
+      ]);
+      setEmployees(empRes.data?.map(mapEmployee) || []);
+      setKanbanCards(cardsRes.data?.map(mapKanbanCard) || []);
+      setCalendarTasks(tasksRes.data?.map(mapCalendarTask) || []);
+      setCredentials(credsRes.data?.map(mapCredential) || []);
+      setCalendarClients(clientsRes.data?.map(mapCalendarClient) || []);
+      if (settingsRes.data) {
+        const banner = settingsRes.data.find((s: any) => s.key === 'dashboardBanner');
+        const logo = settingsRes.data.find((s: any) => s.key === 'dashboardLogo');
+        if (banner) setDashboardBannerState(banner.value || undefined);
+        if (logo) setDashboardLogoState(logo.value || undefined);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err);
+      toast.error('Erro ao carregar dados do servidor.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Auto-delete cards archived > 60 days
   const cleanupOldArchived = useCallback(async () => {
-    const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
-    await supabase.from('kanban_cards').delete().not('archived_at', 'is', null).lt('archived_at', cutoff);
+    try {
+      const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      await supabase.from('kanban_cards').delete().not('archived_at', 'is', null).lt('archived_at', cutoff);
+    } catch (err) {
+      console.error('Erro ao limpar arquivados:', err);
+    }
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) { setLoading(false); return; }
     fetchAll();
     cleanupOldArchived();
 
-    // Real-time subscriptions
     const channel = supabase.channel('realtime-all')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
         supabase.from('employees').select('*').then(r => { if (r.data) setEmployees(r.data.map(mapEmployee)); });
@@ -215,149 +226,264 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logout = () => setIsAuthenticated(false);
 
   const addEmployee = async (emp: Omit<Employee, 'id'>) => {
-    await supabase.from('employees').insert({ name: emp.name, role: emp.role, avatar: emp.avatar, photo_url: emp.photoUrl || null });
+    try {
+      const { error } = await supabase.from('employees').insert({ name: emp.name, role: emp.role, avatar: emp.avatar, photo_url: emp.photoUrl || null });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao adicionar funcionário:', err);
+      toast.error('Erro ao adicionar funcionário.');
+    }
   };
 
   const updateEmployee = async (id: string, updates: Partial<Employee>) => {
-    const dbUpdates: any = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.role !== undefined) dbUpdates.role = updates.role;
-    if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
-    if ('photoUrl' in updates) dbUpdates.photo_url = updates.photoUrl || null;
-    await supabase.from('employees').update(dbUpdates).eq('id', id);
+    try {
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.role !== undefined) dbUpdates.role = updates.role;
+      if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
+      if ('photoUrl' in updates) dbUpdates.photo_url = updates.photoUrl || null;
+      const { error } = await supabase.from('employees').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao atualizar funcionário:', err);
+      toast.error('Erro ao atualizar funcionário.');
+    }
   };
 
   const deleteEmployee = async (id: string) => {
-    await supabase.from('employees').delete().eq('id', id);
+    try {
+      // Cascade delete related data
+      await Promise.all([
+        supabase.from('kanban_cards').delete().eq('employee_id', id),
+        supabase.from('calendar_tasks').delete().eq('employee_id', id),
+        supabase.from('credentials').delete().eq('employee_id', id),
+      ]);
+      const { error } = await supabase.from('employees').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao excluir funcionário:', err);
+      toast.error('Erro ao excluir funcionário.');
+    }
   };
 
   const addKanbanCard = async (card: Omit<KanbanCard, 'id'>) => {
-    await supabase.from('kanban_cards').insert({
-      employee_id: card.employeeId, client_name: card.clientName,
-      description: card.description, notes: card.notes || null,
-      images: card.images || [], column: card.column,
-      time_spent: card.timeSpent, timer_running: card.timerRunning,
-      timer_start: card.timerStart || null,
-    });
+    try {
+      const { error } = await supabase.from('kanban_cards').insert({
+        employee_id: card.employeeId, client_name: card.clientName,
+        description: card.description || '', notes: card.notes || null,
+        images: card.images || [], column: card.column,
+        time_spent: card.timeSpent ?? 0, timer_running: card.timerRunning ?? false,
+        timer_start: card.timerStart || null,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao adicionar card:', err);
+      toast.error('Erro ao adicionar card.');
+    }
   };
 
   const updateKanbanCard = async (id: string, updates: Partial<KanbanCard>) => {
-    const dbUpdates: any = {};
-    if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if ('notes' in updates) dbUpdates.notes = updates.notes || null;
-    if (updates.images !== undefined) dbUpdates.images = updates.images;
-    if (updates.column !== undefined) dbUpdates.column = updates.column;
-    if (updates.timeSpent !== undefined) dbUpdates.time_spent = updates.timeSpent;
-    if (updates.timerRunning !== undefined) dbUpdates.timer_running = updates.timerRunning;
-    if ('timerStart' in updates) dbUpdates.timer_start = updates.timerStart || null;
-    await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
+    try {
+      const dbUpdates: any = {};
+      if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if ('notes' in updates) dbUpdates.notes = updates.notes || null;
+      if (updates.images !== undefined) dbUpdates.images = updates.images;
+      if (updates.column !== undefined) dbUpdates.column = updates.column;
+      if (updates.timeSpent !== undefined) dbUpdates.time_spent = updates.timeSpent;
+      if (updates.timerRunning !== undefined) dbUpdates.timer_running = updates.timerRunning;
+      if ('timerStart' in updates) dbUpdates.timer_start = updates.timerStart || null;
+      const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao atualizar card:', err);
+      toast.error('Erro ao atualizar card.');
+    }
   };
 
   const deleteKanbanCard = async (id: string) => {
-    await supabase.from('kanban_cards').delete().eq('id', id);
+    try {
+      const { error } = await supabase.from('kanban_cards').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao excluir card:', err);
+      toast.error('Erro ao excluir card.');
+    }
   };
 
   const moveKanbanCard = async (id: string, column: KanbanCard['column']) => {
-    const card = kanbanCards.find(c => c.id === id);
-    if (!card) return;
-    const now = Date.now();
-    const dbUpdates: any = { column };
-    if (column === 'production' && card.column !== 'production') {
-      dbUpdates.timer_running = true;
-      dbUpdates.timer_start = now;
-    } else if (column !== 'production' && card.column === 'production' && card.timerRunning) {
-      const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
-      dbUpdates.timer_running = false;
-      dbUpdates.time_spent = card.timeSpent + elapsed;
-      dbUpdates.timer_start = null;
+    try {
+      const card = kanbanCards.find(c => c.id === id);
+      if (!card) return;
+      const now = Date.now();
+      const dbUpdates: any = { column };
+      if (column === 'production' && card.column !== 'production') {
+        dbUpdates.timer_running = true;
+        dbUpdates.timer_start = now;
+      } else if (column !== 'production' && card.column === 'production' && card.timerRunning) {
+        const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
+        dbUpdates.timer_running = false;
+        dbUpdates.time_spent = card.timeSpent + elapsed;
+        dbUpdates.timer_start = null;
+      }
+      const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao mover card:', err);
+      toast.error('Erro ao mover card.');
     }
-    await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
   };
 
   const addCalendarTask = async (task: Omit<CalendarTask, 'id'>) => {
-    await supabase.from('calendar_tasks').insert({
-      calendar_client_id: task.calendarClientId, employee_id: task.employeeId,
-      date: task.date, client_name: task.clientName, content_type: task.contentType,
-      description: task.description, time: task.time, image_url: task.imageUrl || null,
-      status: task.status,
-    });
+    try {
+      const { error } = await supabase.from('calendar_tasks').insert({
+        calendar_client_id: task.calendarClientId, employee_id: task.employeeId,
+        date: task.date, client_name: task.clientName, content_type: task.contentType || '',
+        description: task.description || '', time: task.time || '', image_url: task.imageUrl || null,
+        status: task.status || 'pendente',
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao adicionar tarefa:', err);
+      toast.error('Erro ao adicionar tarefa.');
+    }
   };
 
   const updateCalendarTask = async (id: string, updates: Partial<CalendarTask>) => {
-    const dbUpdates: any = {};
-    if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
-    if (updates.contentType !== undefined) dbUpdates.content_type = updates.contentType;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.time !== undefined) dbUpdates.time = updates.time;
-    if ('imageUrl' in updates) dbUpdates.image_url = updates.imageUrl || null;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.employeeId !== undefined) dbUpdates.employee_id = updates.employeeId;
-    if (updates.date !== undefined) dbUpdates.date = updates.date;
-    await supabase.from('calendar_tasks').update(dbUpdates).eq('id', id);
+    try {
+      const dbUpdates: any = {};
+      if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
+      if (updates.contentType !== undefined) dbUpdates.content_type = updates.contentType;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.time !== undefined) dbUpdates.time = updates.time;
+      if ('imageUrl' in updates) dbUpdates.image_url = updates.imageUrl || null;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      if (updates.employeeId !== undefined) dbUpdates.employee_id = updates.employeeId;
+      if (updates.date !== undefined) dbUpdates.date = updates.date;
+      const { error } = await supabase.from('calendar_tasks').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao atualizar tarefa:', err);
+      toast.error('Erro ao atualizar tarefa.');
+    }
   };
 
   const deleteCalendarTask = async (id: string) => {
-    await supabase.from('calendar_tasks').delete().eq('id', id);
+    try {
+      const { error } = await supabase.from('calendar_tasks').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao excluir tarefa:', err);
+      toast.error('Erro ao excluir tarefa.');
+    }
   };
 
   const convertTaskToCard = async (taskId: string) => {
-    const task = calendarTasks.find(t => t.id === taskId);
-    if (!task) return;
-    await addKanbanCard({
-      clientName: task.clientName,
-      description: `${task.contentType}: ${task.description}`,
-      column: 'todo',
-      timeSpent: 0,
-      timerRunning: false,
-      employeeId: task.employeeId,
-    });
+    try {
+      const task = calendarTasks.find(t => t.id === taskId);
+      if (!task) return;
+      await addKanbanCard({
+        clientName: task.clientName,
+        description: `${task.contentType}: ${task.description}`,
+        column: 'todo',
+        timeSpent: 0,
+        timerRunning: false,
+        employeeId: task.employeeId,
+      });
+    } catch (err: any) {
+      console.error('Erro ao converter tarefa:', err);
+      toast.error('Erro ao converter tarefa em card.');
+    }
   };
 
   const addCredential = async (cred: Omit<Credential, 'id'>) => {
-    await supabase.from('credentials').insert({
-      employee_id: cred.employeeId, label: cred.label,
-      username: cred.username, password: cred.password, url: cred.url || null,
-    });
+    try {
+      const { error } = await supabase.from('credentials').insert({
+        employee_id: cred.employeeId, label: cred.label,
+        username: cred.username, password: cred.password, url: cred.url || null,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao adicionar credencial:', err);
+      toast.error('Erro ao adicionar credencial.');
+    }
   };
 
   const updateCredential = async (id: string, updates: Partial<Credential>) => {
-    const dbUpdates: any = {};
-    if (updates.label !== undefined) dbUpdates.label = updates.label;
-    if (updates.username !== undefined) dbUpdates.username = updates.username;
-    if (updates.password !== undefined) dbUpdates.password = updates.password;
-    if ('url' in updates) dbUpdates.url = updates.url || null;
-    await supabase.from('credentials').update(dbUpdates).eq('id', id);
+    try {
+      const dbUpdates: any = {};
+      if (updates.label !== undefined) dbUpdates.label = updates.label;
+      if (updates.username !== undefined) dbUpdates.username = updates.username;
+      if (updates.password !== undefined) dbUpdates.password = updates.password;
+      if ('url' in updates) dbUpdates.url = updates.url || null;
+      const { error } = await supabase.from('credentials').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao atualizar credencial:', err);
+      toast.error('Erro ao atualizar credencial.');
+    }
   };
 
   const deleteCredential = async (id: string) => {
-    await supabase.from('credentials').delete().eq('id', id);
+    try {
+      const { error } = await supabase.from('credentials').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao excluir credencial:', err);
+      toast.error('Erro ao excluir credencial.');
+    }
   };
 
   const addCalendarClient = async (name: string) => {
-    const id = slugify(name) || crypto.randomUUID();
-    await supabase.from('calendar_clients').insert({ id, name });
+    try {
+      const id = slugify(name) || crypto.randomUUID();
+      const { error } = await supabase.from('calendar_clients').insert({ id, name });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao adicionar cliente:', err);
+      toast.error('Erro ao adicionar cliente.');
+    }
   };
 
   const deleteCalendarClient = async (id: string) => {
-    await supabase.from('calendar_clients').delete().eq('id', id);
+    try {
+      // Also delete tasks associated with this calendar client
+      await supabase.from('calendar_tasks').delete().eq('calendar_client_id', id);
+      const { error } = await supabase.from('calendar_clients').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao excluir cliente:', err);
+      toast.error('Erro ao excluir cliente.');
+    }
   };
 
   const setDashboardBanner = async (url: string) => {
-    setDashboardBannerState(url);
-    await supabase.from('settings').upsert({ key: 'dashboardBanner', value: url });
+    try {
+      setDashboardBannerState(url);
+      const { error } = await supabase.from('settings').upsert({ key: 'dashboardBanner', value: url });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao salvar banner:', err);
+      toast.error('Erro ao salvar banner.');
+    }
   };
 
   const setDashboardLogo = async (url: string) => {
-    setDashboardLogoState(url);
-    await supabase.from('settings').upsert({ key: 'dashboardLogo', value: url });
+    try {
+      setDashboardLogoState(url);
+      const { error } = await supabase.from('settings').upsert({ key: 'dashboardLogo', value: url });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao salvar logo:', err);
+      toast.error('Erro ao salvar logo.');
+    }
   };
 
   return (
     <AppContext.Provider value={{
       isAuthenticated, employees,
       kanbanCards, calendarTasks, credentials, calendarClients,
-      dashboardBanner, dashboardLogo,
+      dashboardBanner, dashboardLogo, loading,
       login, logout,
       addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,

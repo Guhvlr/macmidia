@@ -121,6 +121,16 @@ const Employee = () => {
         </div>
       </header>
 
+      <div className="relative mb-4 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar cards por nome ou descrição..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="pl-9 bg-secondary border-border"
+        />
+      </div>
+
       <div className="flex gap-4 overflow-x-auto pb-4">
         {columns.map(col => (
           <KanbanColumn

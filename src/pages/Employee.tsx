@@ -32,9 +32,13 @@ const Employee = () => {
   const [editColTitle, setEditColTitle] = useState('');
   const [editColColor, setEditColColor] = useState('');
   const [deleteColTarget, setDeleteColTarget] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const employee = employees.find(e => e.id === id);
-  const cards = kanbanCards.filter(c => c.employeeId === id && !c.archivedAt);
+  const allCards = kanbanCards.filter(c => c.employeeId === id && !c.archivedAt);
+  const cards = searchQuery.trim()
+    ? allCards.filter(c => c.clientName.toLowerCase().includes(searchQuery.toLowerCase()) || c.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allCards;
   const columns = employee ? getColumnsForEmployee(employee.id) : [];
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -31,6 +31,7 @@ const ClientCalendar = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
   const { employees, calendarTasks, calendarClients, addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard, loading } = useApp();
+  const [viewMode, setViewMode] = useState<'calendar' | 'feed'>('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [addDate, setAddDate] = useState<string>('');

@@ -1,20 +1,23 @@
 import { useState, useRef } from 'react';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, KanbanColumnDef } from '@/contexts/AppContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Upload, X } from 'lucide-react';
 
 interface Props {
   employeeId: string;
+  columns?: KanbanColumnDef[];
 }
 
-const AddCardDialog = ({ employeeId }: Props) => {
+const AddCardDialog = ({ employeeId, columns }: Props) => {
   const { addKanbanCard } = useApp();
   const [open, setOpen] = useState(false);
   const [clientName, setClientName] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedColumn, setSelectedColumn] = useState('todo');
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,9 +36,9 @@ const AddCardDialog = ({ employeeId }: Props) => {
     if (!clientName.trim()) return;
     addKanbanCard({
       clientName, description, images,
-      column: 'todo', timeSpent: 0, timerRunning: false, employeeId,
+      column: selectedColumn, timeSpent: 0, timerRunning: false, employeeId,
     });
-    setClientName(''); setDescription(''); setImages([]); setOpen(false);
+    setClientName(''); setDescription(''); setImages([]); setSelectedColumn('todo'); setOpen(false);
   };
 
   return (
@@ -52,7 +55,23 @@ const AddCardDialog = ({ employeeId }: Props) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input placeholder="Nome do cliente" value={clientName} onChange={e => setClientName(e.target.value)} className="bg-secondary border-border" />
           <Textarea placeholder="Descrição" value={description} onChange={e => setDescription(e.target.value)} className="bg-secondary border-border min-h-[80px]" />
-          
+
+          {columns && columns.length > 0 && (
+            <Select value={selectedColumn} onValueChange={setSelectedColumn}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Coluna" /></SelectTrigger>
+              <SelectContent>
+                {columns.map(col => (
+                  <SelectItem key={col.id} value={col.columnKey}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${col.color}`} />
+                      {col.title}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <div
             onClick={() => fileInputRef.current?.click()}
             className="border-2 border-dashed border-border rounded-xl p-3 text-center cursor-pointer hover:border-primary/50 transition-colors"

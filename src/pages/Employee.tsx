@@ -4,23 +4,38 @@ import { useApp } from '@/contexts/AppContext';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
-import { ArrowLeft, Camera, Archive, Loader2 } from 'lucide-react';
+import { ArrowLeft, Camera, Archive, Loader2, Plus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const columns = [
-  { id: 'todo' as const, title: 'A Fazer', color: 'bg-info' },
-  { id: 'production' as const, title: 'Em Produção', color: 'bg-warning' },
-  { id: 'correction' as const, title: 'Correção', color: 'bg-destructive' },
-  { id: 'done' as const, title: 'Finalizado', color: 'bg-success' },
+const COLUMN_COLORS = [
+  { value: 'bg-info', label: 'Azul' },
+  { value: 'bg-warning', label: 'Amarelo' },
+  { value: 'bg-destructive', label: 'Vermelho' },
+  { value: 'bg-success', label: 'Verde' },
+  { value: 'bg-primary', label: 'Primário' },
+  { value: 'bg-muted-foreground', label: 'Cinza' },
 ];
 
 const Employee = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { employees, kanbanCards, updateEmployee, loading } = useApp();
+  const { employees, kanbanCards, updateEmployee, getColumnsForEmployee, addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, loading } = useApp();
+
+  const [showAddCol, setShowAddCol] = useState(false);
+  const [newColTitle, setNewColTitle] = useState('');
+  const [newColColor, setNewColColor] = useState('bg-primary');
+  const [editCol, setEditCol] = useState<string | null>(null);
+  const [editColTitle, setEditColTitle] = useState('');
+  const [editColColor, setEditColColor] = useState('');
+  const [deleteColTarget, setDeleteColTarget] = useState<string | null>(null);
 
   const employee = employees.find(e => e.id === id);
-  const cards = kanbanCards.filter(c => c.employeeId === id);
+  const cards = kanbanCards.filter(c => c.employeeId === id && !c.archivedAt);
+  const columns = employee ? getColumnsForEmployee(employee.id) : [];
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -29,6 +44,22 @@ const Employee = () => {
     reader.onload = () => updateEmployee(employee.id, { photoUrl: reader.result as string });
     reader.readAsDataURL(file);
   };
+
+  const handleAddColumn = () => {
+    if (!newColTitle.trim() || !employee) return;
+    addKanbanColumn(employee.id, newColTitle.trim(), newColColor);
+    setNewColTitle('');
+    setNewColColor('bg-primary');
+    setShowAddCol(false);
+  };
+
+  const handleEditColumn = () => {
+    if (!editCol || !editColTitle.trim()) return;
+    updateKanbanColumn(editCol, { title: editColTitle.trim(), color: editColColor });
+    setEditCol(null);
+  };
+
+  const editingColumn = columns.find(c => c.id === editCol);
 
   if (loading) {
     return (
@@ -66,10 +97,7 @@ const Employee = () => {
             <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
           </label>
           {employee.photoUrl && (
-            <button
-              onClick={() => updateEmployee(employee.id, { photoUrl: undefined })}
-              className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-            >
+            <button onClick={() => updateEmployee(employee.id, { photoUrl: undefined })} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
               Remover foto
             </button>
           )}
@@ -79,22 +107,97 @@ const Employee = () => {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowAddCol(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Coluna
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate(`/funcionario/${employee.id}/arquivados`)}>
             <Archive className="w-4 h-4 mr-1" /> Arquivados
           </Button>
-          <AddCardDialog employeeId={employee.id} />
+          <AddCardDialog employeeId={employee.id} columns={columns} />
         </div>
       </header>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {columns.map(col => (
-          <KanbanColumn key={col.id} id={col.id} title={col.title} color={col.color} count={cards.filter(c => c.column === col.id).length}>
-            {cards.filter(c => c.column === col.id).map(card => (
+          <KanbanColumn
+            key={col.id}
+            id={col.columnKey}
+            title={col.title}
+            color={col.color}
+            count={cards.filter(c => c.column === col.columnKey).length}
+            onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
+            onDelete={!col.id.startsWith('default-') ? () => setDeleteColTarget(col.id) : undefined}
+          >
+            {cards.filter(c => c.column === col.columnKey).map(card => (
               <KanbanCard key={card.id} card={card} />
             ))}
           </KanbanColumn>
         ))}
       </div>
+
+      {/* Add column dialog */}
+      <Dialog open={showAddCol} onOpenChange={setShowAddCol}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader><DialogTitle>Nova Coluna</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Nome da coluna" value={newColTitle} onChange={e => setNewColTitle(e.target.value)} className="bg-secondary border-border" />
+            <Select value={newColColor} onValueChange={setNewColColor}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {COLUMN_COLORS.map(c => (
+                  <SelectItem key={c.value} value={c.value}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${c.value}`} />
+                      {c.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button className="w-full" onClick={handleAddColumn}>Adicionar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit column dialog */}
+      <Dialog open={!!editCol} onOpenChange={(open) => !open && setEditCol(null)}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader><DialogTitle>Editar Coluna</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input value={editColTitle} onChange={e => setEditColTitle(e.target.value)} className="bg-secondary border-border" />
+            <Select value={editColColor} onValueChange={setEditColColor}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {COLUMN_COLORS.map(c => (
+                  <SelectItem key={c.value} value={c.value}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${c.value}`} />
+                      {c.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button className="w-full" onClick={handleEditColumn}>Salvar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete column confirmation */}
+      <AlertDialog open={!!deleteColTarget} onOpenChange={(open) => !open && setDeleteColTarget(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir coluna</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta coluna? Os cards nela não serão apagados, mas ficarão sem coluna.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteColTarget) { deleteKanbanColumn(deleteColTarget); setDeleteColTarget(null); } }}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

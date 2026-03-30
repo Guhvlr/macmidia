@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp, CalendarTask } from '@/contexts/AppContext';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, Upload, X, ZoomIn, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,7 @@ const ClientCalendar = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
   const { employees, calendarTasks, calendarClients, addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard, loading } = useApp();
+  const [viewMode, setViewMode] = useState<'calendar' | 'feed'>('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [addDate, setAddDate] = useState<string>('');
@@ -180,23 +181,55 @@ const ClientCalendar = () => {
       </div>
 
       <div className="p-4 md:p-6">
-        {/* Month navigation */}
+        {/* View toggle + Month navigation */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month - 1))}>
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <h2 className="text-lg font-semibold min-w-[180px] text-center">{monthNames[month]} {year}</h2>
-            <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month + 1))}>
-              <ChevronRight className="w-5 h-5" />
-            </Button>
+            {viewMode === 'calendar' && (
+              <>
+                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month - 1))}>
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <h2 className="text-lg font-semibold min-w-[180px] text-center">{monthNames[month]} {year}</h2>
+                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month + 1))}>
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+              </>
+            )}
+            {viewMode === 'feed' && (
+              <h2 className="text-lg font-semibold">Feed</h2>
+            )}
           </div>
-          <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setCurrentDate(new Date())}>
-            Hoje
-          </Button>
+          <div className="flex items-center gap-2">
+            {viewMode === 'calendar' && (
+              <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())}>
+                Hoje
+              </Button>
+            )}
+            <div className="flex bg-secondary rounded-lg p-0.5 gap-0.5">
+              <Button
+                size="sm"
+                variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+                className="h-7 px-3 text-xs"
+                onClick={() => setViewMode('calendar')}
+              >
+                <CalendarDays className="w-3.5 h-3.5 mr-1" />
+                Mensal
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === 'feed' ? 'default' : 'ghost'}
+                className="h-7 px-3 text-xs"
+                onClick={() => setViewMode('feed')}
+              >
+                <Grid3X3 className="w-3.5 h-3.5 mr-1" />
+                Feed
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Calendar grid */}
+        {/* Calendar grid view */}
+        {viewMode === 'calendar' && (
         <div className="border border-border rounded-xl overflow-hidden">
           {/* Day headers */}
           <div className="grid grid-cols-7 bg-card/60">
@@ -247,7 +280,7 @@ const ClientCalendar = () => {
                       >
                         <div className="flex items-center gap-1">
                           {task.imageUrl && (
-                            <img src={task.imageUrl} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
+                            <img src={task.imageUrl} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" loading="lazy" />
                           )}
                           <span className="text-[10px] font-medium truncate leading-tight">{task.clientName}</span>
                         </div>
@@ -263,6 +296,51 @@ const ClientCalendar = () => {
             })}
           </div>
         </div>
+        )}
+
+        {/* Feed grid view */}
+        {viewMode === 'feed' && (() => {
+          const feedTasks = clientTasks
+            .filter(t => t.imageUrl)
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+          if (feedTasks.length === 0) {
+            return (
+              <div className="glass-card p-12 text-center max-w-lg mx-auto">
+                <Grid3X3 className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">Nenhum conteúdo com imagem ainda.</p>
+                <p className="text-muted-foreground text-sm mt-1">Adicione imagens às tarefas no calendário.</p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-3 gap-1 md:gap-2 max-w-4xl mx-auto">
+              {feedTasks.map(task => (
+                <button
+                  key={task.id}
+                  onClick={() => setEditTask(task)}
+                  className="relative aspect-square overflow-hidden rounded-lg group bg-secondary border border-border hover:border-primary/50 transition-all"
+                >
+                  <img
+                    src={task.imageUrl!}
+                    alt={task.clientName}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-2">
+                    <span className="text-xs font-semibold text-foreground text-center truncate w-full">{task.clientName}</span>
+                    <Badge variant="secondary" className={`text-[10px] ${getTypeColor(task.contentType)}`}>
+                      {task.contentType}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{task.date}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Add Task Dialog */}

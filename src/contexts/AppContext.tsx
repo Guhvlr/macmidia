@@ -9,12 +9,21 @@ export interface KanbanCard {
   notes?: string;
   images?: string[];
   imageUrl?: string;
-  column: 'todo' | 'production' | 'correction' | 'done';
+  column: string;
   timeSpent: number;
   timerRunning: boolean;
   timerStart?: number;
   employeeId: string;
   archivedAt?: string;
+}
+
+export interface KanbanColumnDef {
+  id: string;
+  employeeId: string;
+  columnKey: string;
+  title: string;
+  color: string;
+  position: number;
 }
 
 export interface CalendarTask {
@@ -52,10 +61,18 @@ export interface CalendarClient {
   name: string;
 }
 
+const DEFAULT_COLUMNS = [
+  { columnKey: 'todo', title: 'A Fazer', color: 'bg-info', position: 0 },
+  { columnKey: 'production', title: 'Em Produção', color: 'bg-warning', position: 1 },
+  { columnKey: 'correction', title: 'Correção', color: 'bg-destructive', position: 2 },
+  { columnKey: 'done', title: 'Finalizado', color: 'bg-success', position: 3 },
+];
+
 interface AppState {
   isAuthenticated: boolean;
   employees: Employee[];
   kanbanCards: KanbanCard[];
+  kanbanColumns: KanbanColumnDef[];
   calendarTasks: CalendarTask[];
   credentials: Credential[];
   calendarClients: CalendarClient[];
@@ -70,7 +87,11 @@ interface AppState {
   addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>) => void;
   deleteKanbanCard: (id: string) => void;
-  moveKanbanCard: (id: string, column: KanbanCard['column']) => void;
+  moveKanbanCard: (id: string, column: string) => void;
+  addKanbanColumn: (employeeId: string, title: string, color: string) => void;
+  updateKanbanColumn: (id: string, updates: Partial<KanbanColumnDef>) => void;
+  deleteKanbanColumn: (id: string) => void;
+  getColumnsForEmployee: (employeeId: string) => KanbanColumnDef[];
   addCalendarTask: (task: Omit<CalendarTask, 'id'>) => void;
   updateCalendarTask: (id: string, updates: Partial<CalendarTask>) => void;
   deleteCalendarTask: (id: string) => void;
@@ -96,17 +117,18 @@ function mapEmployee(row: any): Employee {
 
 function mapKanbanCard(row: any): KanbanCard {
   return {
-    id: row.id,
-    clientName: row.client_name,
-    description: row.description,
-    notes: row.notes || undefined,
-    images: row.images || [],
-    column: row.column as KanbanCard['column'],
-    timeSpent: row.time_spent ?? 0,
-    timerRunning: row.timer_running ?? false,
-    timerStart: row.timer_start || undefined,
-    employeeId: row.employee_id,
-    archivedAt: row.archived_at || undefined,
+    id: row.id, clientName: row.client_name, description: row.description,
+    notes: row.notes || undefined, images: row.images || [],
+    column: row.column, timeSpent: row.time_spent ?? 0,
+    timerRunning: row.timer_running ?? false, timerStart: row.timer_start || undefined,
+    employeeId: row.employee_id, archivedAt: row.archived_at || undefined,
+  };
+}
+
+function mapKanbanColumn(row: any): KanbanColumnDef {
+  return {
+    id: row.id, employeeId: row.employee_id, columnKey: row.column_key,
+    title: row.title, color: row.color, position: row.position,
   };
 }
 
@@ -134,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
+  const [kanbanColumns, setKanbanColumns] = useState<KanbanColumnDef[]>([]);
   const [calendarTasks, setCalendarTasks] = useState<CalendarTask[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [calendarClients, setCalendarClients] = useState<CalendarClient[]>([]);
@@ -144,9 +167,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [empRes, cardsRes, tasksRes, credsRes, clientsRes, settingsRes] = await Promise.all([
+      const [empRes, cardsRes, colsRes, tasksRes, credsRes, clientsRes, settingsRes] = await Promise.all([
         supabase.from('employees').select('*'),
         supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('kanban_columns').select('*'),
         supabase.from('calendar_tasks').select('*'),
         supabase.from('credentials').select('*'),
         supabase.from('calendar_clients').select('*'),
@@ -154,6 +178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       setEmployees(empRes.data?.map(mapEmployee) || []);
       setKanbanCards(cardsRes.data?.map(mapKanbanCard) || []);
+      setKanbanColumns(colsRes.data?.map(mapKanbanColumn) || []);
       setCalendarTasks(tasksRes.data?.map(mapCalendarTask) || []);
       setCredentials(credsRes.data?.map(mapCredential) || []);
       setCalendarClients(clientsRes.data?.map(mapCalendarClient) || []);
@@ -193,6 +218,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
         supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).then(r => { if (r.data) setKanbanCards(r.data.map(mapKanbanCard)); });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, () => {
+        supabase.from('kanban_columns').select('*').then(r => { if (r.data) setKanbanColumns(r.data.map(mapKanbanColumn)); });
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_tasks' }, () => {
         supabase.from('calendar_tasks').select('*').then(r => { if (r.data) setCalendarTasks(r.data.map(mapCalendarTask)); });
       })
@@ -227,8 +255,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addEmployee = async (emp: Omit<Employee, 'id'>) => {
     try {
-      const { error } = await supabase.from('employees').insert({ name: emp.name, role: emp.role, avatar: emp.avatar, photo_url: emp.photoUrl || null });
+      const { data, error } = await supabase.from('employees').insert({ name: emp.name, role: emp.role, avatar: emp.avatar, photo_url: emp.photoUrl || null }).select();
       if (error) throw error;
+      // Create default columns for new employee
+      if (data && data[0]) {
+        const empId = data[0].id;
+        const cols = DEFAULT_COLUMNS.map(c => ({
+          employee_id: empId, column_key: c.columnKey, title: c.title, color: c.color, position: c.position,
+        }));
+        await supabase.from('kanban_columns').insert(cols);
+      }
     } catch (err: any) {
       console.error('Erro ao adicionar funcionário:', err);
       toast.error('Erro ao adicionar funcionário.');
@@ -252,9 +288,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteEmployee = async (id: string) => {
     try {
-      // Cascade delete related data
       await Promise.all([
         supabase.from('kanban_cards').delete().eq('employee_id', id),
+        supabase.from('kanban_columns').delete().eq('employee_id', id),
         supabase.from('calendar_tasks').delete().eq('employee_id', id),
         supabase.from('credentials').delete().eq('employee_id', id),
       ]);
@@ -293,6 +329,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.timeSpent !== undefined) dbUpdates.time_spent = updates.timeSpent;
       if (updates.timerRunning !== undefined) dbUpdates.timer_running = updates.timerRunning;
       if ('timerStart' in updates) dbUpdates.timer_start = updates.timerStart || null;
+      if ('archivedAt' in updates) dbUpdates.archived_at = updates.archivedAt || null;
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       if (error) throw error;
     } catch (err: any) {
@@ -311,7 +348,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const moveKanbanCard = async (id: string, column: KanbanCard['column']) => {
+  const moveKanbanCard = async (id: string, column: string) => {
     try {
       const card = kanbanCards.find(c => c.id === id);
       if (!card) return;
@@ -326,6 +363,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbUpdates.time_spent = card.timeSpent + elapsed;
         dbUpdates.timer_start = null;
       }
+      if (column === 'done') {
+        dbUpdates.archived_at = new Date().toISOString();
+      }
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       if (error) throw error;
     } catch (err: any) {
@@ -333,6 +373,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast.error('Erro ao mover card.');
     }
   };
+
+  const addKanbanColumn = async (employeeId: string, title: string, color: string) => {
+    try {
+      const existing = kanbanColumns.filter(c => c.employeeId === employeeId);
+      const maxPos = existing.length > 0 ? Math.max(...existing.map(c => c.position)) : -1;
+      const columnKey = slugify(title) || crypto.randomUUID();
+      const { error } = await supabase.from('kanban_columns').insert({
+        employee_id: employeeId, column_key: columnKey, title, color, position: maxPos + 1,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao adicionar coluna:', err);
+      toast.error('Erro ao adicionar coluna.');
+    }
+  };
+
+  const updateKanbanColumn = async (id: string, updates: Partial<KanbanColumnDef>) => {
+    try {
+      const dbUpdates: any = {};
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.color !== undefined) dbUpdates.color = updates.color;
+      if (updates.position !== undefined) dbUpdates.position = updates.position;
+      const { error } = await supabase.from('kanban_columns').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao atualizar coluna:', err);
+      toast.error('Erro ao atualizar coluna.');
+    }
+  };
+
+  const deleteKanbanColumn = async (id: string) => {
+    try {
+      const { error } = await supabase.from('kanban_columns').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao excluir coluna:', err);
+      toast.error('Erro ao excluir coluna.');
+    }
+  };
+
+  const getColumnsForEmployee = useCallback((employeeId: string): KanbanColumnDef[] => {
+    const cols = kanbanColumns.filter(c => c.employeeId === employeeId);
+    if (cols.length === 0) {
+      return DEFAULT_COLUMNS.map((c, i) => ({
+        id: `default-${c.columnKey}`, employeeId, columnKey: c.columnKey,
+        title: c.title, color: c.color, position: i,
+      }));
+    }
+    return cols.sort((a, b) => a.position - b.position);
+  }, [kanbanColumns]);
 
   const addCalendarTask = async (task: Omit<CalendarTask, 'id'>) => {
     try {
@@ -383,12 +473,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const task = calendarTasks.find(t => t.id === taskId);
       if (!task) return;
       await addKanbanCard({
-        clientName: task.clientName,
-        description: `${task.contentType}: ${task.description}`,
-        column: 'todo',
-        timeSpent: 0,
-        timerRunning: false,
-        employeeId: task.employeeId,
+        clientName: task.clientName, description: `${task.contentType}: ${task.description}`,
+        column: 'todo', timeSpent: 0, timerRunning: false, employeeId: task.employeeId,
       });
     } catch (err: any) {
       console.error('Erro ao converter tarefa:', err);
@@ -447,7 +533,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCalendarClient = async (id: string) => {
     try {
-      // Also delete tasks associated with this calendar client
       await supabase.from('calendar_tasks').delete().eq('calendar_client_id', id);
       const { error } = await supabase.from('calendar_clients').delete().eq('id', id);
       if (error) throw error;
@@ -481,12 +566,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      isAuthenticated, employees,
-      kanbanCards, calendarTasks, credentials, calendarClients,
+      isAuthenticated, employees, kanbanCards, kanbanColumns,
+      calendarTasks, credentials, calendarClients,
       dashboardBanner, dashboardLogo, loading,
       login, logout,
       addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+      addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
       addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
       addCredential, updateCredential, deleteCredential,
       addCalendarClient, deleteCalendarClient,

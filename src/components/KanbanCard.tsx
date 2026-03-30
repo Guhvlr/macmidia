@@ -3,6 +3,7 @@ import { KanbanCard as KanbanCardType, useApp } from '@/contexts/AppContext';
 import Timer from './Timer';
 import CardDetailDialog from './CardDetailDialog';
 import { Trash2, ImageIcon } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface Props {
   card: KanbanCardType;
@@ -11,6 +12,7 @@ interface Props {
 const KanbanCard = ({ card }: Props) => {
   const { updateKanbanCard, deleteKanbanCard } = useApp();
   const [detailOpen, setDetailOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
   const thumbImage = images[0];
@@ -52,13 +54,33 @@ const KanbanCard = ({ card }: Props) => {
             timerStart={card.timerStart}
             onToggle={toggleTimer}
           />
-          <button onClick={() => deleteKanbanCard(card.id)} className="p-1 hover:text-destructive transition-colors">
+          <button onClick={() => setDeleteOpen(true)} className="p-1 hover:text-destructive transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
 
       <CardDetailDialog card={card} open={detailOpen} onOpenChange={setDetailOpen} />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir card</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o card "{card.clientName}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteKanbanCard(card.id)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

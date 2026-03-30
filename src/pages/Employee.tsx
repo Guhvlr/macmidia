@@ -4,7 +4,7 @@ import { useApp } from '@/contexts/AppContext';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
-import { ArrowLeft, Camera, Archive, Loader2, Plus, Settings } from 'lucide-react';
+import { ArrowLeft, Camera, Archive, Loader2, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -32,9 +32,13 @@ const Employee = () => {
   const [editColTitle, setEditColTitle] = useState('');
   const [editColColor, setEditColColor] = useState('');
   const [deleteColTarget, setDeleteColTarget] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const employee = employees.find(e => e.id === id);
-  const cards = kanbanCards.filter(c => c.employeeId === id && !c.archivedAt);
+  const allCards = kanbanCards.filter(c => c.employeeId === id && !c.archivedAt);
+  const cards = searchQuery.trim()
+    ? allCards.filter(c => c.clientName.toLowerCase().includes(searchQuery.toLowerCase()) || c.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allCards;
   const columns = employee ? getColumnsForEmployee(employee.id) : [];
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,6 +120,16 @@ const Employee = () => {
           <AddCardDialog employeeId={employee.id} columns={columns} />
         </div>
       </header>
+
+      <div className="relative mb-4 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar cards por nome ou descrição..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="pl-9 bg-secondary border-border"
+        />
+      </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {columns.map(col => (

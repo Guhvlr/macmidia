@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, ArrowRightLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, ArrowRightLeft, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -11,14 +11,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const ClientCalendar = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const { employees, calendarTasks, calendarClients, addCalendarTask, deleteCalendarTask, convertTaskToCard } = useApp();
+  const { employees, calendarTasks, calendarClients, addCalendarTask, deleteCalendarTask, convertTaskToCard, loading } = useApp();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [form, setForm] = useState({ clientName: '', contentType: '', description: '', time: '09:00', imageUrl: '', status: 'pendente', employeeId: '' });
 
   const client = calendarClients.find(c => c.id === clientId);
-  if (!client) return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Cliente não encontrado</div>;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Cliente não encontrado</p>
+        <Button variant="outline" onClick={() => navigate('/calendario')}>Voltar</Button>
+      </div>
+    );
+  }
 
   const clientTasks = calendarTasks.filter(t => t.calendarClientId === clientId);
 
@@ -115,10 +131,10 @@ const ClientCalendar = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{task.clientName}</span>
-                    <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">{task.contentType}</span>
-                    <span className="text-xs text-muted-foreground">{task.time}</span>
+                    {task.contentType && <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">{task.contentType}</span>}
+                    {task.time && <span className="text-xs text-muted-foreground">{task.time}</span>}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{task.description}</p>
+                  {task.description && <p className="text-xs text-muted-foreground mt-1">{task.description}</p>}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" onClick={() => convertTaskToCard(task.id)} title="Enviar para Kanban">
@@ -143,13 +159,17 @@ const ClientCalendar = () => {
             <Textarea placeholder="Descrição" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-secondary border-border" />
             <Input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} className="bg-secondary border-border" />
             <Input placeholder="URL da imagem (opcional)" value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))} className="bg-secondary border-border" />
-            <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
-              <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Funcionário responsável" /></SelectTrigger>
-              <SelectContent>
-                {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button type="submit" className="w-full">Criar Tarefa</Button>
+            {employees.length > 0 ? (
+              <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Funcionário responsável" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhum funcionário cadastrado. Cadastre um funcionário primeiro.</p>
+            )}
+            <Button type="submit" className="w-full" disabled={!form.employeeId}>Criar Tarefa</Button>
           </form>
         </DialogContent>
       </Dialog>

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2 } from 'lucide-react';
+import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -10,7 +10,7 @@ import defaultLogo from '@/assets/logo-mac-midia.png';
 import defaultBanner from '@/assets/banner-mac-midia.png';
 
 const Index = () => {
-  const { employees, logout, addEmployee, deleteEmployee, dashboardBanner, dashboardLogo, setDashboardBanner, setDashboardLogo } = useApp();
+  const { employees, logout, addEmployee, deleteEmployee, dashboardBanner, dashboardLogo, setDashboardBanner, setDashboardLogo, loading } = useApp();
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
@@ -48,6 +48,14 @@ const Index = () => {
   };
 
   const deleteTargetEmployee = employees.find(e => e.id === deleteTarget);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -89,27 +97,34 @@ const Index = () => {
               <Plus className="w-4 h-4 mr-1" /> Adicionar
             </Button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {employees.map(emp => (
-              <div key={emp.id} className="glass-card p-6 text-left hover:glow-primary transition-all duration-300 group relative">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(emp.id); }}
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-card/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all z-10"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-                <div onClick={() => navigate(`/funcionario/${emp.id}`)} className="cursor-pointer">
-                  {emp.photoUrl ? (
-                    <img src={emp.photoUrl} alt={emp.name} className="w-12 h-12 rounded-full object-cover mb-3 group-hover:scale-110 transition-transform" />
-                  ) : (
-                    <span className="text-4xl block mb-3 group-hover:scale-110 transition-transform">{emp.avatar}</span>
-                  )}
-                  <h3 className="font-semibold text-card-foreground">{emp.name}</h3>
-                  <p className="text-sm text-muted-foreground">{emp.role}</p>
+          {employees.length === 0 ? (
+            <div className="glass-card p-12 text-center">
+              <p className="text-muted-foreground">Nenhum funcionário cadastrado.</p>
+              <p className="text-muted-foreground text-sm mt-1">Clique em "Adicionar" para começar.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {employees.map(emp => (
+                <div key={emp.id} className="glass-card p-6 text-left hover:glow-primary transition-all duration-300 group relative">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(emp.id); }}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-card/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all z-10"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <div onClick={() => navigate(`/funcionario/${emp.id}`)} className="cursor-pointer">
+                    {emp.photoUrl ? (
+                      <img src={emp.photoUrl} alt={emp.name} className="w-12 h-12 rounded-full object-cover mb-3 group-hover:scale-110 transition-transform" />
+                    ) : (
+                      <span className="text-4xl block mb-3 group-hover:scale-110 transition-transform">{emp.avatar}</span>
+                    )}
+                    <h3 className="font-semibold text-card-foreground">{emp.name}</h3>
+                    <p className="text-sm text-muted-foreground">{emp.role}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -377,10 +377,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addKanbanColumn = async (employeeId: string, title: string, color: string) => {
     try {
       const existing = kanbanColumns.filter(c => c.employeeId === employeeId);
-      const maxPos = existing.length > 0 ? Math.max(...existing.map(c => c.position)) : -1;
+      // If no columns in DB yet, persist the defaults first
+      if (existing.length === 0) {
+        const defaultInserts = DEFAULT_COLUMNS.map(c => ({
+          employee_id: employeeId, column_key: c.columnKey, title: c.title, color: c.color, position: c.position,
+        }));
+        const { error: defErr } = await supabase.from('kanban_columns').insert(defaultInserts);
+        if (defErr) throw defErr;
+      }
+      const currentMax = existing.length > 0
+        ? Math.max(...existing.map(c => c.position))
+        : DEFAULT_COLUMNS.length - 1;
       const columnKey = slugify(title) || crypto.randomUUID();
       const { error } = await supabase.from('kanban_columns').insert({
-        employee_id: employeeId, column_key: columnKey, title, color, position: maxPos + 1,
+        employee_id: employeeId, column_key: columnKey, title, color, position: currentMax + 1,
       });
       if (error) throw error;
     } catch (err: any) {

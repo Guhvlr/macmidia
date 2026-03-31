@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Archive, Trash2 } from 'lucide-react';
+import { ArrowLeft, Archive, Trash2, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ArchivedCard {
@@ -78,38 +78,47 @@ const ArchivedCards = () => {
 
   return (
     <div className="min-h-screen gradient-bg">
-      <header className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center gap-4 px-6 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(`/funcionario/${id}`)} className="hover:bg-secondary">
+      <header className="page-header">
+        <div className="flex items-center gap-4 px-6 py-3.5">
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/funcionario/${id}`)} className="hover:bg-secondary rounded-xl">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="p-2 rounded-xl bg-primary/10">
+          <div className="p-2 rounded-xl bg-primary/8">
             <Archive className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Arquivados — {employee.name}</h1>
-            <p className="text-xs text-muted-foreground">Cards finalizados há mais de 15 dias. Exclusão automática após 60 dias.</p>
+            <h1 className="text-lg font-bold text-foreground">Arquivados — {employee.name}</h1>
+            <p className="text-[11px] text-muted-foreground">Cards finalizados há mais de 15 dias · Exclusão automática após 60 dias</p>
           </div>
         </div>
       </header>
 
-      <div className="p-6 md:p-10 max-w-6xl mx-auto">
+      <div className="p-6 md:p-8 max-w-6xl mx-auto">
 
       {cards.length === 0 && !loading && (
-        <div className="text-center text-muted-foreground py-16">Nenhum card arquivado.</div>
+        <div className="glass-card p-16 text-center max-w-lg mx-auto animate-fade-in">
+          <Archive className="w-12 h-12 mx-auto text-muted-foreground/20 mb-4" />
+          <p className="text-muted-foreground font-medium">Nenhum card arquivado.</p>
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map(card => (
-          <div key={card.id} className="glass-card-hover p-5 space-y-3">
+        {cards.map((card, i) => (
+          <div key={card.id} className="glass-card-hover p-5 space-y-3 animate-slide-up" style={{ animationDelay: `${i * 0.04}s` }}>
             {card.images[0] && <img src={card.images[0]} alt="" className="w-full h-28 object-cover rounded-xl" />}
-            <h4 className="font-bold text-card-foreground">{card.clientName}</h4>
+            <h4 className="font-bold text-sm text-card-foreground">{card.clientName}</h4>
             <p className="text-xs text-muted-foreground line-clamp-2">{card.description}</p>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Tempo: {formatTime(card.timeSpent)}</span>
-              <span className="text-destructive/70">{daysUntilDeletion(card.archivedAt)} dias para exclusão</span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {formatTime(card.timeSpent)}
+              </span>
+              <span className="flex items-center gap-1 text-destructive/70">
+                <AlertTriangle className="w-3 h-3" />
+                {daysUntilDeletion(card.archivedAt)} dias
+              </span>
             </div>
-            <Button variant="ghost" size="sm" className="w-full text-destructive hover:bg-destructive/10" onClick={() => handleDelete(card.id)}>
+            <Button variant="ghost" size="sm" className="w-full text-destructive hover:bg-destructive/10 rounded-xl text-xs" onClick={() => handleDelete(card.id)}>
               <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir agora
             </Button>
           </div>
@@ -118,7 +127,7 @@ const ArchivedCards = () => {
 
       {hasMore && cards.length > 0 && (
         <div className="flex justify-center mt-6">
-          <Button variant="outline" onClick={() => { const next = page + 1; setPage(next); fetchArchived(next); }} disabled={loading}>
+          <Button variant="outline" onClick={() => { const next = page + 1; setPage(next); fetchArchived(next); }} disabled={loading} className="rounded-xl">
             {loading ? 'Carregando...' : 'Carregar mais'}
           </Button>
         </div>

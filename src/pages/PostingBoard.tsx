@@ -27,22 +27,25 @@ const PostingBoard = () => {
 
   return (
     <div className="min-h-screen gradient-bg">
-      <header className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center gap-4 px-6 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary">
+      <header className="page-header">
+        <div className="flex items-center gap-4 px-6 py-3.5">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-primary/10">
+            <div className="p-2 rounded-xl bg-primary/8">
               <Send className="w-5 h-5 text-primary" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">Quadros de Postagem</h1>
+            <div>
+              <h1 className="text-lg font-bold text-foreground">Quadros de Postagem</h1>
+              <p className="text-[11px] text-muted-foreground">Gerencie conteúdos para publicação</p>
+            </div>
           </div>
         </div>
       </header>
 
       <div className="p-6">
-        <div className="flex gap-5 overflow-x-auto pb-4" style={{ scrollbarColor: 'hsl(0 0% 25%) transparent' }}>
+        <div className="flex gap-5 overflow-x-auto pb-4">
           {POSTING_COLUMNS.map(col => {
             const colCards = activeCards.filter(c => c.column === col.key);
             return (
@@ -54,20 +57,21 @@ const PostingBoard = () => {
                   const cardId = e.dataTransfer.getData('cardId');
                   if (cardId) moveKanbanCard(cardId, col.key);
                 }}
-                className="flex flex-col min-h-[400px] min-w-[330px] w-[350px] flex-shrink-0"
+                className="flex flex-col min-h-[420px] min-w-[340px] w-[360px] flex-shrink-0"
               >
                 <div className="flex items-center gap-2.5 mb-3 px-1">
                   <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
-                  <h3 className="font-semibold text-sm tracking-wide">{col.title}</h3>
-                  <span className="text-[11px] text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full font-medium">{colCards.length}</span>
+                  <h3 className="font-semibold text-[13px] tracking-wide uppercase">{col.title}</h3>
+                  <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
                 </div>
-                <div className="space-y-2.5 flex-1 p-2.5 rounded-2xl bg-secondary/20 border border-border/30">
+                <div className="space-y-3 flex-1 p-3 rounded-2xl bg-secondary/15 border border-border/25">
                   {colCards.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-12">Nenhum card</p>
                   ) : (
                     colCards.map(card => (
                       <div key={card.id} className="relative">
-                        <div className="text-[10px] text-muted-foreground mb-1 px-1 flex items-center gap-1">
+                        <div className="text-[10px] text-muted-foreground mb-1.5 px-1 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
                           <span className="font-medium">{getEmployeeName(card.employeeId)}</span>
                         </div>
                         <KanbanCard card={card} />

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send } from 'lucide-react';
+import { Calendar, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send, Shield, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -10,7 +10,7 @@ import defaultLogo from '@/assets/logo-mac-midia.png';
 import defaultBanner from '@/assets/banner-mac-midia.png';
 
 const Index = () => {
-  const { employees, logout, addEmployee, deleteEmployee, dashboardBanner, dashboardLogo, setDashboardBanner, setDashboardLogo, loading } = useApp();
+  const { employees, addEmployee, deleteEmployee, dashboardBanner, dashboardLogo, setDashboardBanner, setDashboardLogo, loading } = useApp();
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
@@ -60,58 +60,81 @@ const Index = () => {
   return (
     <div className="min-h-screen gradient-bg">
       {/* Banner */}
-      <div className="relative w-full h-52 md:h-72 overflow-hidden group">
+      <div className="relative w-full h-48 md:h-64 overflow-hidden group">
         <img src={bannerSrc} alt="Banner" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-        <div className="absolute bottom-6 left-6 md:left-10 flex items-end gap-4">
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        <div className="absolute bottom-5 left-6 md:left-8 flex items-end gap-4">
           <div className="relative group/logo cursor-pointer" onClick={() => logoInputRef.current?.click()}>
-            <img src={logoSrc} alt="Logo" className="h-16 md:h-24 w-auto object-contain drop-shadow-2xl" />
-            <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-xl opacity-0 group-hover/logo:opacity-100 transition-opacity">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-card/60 border border-border/40 backdrop-blur-md flex items-center justify-center shadow-2xl overflow-hidden">
+              <img src={logoSrc} alt="Logo" className="w-[80%] h-[80%] object-contain" />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-2xl opacity-0 group-hover/logo:opacity-100 transition-opacity">
               <Camera className="w-5 h-5 text-foreground" />
             </div>
             <input ref={logoInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileUpload(setDashboardLogo)} />
           </div>
           <div className="pb-1">
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground drop-shadow-2xl">Mac Mídia</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Painel de gestão</p>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground drop-shadow-2xl tracking-tight">Mac Mídia</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Painel de gestão</p>
           </div>
         </div>
-        <button onClick={() => bannerInputRef.current?.click()} className="absolute top-4 right-4 p-2.5 rounded-xl glass-card text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all">
+        <button onClick={() => bannerInputRef.current?.click()} className="absolute top-3 right-3 p-2 rounded-xl glass-card text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all">
           <ImageIcon className="w-4 h-4" />
         </button>
         <input ref={bannerInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileUpload(setDashboardBanner)} />
       </div>
 
-      <div className="p-6 md:p-10 max-w-7xl mx-auto">
-        <div className="flex items-center justify-end mb-8">
-          <Button variant="ghost" size="icon" onClick={() => { logout(); navigate('/login'); }} className="hover:bg-destructive/10 hover:text-destructive">
-            <LogOut className="w-5 h-5" />
-          </Button>
-        </div>
+      <div className="p-6 md:p-8 max-w-7xl mx-auto">
+        {/* Quick action cards */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 animate-slide-up">
+          {[
+            { icon: Send, label: 'Quadros de Postagem', desc: 'Centralizar e publicar conteúdos', path: '/postagem', color: 'from-rose-500/10 to-transparent' },
+            { icon: Calendar, label: 'Calendário', desc: 'Planejamento de conteúdo mensal', path: '/calendario', color: 'from-amber-500/10 to-transparent' },
+            { icon: Shield, label: 'Cofre de Acessos', desc: 'Credenciais seguras dos clientes', path: '/cofre', color: 'from-emerald-500/10 to-transparent' },
+          ].map(({ icon: Icon, label, desc, path, color }) => (
+            <button key={path} onClick={() => navigate(path)} className="glass-card-hover p-6 text-left group cursor-pointer relative overflow-hidden">
+              <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+              <div className="relative z-10">
+                <div className="p-3 rounded-2xl bg-primary/8 w-fit mb-4 group-hover:bg-primary/15 transition-colors">
+                  <Icon className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-card-foreground text-base">{label}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{desc}</p>
+                <div className="flex items-center gap-1 text-primary text-xs font-medium mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  Acessar <ArrowRight className="w-3 h-3" />
+                </div>
+              </div>
+            </button>
+          ))}
+        </section>
 
-        <section className="mb-10 animate-slide-up">
+        {/* Team section */}
+        <section className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 rounded-xl bg-primary/10">
+            <div className="p-2 rounded-xl bg-primary/8">
               <Users className="w-5 h-5 text-primary" />
             </div>
-            <h2 className="text-xl font-bold">Equipe</h2>
-            <Button size="sm" className="ml-auto btn-primary-glow" onClick={() => setShowAdd(true)}>
-              <Plus className="w-4 h-4 mr-1" /> Adicionar
+            <div>
+              <h2 className="text-lg font-bold">Equipe</h2>
+              <p className="text-xs text-muted-foreground">{employees.length} membros</p>
+            </div>
+            <Button size="sm" className="ml-auto btn-primary-glow rounded-xl" onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4 mr-1.5" /> Adicionar
             </Button>
           </div>
           {employees.length === 0 ? (
             <div className="glass-card p-16 text-center">
-              <Users className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground">Nenhum funcionário cadastrado.</p>
+              <Users className="w-12 h-12 mx-auto text-muted-foreground/20 mb-4" />
+              <p className="text-muted-foreground font-medium">Nenhum funcionário cadastrado.</p>
               <p className="text-muted-foreground text-sm mt-1">Clique em "Adicionar" para começar.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {employees.map((emp, i) => (
                 <div
                   key={emp.id}
-                  className="glass-card-hover p-6 text-left group relative animate-slide-up"
-                  style={{ animationDelay: `${i * 0.05}s` }}
+                  className="glass-card-hover p-5 text-left group relative animate-slide-up"
+                  style={{ animationDelay: `${i * 0.04}s` }}
                 >
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeleteTarget(emp.id); }}
@@ -121,46 +144,32 @@ const Index = () => {
                   </button>
                   <div onClick={() => navigate(`/funcionario/${emp.id}`)} className="cursor-pointer">
                     {emp.photoUrl ? (
-                      <img src={emp.photoUrl} alt={emp.name} className="w-14 h-14 rounded-2xl object-cover mb-4 group-hover:scale-110 transition-transform shadow-lg" />
+                      <img src={emp.photoUrl} alt={emp.name} className="w-12 h-12 rounded-xl object-cover mb-3 group-hover:scale-105 transition-transform shadow-lg ring-1 ring-border/30" />
                     ) : (
-                      <span className="text-4xl block mb-4 group-hover:scale-110 transition-transform">{emp.avatar}</span>
+                      <div className="w-12 h-12 rounded-xl bg-secondary/60 flex items-center justify-center mb-3 text-2xl group-hover:scale-105 transition-transform">
+                        {emp.avatar}
+                      </div>
                     )}
-                    <h3 className="font-bold text-card-foreground">{emp.name}</h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">{emp.role}</p>
+                    <h3 className="font-bold text-sm text-card-foreground">{emp.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{emp.role}</p>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </section>
-
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-5 animate-slide-up" style={{ animationDelay: '0.15s' }}>
-          {[
-            { icon: Send, label: 'Quadros de Postagem', desc: 'Centralizar e postar conteúdos', path: '/postagem' },
-            { icon: Calendar, label: 'Calendário', desc: 'Planejamento de conteúdo', path: '/calendario' },
-            { icon: Shield, label: 'Cofre de Acessos', desc: 'Credenciais seguras', path: '/cofre' },
-          ].map(({ icon: Icon, label, desc, path }) => (
-            <button key={path} onClick={() => navigate(path)} className="glass-card-hover p-7 text-left group cursor-pointer">
-              <div className="p-3 rounded-2xl bg-primary/10 w-fit mb-4 group-hover:bg-primary/20 transition-colors">
-                <Icon className="w-7 h-7 text-primary" />
-              </div>
-              <h3 className="font-bold text-card-foreground text-lg">{label}</h3>
-              <p className="text-sm text-muted-foreground mt-1">{desc}</p>
-            </button>
-          ))}
-        </section>
       </div>
 
       {/* Add employee dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="glass-card border-border">
+        <DialogContent className="glass-card border-border/50">
           <DialogHeader>
-            <DialogTitle>Novo Funcionário</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Novo Funcionário</DialogTitle>
             <DialogDescription>Adicione um novo membro à equipe.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
             <div className="flex justify-center">
-              <label className="w-20 h-20 rounded-2xl bg-secondary/50 border-2 border-dashed border-border/60 flex items-center justify-center cursor-pointer overflow-hidden hover:border-primary/50 transition-colors">
+              <label className="w-20 h-20 rounded-2xl bg-secondary/40 border-2 border-dashed border-border/50 flex items-center justify-center cursor-pointer overflow-hidden hover:border-primary/40 transition-colors">
                 {newPhoto ? (
                   <img src={newPhoto} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
@@ -169,16 +178,16 @@ const Index = () => {
                 <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhoto} />
               </label>
             </div>
-            <Input placeholder="Nome" value={newName} onChange={e => setNewName(e.target.value)} className="bg-secondary/50 border-border/60 h-11" />
-            <Input placeholder="Cargo" value={newRole} onChange={e => setNewRole(e.target.value)} className="bg-secondary/50 border-border/60 h-11" />
-            <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold">Adicionar</Button>
+            <Input placeholder="Nome" value={newName} onChange={e => setNewName(e.target.value)} className="bg-secondary/40 border-border/50 h-11 rounded-xl" />
+            <Input placeholder="Cargo" value={newRole} onChange={e => setNewRole(e.target.value)} className="bg-secondary/40 border-border/50 h-11 rounded-xl" />
+            <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold rounded-xl">Adicionar</Button>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="glass-card border-border">
+        <AlertDialogContent className="glass-card border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir funcionário</AlertDialogTitle>
             <AlertDialogDescription>
@@ -186,9 +195,9 @@ const Index = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-secondary hover:bg-muted">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
               onClick={() => { if (deleteTarget) { deleteEmployee(deleteTarget); setDeleteTarget(null); } }}
             >
               Excluir

@@ -34,23 +34,23 @@ const KanbanCard = ({ card }: Props) => {
         draggable
         onDragStart={(e) => e.dataTransfer.setData('cardId', card.id)}
         onClick={() => setDetailOpen(true)}
-        className="glass-card p-3.5 space-y-2.5 cursor-pointer group
-          hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5
-          active:cursor-grabbing active:scale-[0.98]
-          transition-all duration-200 animate-fade-in"
+        className="glass-card p-4 space-y-3 cursor-pointer group
+          hover:border-primary/25 hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5),0_0_20px_-4px_hsl(0_80%_52%/0.06)]
+          active:cursor-grabbing active:scale-[0.97]
+          transition-all duration-250 animate-fade-in"
       >
         {thumbImage && (
           <div className="relative overflow-hidden rounded-xl -mx-0.5 -mt-0.5">
-            <img src={thumbImage} alt="" className="w-full h-28 object-cover transition-transform duration-300 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-card/60 to-transparent" />
+            <img src={thumbImage} alt="" className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-t from-card/70 to-transparent" />
           </div>
         )}
 
         <div className="flex items-center gap-2">
           <h4 className="font-semibold text-sm text-card-foreground flex-1 truncate">{card.clientName}</h4>
           {images.length > 1 && (
-            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-              <ImageIcon className="w-3 h-3" /> {images.length}
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded-full border border-border/20">
+              <ImageIcon className="w-2.5 h-2.5" /> {images.length}
             </span>
           )}
         </div>
@@ -59,7 +59,7 @@ const KanbanCard = ({ card }: Props) => {
           <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{card.description}</p>
         )}
 
-        <div className="flex items-center justify-between pt-1 border-t border-border/30" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between pt-2 border-t border-border/20" onClick={e => e.stopPropagation()}>
           <Timer
             timeSpent={card.timeSpent}
             timerRunning={card.timerRunning}
@@ -78,7 +78,7 @@ const KanbanCard = ({ card }: Props) => {
       <CardDetailDialog card={card} open={detailOpen} onOpenChange={setDetailOpen} />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="glass-card border-border">
+        <AlertDialogContent className="glass-card border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir card</AlertDialogTitle>
             <AlertDialogDescription>
@@ -86,9 +86,9 @@ const KanbanCard = ({ card }: Props) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-secondary hover:bg-muted">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
               onClick={() => deleteKanbanCard(card.id)}
             >
               Excluir

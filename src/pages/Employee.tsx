@@ -4,7 +4,6 @@ import { useApp } from '@/contexts/useApp';
 import { FIXED_COLUMN_KEYS } from '@/contexts/app-types';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
-import AddCardDialog from '@/components/AddCardDialog';
 import { ArrowLeft, Camera, Archive, Loader2, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -76,25 +75,25 @@ const Employee = () => {
     return (
       <div className="min-h-screen gradient-bg flex flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">Funcionário não encontrado</p>
-        <Button variant="outline" onClick={() => navigate('/')}>Voltar ao início</Button>
+        <Button variant="outline" onClick={() => navigate('/')} className="rounded-xl">Voltar ao início</Button>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen gradient-bg">
-      {/* Header */}
-      <header className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center gap-4 px-6 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary">
+      {/* Header — clean, without global add buttons */}
+      <header className="page-header">
+        <div className="flex items-center gap-4 px-6 py-3.5">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="flex items-center gap-3">
             <label className="relative cursor-pointer group">
               {employee.photoUrl ? (
-                <img src={employee.photoUrl} alt={employee.name} className="w-11 h-11 rounded-xl object-cover shadow-lg" />
+                <img src={employee.photoUrl} alt={employee.name} className="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-border/30" />
               ) : (
-                <span className="text-3xl">{employee.avatar}</span>
+                <div className="w-10 h-10 rounded-xl bg-secondary/60 flex items-center justify-center text-xl">{employee.avatar}</div>
               )}
               <div className="absolute inset-0 rounded-xl bg-background/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera className="w-4 h-4 text-foreground" />
@@ -107,36 +106,32 @@ const Employee = () => {
               </button>
             )}
             <div>
-              <h1 className="text-xl font-bold text-foreground">{employee.name}</h1>
-              <p className="text-xs text-muted-foreground">{employee.role}</p>
+              <h1 className="text-lg font-bold text-foreground">{employee.name}</h1>
+              <p className="text-[11px] text-muted-foreground">{employee.role}</p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowAddCol(true)} className="border-border/60 hover:border-primary/40">
-              <Plus className="w-4 h-4 mr-1" /> Coluna
+            <Button variant="outline" size="sm" onClick={() => navigate(`/funcionario/${employee.id}/arquivados`)} className="border-border/50 hover:border-primary/30 rounded-xl text-xs">
+              <Archive className="w-3.5 h-3.5 mr-1" /> Arquivados
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate(`/funcionario/${employee.id}/arquivados`)} className="border-border/60 hover:border-primary/40">
-              <Archive className="w-4 h-4 mr-1" /> Arquivados
-            </Button>
-            <AddCardDialog employeeId={employee.id} columns={columns} />
           </div>
         </div>
       </header>
 
-      <div className="p-6">
+      <div className="p-5">
         {/* Search */}
-        <div className="relative mb-5 max-w-md">
+        <div className="relative mb-5 max-w-sm">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar cards por nome ou descrição..."
+            placeholder="Buscar cards..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-10 h-10 bg-secondary/50 border-border/60"
+            className="pl-10 h-9 bg-secondary/40 border-border/40 rounded-xl text-sm"
           />
         </div>
 
         {/* Kanban board */}
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ scrollbarColor: 'hsl(0 0% 25%) transparent' }}>
+        <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map(col => (
             <KanbanColumn
               key={col.id}
@@ -144,6 +139,7 @@ const Employee = () => {
               title={col.title}
               color={col.color}
               count={cards.filter(c => c.column === col.columnKey).length}
+              employeeId={employee.id}
               onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
               onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
             >
@@ -152,20 +148,31 @@ const Employee = () => {
               ))}
             </KanbanColumn>
           ))}
+
+          {/* "+ Nova Coluna" button — fixed at the end of all columns */}
+          <div className="flex-shrink-0 min-w-[280px] w-[280px]">
+            <button
+              onClick={() => setShowAddCol(true)}
+              className="w-full flex items-center justify-center gap-2 py-4 mt-9 rounded-2xl border-2 border-dashed border-border/30 text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/[0.03] transition-all group"
+            >
+              <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-sm font-medium">Nova Coluna</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Add column dialog */}
       <Dialog open={showAddCol} onOpenChange={setShowAddCol}>
-        <DialogContent className="glass-card border-border">
+        <DialogContent className="glass-card border-border/50">
           <DialogHeader>
-            <DialogTitle>Nova Coluna</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Nova Coluna</DialogTitle>
             <DialogDescription>Crie uma nova coluna para organizar seus cards.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Input placeholder="Nome da coluna" value={newColTitle} onChange={e => setNewColTitle(e.target.value)} className="bg-secondary/50 border-border/60 h-11" />
+            <Input placeholder="Nome da coluna" value={newColTitle} onChange={e => setNewColTitle(e.target.value)} className="bg-secondary/40 border-border/50 h-11 rounded-xl" autoFocus />
             <Select value={newColColor} onValueChange={setNewColColor}>
-              <SelectTrigger className="bg-secondary/50 border-border/60 h-11"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {COLUMN_COLORS.map(c => (
                   <SelectItem key={c.value} value={c.value}>
@@ -177,22 +184,22 @@ const Employee = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button className="w-full h-11 btn-primary-glow font-semibold" onClick={handleAddColumn}>Adicionar</Button>
+            <Button className="w-full h-11 btn-primary-glow font-semibold rounded-xl" onClick={handleAddColumn}>Adicionar</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit column dialog */}
       <Dialog open={!!editCol} onOpenChange={(open) => !open && setEditCol(null)}>
-        <DialogContent className="glass-card border-border">
+        <DialogContent className="glass-card border-border/50">
           <DialogHeader>
-            <DialogTitle>Editar Coluna</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Editar Coluna</DialogTitle>
             <DialogDescription>Altere o nome ou cor da coluna.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Input value={editColTitle} onChange={e => setEditColTitle(e.target.value)} className="bg-secondary/50 border-border/60 h-11" />
+            <Input value={editColTitle} onChange={e => setEditColTitle(e.target.value)} className="bg-secondary/40 border-border/50 h-11 rounded-xl" />
             <Select value={editColColor} onValueChange={setEditColColor}>
-              <SelectTrigger className="bg-secondary/50 border-border/60 h-11"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {COLUMN_COLORS.map(c => (
                   <SelectItem key={c.value} value={c.value}>
@@ -204,21 +211,21 @@ const Employee = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button className="w-full h-11 btn-primary-glow font-semibold" onClick={handleEditColumn}>Salvar</Button>
+            <Button className="w-full h-11 btn-primary-glow font-semibold rounded-xl" onClick={handleEditColumn}>Salvar</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Delete column confirmation */}
       <AlertDialog open={!!deleteColTarget} onOpenChange={(open) => !open && setDeleteColTarget(null)}>
-        <AlertDialogContent className="glass-card border-border">
+        <AlertDialogContent className="glass-card border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir coluna</AlertDialogTitle>
             <AlertDialogDescription>Tem certeza que deseja excluir esta coluna? Os cards nela não serão apagados, mas ficarão sem coluna.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-secondary hover:bg-muted">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteColTarget) { deleteKanbanColumn(deleteColTarget); setDeleteColTarget(null); } }}>
+            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl" onClick={() => { if (deleteColTarget) { deleteKanbanColumn(deleteColTarget); setDeleteColTarget(null); } }}>
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

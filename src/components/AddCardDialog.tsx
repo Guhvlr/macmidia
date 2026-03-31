@@ -5,20 +5,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Upload, X } from 'lucide-react';
 
 interface Props {
   employeeId: string;
-  columns?: KanbanColumnDef[];
+  /** When provided, the card is created directly in this column (no selector shown) */
+  fixedColumnKey?: string;
+  /** Custom trigger element. If omitted, a default "+" button is rendered */
+  trigger?: React.ReactNode;
 }
 
-const AddCardDialog = ({ employeeId, columns }: Props) => {
+const AddCardDialog = ({ employeeId, fixedColumnKey, trigger }: Props) => {
   const { addKanbanCard } = useApp();
   const [open, setOpen] = useState(false);
   const [clientName, setClientName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedColumn, setSelectedColumn] = useState('para-producao');
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,45 +38,44 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
     if (!clientName.trim()) return;
     addKanbanCard({
       clientName, description, images,
-      column: selectedColumn, timeSpent: 0, timerRunning: false, employeeId,
+      column: fixedColumnKey || 'para-producao',
+      timeSpent: 0, timerRunning: false, employeeId,
     });
-    setClientName(''); setDescription(''); setImages([]); setSelectedColumn('todo'); setOpen(false);
+    setClientName(''); setDescription(''); setImages([]); setOpen(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="btn-primary-glow">
-          <Plus className="w-4 h-4 mr-1" /> Novo Card
-        </Button>
+        {trigger || (
+          <button className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-all group">
+            <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span>Adicionar card</span>
+          </button>
+        )}
       </DialogTrigger>
-      <DialogContent className="glass-card border-border">
+      <DialogContent className="glass-card border-border/50">
         <DialogHeader>
-          <DialogTitle>Novo Card</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Novo Card</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input placeholder="Nome do cliente" value={clientName} onChange={e => setClientName(e.target.value)} className="bg-secondary border-border" />
-          <Textarea placeholder="Descrição" value={description} onChange={e => setDescription(e.target.value)} className="bg-secondary border-border min-h-[80px]" />
-
-          {columns && columns.length > 0 && (
-            <Select value={selectedColumn} onValueChange={setSelectedColumn}>
-              <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Coluna" /></SelectTrigger>
-              <SelectContent>
-                {columns.map(col => (
-                  <SelectItem key={col.id} value={col.columnKey}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${col.color}`} />
-                      {col.title}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Input
+            placeholder="Nome do cliente"
+            value={clientName}
+            onChange={e => setClientName(e.target.value)}
+            className="bg-secondary/40 border-border/50 rounded-xl h-11"
+            autoFocus
+          />
+          <Textarea
+            placeholder="Descrição (opcional)"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            className="bg-secondary/40 border-border/50 min-h-[80px] rounded-xl"
+          />
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-border rounded-xl p-3 text-center cursor-pointer hover:border-primary/50 transition-colors"
+            className="border-2 border-dashed border-border/40 rounded-xl p-3 text-center cursor-pointer hover:border-primary/40 transition-colors"
           >
             <Upload className="w-5 h-5 mx-auto text-muted-foreground mb-1" />
             <p className="text-xs text-muted-foreground">Clique ou arraste imagens</p>
@@ -85,9 +85,9 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
           {images.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {images.map((img, i) => (
-                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden">
+                <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-border/30">
                   <img src={img} alt="" className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-destructive rounded-bl p-0.5">
+                  <button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-destructive rounded-bl-lg p-0.5">
                     <X className="w-3 h-3 text-destructive-foreground" />
                   </button>
                 </div>
@@ -95,7 +95,7 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
             </div>
           )}
 
-          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold">Adicionar</Button>
+          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold rounded-xl">Adicionar</Button>
         </form>
       </DialogContent>
     </Dialog>

@@ -79,9 +79,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="glass-card border-border max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="glass-card border-border/50 max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-foreground text-lg">Detalhes do Card</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Detalhes do Card</DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
               Edite as informações do card abaixo.
             </DialogDescription>
@@ -89,42 +89,42 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
           <div className="space-y-5 mt-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Cliente</label>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Cliente</label>
               <Input
                 value={clientName}
                 onChange={e => { setClientName(e.target.value); markChanged(); }}
-                className="bg-secondary/50 border-border text-base h-11"
+                className="bg-secondary/40 border-border/50 text-base h-11 rounded-xl"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Descrição</label>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Descrição</label>
               <Textarea
                 value={description}
                 onChange={e => { setDescription(e.target.value); markChanged(); }}
-                className="bg-secondary/50 border-border min-h-[120px] text-base"
+                className="bg-secondary/40 border-border/50 min-h-[120px] text-base rounded-xl"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Observações / Anotações</label>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Observações / Anotações</label>
               <Textarea
                 value={notes}
                 onChange={e => { setNotes(e.target.value); markChanged(); }}
                 placeholder="Adicione notas e observações..."
-                className="bg-secondary/50 border-border min-h-[100px]"
+                className="bg-secondary/40 border-border/50 min-h-[100px] rounded-xl"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Imagens e Anexos</label>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Imagens e Anexos</label>
               <div
                 onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all
-                  ${isDragging ? 'border-primary bg-primary/10 scale-[1.01]' : 'border-border/60 hover:border-primary/40 hover:bg-secondary/30'}`}
+                  ${isDragging ? 'border-primary bg-primary/8 scale-[1.01]' : 'border-border/40 hover:border-primary/30 hover:bg-secondary/20'}`}
               >
                 <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">Arraste imagens ou clique para upload</p>
@@ -134,7 +134,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
               {localImages.length > 0 && (
                 <div className="grid grid-cols-3 gap-3 mt-4">
                   {localImages.map((img, i) => (
-                    <div key={i} className="relative group rounded-2xl overflow-hidden aspect-square bg-secondary border border-border/50 shadow-md">
+                    <div key={i} className="relative group rounded-2xl overflow-hidden aspect-square bg-secondary border border-border/30 shadow-md">
                       <img src={img} alt="" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                         <button onClick={(e) => { e.stopPropagation(); setPreviewImage(img); }} className="p-2.5 rounded-full bg-card/90 hover:bg-primary hover:text-primary-foreground transition-colors shadow-lg">
@@ -150,15 +150,15 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-5 border-t border-border/50">
+            <div className="flex items-center justify-between pt-5 border-t border-border/30">
               <div onClick={e => e.stopPropagation()}>
                 <Timer timeSpent={card.timeSpent} timerRunning={card.timerRunning} timerStart={card.timerStart} onToggle={toggleTimer} />
               </div>
               <div className="flex items-center gap-2">
-                <Button onClick={handleSave} disabled={!hasChanges} size="sm" className="gap-1.5 btn-primary-glow">
+                <Button onClick={handleSave} disabled={!hasChanges} size="sm" className="gap-1.5 btn-primary-glow rounded-xl">
                   <Save className="w-3.5 h-3.5" /> Salvar
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(true)} className="text-destructive hover:bg-destructive/10">
+                <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(true)} className="text-destructive hover:bg-destructive/10 rounded-xl">
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
                 </Button>
               </div>
@@ -169,7 +169,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
       {/* Image preview */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="glass-card border-border max-w-4xl p-2">
+        <DialogContent className="glass-card border-border/50 max-w-4xl p-2">
           <DialogHeader className="sr-only"><DialogTitle>Preview</DialogTitle></DialogHeader>
           {previewImage && <img src={previewImage} alt="" className="w-full h-auto max-h-[80vh] object-contain rounded-xl" />}
         </DialogContent>
@@ -177,14 +177,14 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
       {/* Delete confirmation */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent className="glass-card border-border">
+        <AlertDialogContent className="glass-card border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir card</AlertDialogTitle>
             <AlertDialogDescription>Tem certeza que deseja excluir este card? Esta ação não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-secondary hover:bg-muted">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { deleteKanbanCard(card.id); onOpenChange(false); }}>
+            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl" onClick={() => { deleteKanbanCard(card.id); onOpenChange(false); }}>
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

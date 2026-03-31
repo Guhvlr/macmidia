@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/contexts/AppContext";
 import { useApp } from "@/contexts/useApp";
+import AppSidebar from "@/components/AppSidebar";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Employee from "./pages/Employee";
@@ -20,7 +21,7 @@ const queryClient = new QueryClient();
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useApp();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return <AppSidebar>{children}</AppSidebar>;
 }
 
 const AppRoutes = () => (

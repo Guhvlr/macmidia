@@ -62,11 +62,17 @@ export interface CalendarClient {
 }
 
 const DEFAULT_COLUMNS = [
-  { columnKey: 'todo', title: 'A Fazer', color: 'bg-info', position: 0 },
-  { columnKey: 'production', title: 'Em Produção', color: 'bg-warning', position: 1 },
-  { columnKey: 'correction', title: 'Correção', color: 'bg-destructive', position: 2 },
-  { columnKey: 'done', title: 'Finalizado', color: 'bg-success', position: 3 },
+  { columnKey: 'para-producao', title: 'Para Produção', color: 'bg-info', position: 0 },
+  { columnKey: 'em-producao', title: 'Em Produção', color: 'bg-warning', position: 1 },
+  { columnKey: 'alteracao', title: 'Alteração', color: 'bg-primary', position: 2 },
+  { columnKey: 'para-correcao', title: 'Para Correção', color: 'bg-destructive', position: 3 },
+  { columnKey: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive', position: 4 },
+  { columnKey: 'aprovado', title: 'Aprovado', color: 'bg-success', position: 5 },
+  { columnKey: 'programar', title: 'Programar', color: 'bg-info', position: 6 },
+  { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 7 },
 ];
+
+const FIXED_COLUMN_KEYS = DEFAULT_COLUMNS.map(c => c.columnKey);
 
 interface AppState {
   isAuthenticated: boolean;

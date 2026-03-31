@@ -123,8 +123,8 @@ const ArchivedCards = () => {
           </Button>
         </div>
       )}
+      </div>
     </div>
-  );
 };
 
 export default ArchivedCards;

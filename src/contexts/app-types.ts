@@ -1,0 +1,112 @@
+export interface KanbanCard {
+  id: string;
+  clientName: string;
+  description: string;
+  notes?: string;
+  images?: string[];
+  imageUrl?: string;
+  column: string;
+  timeSpent: number;
+  timerRunning: boolean;
+  timerStart?: number;
+  employeeId: string;
+  archivedAt?: string;
+}
+
+export interface KanbanColumnDef {
+  id: string;
+  employeeId: string;
+  columnKey: string;
+  title: string;
+  color: string;
+  position: number;
+}
+
+export interface CalendarTask {
+  id: string;
+  date: string;
+  clientName: string;
+  contentType: string;
+  description: string;
+  time: string;
+  imageUrl?: string;
+  status: string;
+  employeeId: string;
+  calendarClientId: string;
+}
+
+export interface Credential {
+  id: string;
+  label: string;
+  username: string;
+  password: string;
+  url?: string;
+  employeeId: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  photoUrl?: string;
+}
+
+export interface CalendarClient {
+  id: string;
+  name: string;
+}
+
+export const DEFAULT_COLUMNS = [
+  { columnKey: 'para-producao', title: 'Para Produção', color: 'bg-info', position: 0 },
+  { columnKey: 'em-producao', title: 'Em Produção', color: 'bg-warning', position: 1 },
+  { columnKey: 'alteracao', title: 'Alteração', color: 'bg-primary', position: 2 },
+  { columnKey: 'para-correcao', title: 'Para Correção', color: 'bg-destructive', position: 3 },
+  { columnKey: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive', position: 4 },
+  { columnKey: 'aprovado', title: 'Aprovado', color: 'bg-success', position: 5 },
+  { columnKey: 'programar', title: 'Programar', color: 'bg-info', position: 6 },
+  { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 7 },
+] as const;
+
+export const FIXED_COLUMN_KEYS = DEFAULT_COLUMNS.map((c) => c.columnKey);
+
+export function slugify(text: string) {
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+export interface AppState {
+  isAuthenticated: boolean;
+  employees: Employee[];
+  kanbanCards: KanbanCard[];
+  kanbanColumns: KanbanColumnDef[];
+  calendarTasks: CalendarTask[];
+  credentials: Credential[];
+  calendarClients: CalendarClient[];
+  dashboardBanner?: string;
+  dashboardLogo?: string;
+  loading: boolean;
+  login: (password: string) => boolean;
+  logout: () => void;
+  addEmployee: (emp: Omit<Employee, 'id'>) => void;
+  updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  deleteEmployee: (id: string, deleteData?: boolean) => void;
+  addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
+  updateKanbanCard: (id: string, updates: Partial<KanbanCard>) => void;
+  deleteKanbanCard: (id: string) => void;
+  moveKanbanCard: (id: string, column: string) => void;
+  addKanbanColumn: (employeeId: string, title: string, color: string) => void;
+  updateKanbanColumn: (id: string, updates: Partial<KanbanColumnDef>) => void;
+  deleteKanbanColumn: (id: string) => void;
+  getColumnsForEmployee: (employeeId: string) => KanbanColumnDef[];
+  addCalendarTask: (task: Omit<CalendarTask, 'id'>) => void;
+  updateCalendarTask: (id: string, updates: Partial<CalendarTask>) => void;
+  deleteCalendarTask: (id: string) => void;
+  convertTaskToCard: (taskId: string) => void;
+  addCredential: (cred: Omit<Credential, 'id'>) => void;
+  updateCredential: (id: string, updates: Partial<Credential>) => void;
+  deleteCredential: (id: string) => void;
+  addCalendarClient: (name: string) => void;
+  deleteCalendarClient: (id: string) => void;
+  setDashboardBanner: (url: string) => void;
+  setDashboardLogo: (url: string) => void;
+}

@@ -31,6 +31,7 @@ const AppRoutes = () => (
     <Route path="/calendario" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
     <Route path="/calendario/:clientId" element={<ProtectedRoute><ClientCalendar /></ProtectedRoute>} />
     <Route path="/cofre" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
+    <Route path="/postagem" element={<ProtectedRoute><PostingBoard /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

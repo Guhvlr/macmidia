@@ -360,17 +360,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!card) return;
       const now = Date.now();
       const dbUpdates: any = { column };
-      if (column === 'production' && card.column !== 'production') {
+      if (column === 'em-producao' && card.column !== 'em-producao') {
         dbUpdates.timer_running = true;
         dbUpdates.timer_start = now;
-      } else if (column !== 'production' && card.column === 'production' && card.timerRunning) {
+      } else if (column !== 'em-producao' && card.column === 'em-producao' && card.timerRunning) {
         const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
         dbUpdates.timer_running = false;
         dbUpdates.time_spent = card.timeSpent + elapsed;
         dbUpdates.timer_start = null;
       }
-      if (column === 'done') {
+      if (column === 'postado' && card.column !== 'postado') {
         dbUpdates.archived_at = new Date().toISOString();
+      } else if (column !== 'postado' && card.column === 'postado') {
+        dbUpdates.archived_at = null;
       }
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       if (error) throw error;

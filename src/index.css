@@ -1,51 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 5%;
-    --foreground: 0 0% 92%;
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
 
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 92%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 92%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 0 72% 51%;
+    --primary: 0 78% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 85%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 80%;
 
-    --muted: 0 0% 12%;
+    --muted: 0 0% 14%;
     --muted-foreground: 0 0% 50%;
 
-    --accent: 0 72% 51%;
+    --accent: 0 78% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 16%;
-    --input: 0 0% 16%;
-    --ring: 0 72% 51%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 78% 55%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 7%;
+    --sidebar-background: 0 0% 6%;
     --sidebar-foreground: 0 0% 85%;
-    --sidebar-primary: 0 72% 51%;
+    --sidebar-primary: 0 78% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 14%;
     --sidebar-accent-foreground: 0 0% 85%;
     --sidebar-border: 0 0% 14%;
-    --sidebar-ring: 0 72% 51%;
+    --sidebar-ring: 0 78% 55%;
 
     --success: 152 60% 42%;
     --warning: 38 92% 50%;
-    --info: 200 80% 50%;
+    --info: 210 80% 55%;
   }
 }
 
@@ -58,22 +60,108 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 25%);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 35%);
+  }
 }
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/80 backdrop-blur-xl border border-border/50 rounded-xl;
+    @apply bg-card/70 backdrop-blur-xl border border-border/60 rounded-2xl shadow-lg;
+    box-shadow:
+      0 4px 24px -4px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300;
+  }
+  .glass-card-hover:hover {
+    border-color: hsl(0 78% 55% / 0.3);
+    box-shadow:
+      0 8px 32px -4px rgba(0, 0, 0, 0.5),
+      0 0 24px -4px hsl(0 78% 55% / 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    transform: translateY(-2px);
   }
 
   .glow-primary {
-    box-shadow: 0 0 20px hsl(0 72% 51% / 0.15), 0 0 60px hsl(0 72% 51% / 0.05);
+    box-shadow:
+      0 0 20px hsl(0 78% 55% / 0.15),
+      0 0 60px hsl(0 78% 55% / 0.06),
+      0 4px 24px -4px rgba(0, 0, 0, 0.3);
   }
 
   .glow-accent {
-    box-shadow: 0 0 20px hsl(0 72% 51% / 0.15);
+    box-shadow: 0 0 20px hsl(0 78% 55% / 0.15);
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-red-400;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(0 78% 60%), hsl(0 70% 45%));
+  }
+
+  .gradient-bg {
+    background: linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 5% 6%) 50%, hsl(0 0% 4%) 100%);
+  }
+
+  .gradient-bg-subtle {
+    background: linear-gradient(135deg, hsl(0 0% 8%) 0%, hsl(0 3% 10%) 100%);
+  }
+
+  .btn-primary-glow {
+    @apply bg-primary text-primary-foreground font-medium;
+    box-shadow: 0 4px 16px hsl(0 78% 55% / 0.25), 0 2px 4px rgba(0,0,0,0.2);
+    transition: all 0.2s ease;
+  }
+  .btn-primary-glow:hover {
+    box-shadow: 0 6px 24px hsl(0 78% 55% / 0.35), 0 2px 8px rgba(0,0,0,0.3);
+    transform: translateY(-1px);
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* Column drop zone highlight */
+  .kanban-drop-active {
+    background: hsl(0 78% 55% / 0.05);
+    border-color: hsl(0 78% 55% / 0.3);
   }
 }

@@ -492,7 +492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!task) return;
       await addKanbanCard({
         clientName: task.clientName, description: `${task.contentType}: ${task.description}`,
-        column: 'todo', timeSpent: 0, timerRunning: false, employeeId: task.employeeId,
+        column: 'para-producao', timeSpent: 0, timerRunning: false, employeeId: task.employeeId,
       });
     } catch (err: any) {
       console.error('Erro ao converter tarefa:', err);

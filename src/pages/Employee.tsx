@@ -140,7 +140,7 @@ const Employee = () => {
             color={col.color}
             count={cards.filter(c => c.column === col.columnKey).length}
             onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
-            onDelete={!col.id.startsWith('default-') ? () => setDeleteColTarget(col.id) : undefined}
+            onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
           >
             {cards.filter(c => c.column === col.columnKey).map(card => (
               <KanbanCard key={card.id} card={card} />

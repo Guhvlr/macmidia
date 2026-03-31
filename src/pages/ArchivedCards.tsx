@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Archive, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

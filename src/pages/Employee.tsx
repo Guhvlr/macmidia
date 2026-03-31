@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp, FIXED_COLUMN_KEYS } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
+import { FIXED_COLUMN_KEYS } from '@/contexts/app-types';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';

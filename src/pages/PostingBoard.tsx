@@ -1,4 +1,4 @@
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';

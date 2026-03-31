@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { KanbanCard as KanbanCardType, useApp } from '@/contexts/AppContext';
+import { useState, useRef, useEffect } from 'react';
+import { useApp } from '@/contexts/useApp';
+import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';

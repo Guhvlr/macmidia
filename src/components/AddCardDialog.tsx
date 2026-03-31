@@ -49,7 +49,7 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
           <Plus className="w-4 h-4 mr-1" /> Novo Card
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-card border-border">
+      <DialogContent className="glass-card border-border">
         <DialogHeader>
           <DialogTitle>Novo Card</DialogTitle>
         </DialogHeader>

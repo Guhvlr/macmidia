@@ -156,11 +156,11 @@ const ClientCalendar = () => {
   const getTypeColor = (type: string) => typeColors[type] || typeColors['Outro'];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen gradient-bg">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-4 px-6 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-xl font-bold text-foreground">{client.name}</h1>

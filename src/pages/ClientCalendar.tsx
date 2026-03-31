@@ -395,7 +395,7 @@ const ClientCalendar = () => {
               <p className="text-xs text-muted-foreground">Nenhum funcionário cadastrado.</p>
             )}
 
-            <Button type="submit" className="w-full" disabled={!form.clientName.trim() || !form.employeeId}>Criar Tarefa</Button>
+            <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold" disabled={!form.clientName.trim() || !form.employeeId}>Criar Tarefa</Button>
           </form>
         </DialogContent>
       </Dialog>

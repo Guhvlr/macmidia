@@ -206,7 +206,7 @@ const ClientCalendar = () => {
                 Hoje
               </Button>
             )}
-            <div className="flex bg-secondary rounded-lg p-0.5 gap-0.5">
+            <div className="flex bg-secondary/50 rounded-xl p-0.5 gap-0.5 border border-border/30">
               <Button
                 size="sm"
                 variant={viewMode === 'calendar' ? 'default' : 'ghost'}

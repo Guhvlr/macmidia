@@ -72,7 +72,7 @@ const DEFAULT_COLUMNS = [
   { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 7 },
 ];
 
-const FIXED_COLUMN_KEYS = DEFAULT_COLUMNS.map(c => c.columnKey);
+export const FIXED_COLUMN_KEYS = DEFAULT_COLUMNS.map(c => c.columnKey);
 
 interface AppState {
   isAuthenticated: boolean;

@@ -142,6 +142,8 @@ export type Database = {
           photo_url: string | null
           role: string
           updated_at: string
+          email: string | null
+          password: string | null
         }
         Insert: {
           avatar?: string
@@ -151,6 +153,8 @@ export type Database = {
           photo_url?: string | null
           role?: string
           updated_at?: string
+          email?: string | null
+          password?: string | null
         }
         Update: {
           avatar?: string
@@ -160,6 +164,8 @@ export type Database = {
           photo_url?: string | null
           role?: string
           updated_at?: string
+          email?: string | null
+          password?: string | null
         }
         Relationships: []
       }
@@ -178,6 +184,7 @@ export type Database = {
           timer_running: boolean
           timer_start: number | null
           updated_at: string
+          history: any | null
         }
         Insert: {
           archived_at?: string | null
@@ -193,6 +200,7 @@ export type Database = {
           timer_running?: boolean
           timer_start?: number | null
           updated_at?: string
+          history?: any | null
         }
         Update: {
           archived_at?: string | null
@@ -208,6 +216,7 @@ export type Database = {
           timer_running?: boolean
           timer_start?: number | null
           updated_at?: string
+          history?: any | null
         }
         Relationships: [
           {

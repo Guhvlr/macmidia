@@ -1,26 +1,44 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { Lock, ArrowRight } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, UserPlus, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
 const Login = () => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
-  const { login, dashboardLogo } = useApp();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const { login, register, dashboardLogo } = useApp();
   const navigate = useNavigate();
 
   const logoSrc = dashboardLogo || defaultLogo;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(password)) {
+    setError(null);
+    setLoading(true);
+
+    let res: { success: boolean; error?: string };
+    if (isLogin) {
+      res = await login(email, password);
+    } else {
+      res = await register(name, email, password);
+    }
+    
+    setLoading(false);
+
+    if (res.success) {
+      if (!isLogin) {
+        // If registered, show success or just switch to login (Supabase signs in automatically on signup if email confirmation is disabled, but if it requires confirmation, it won't. Wait, we usually redirect or stay. We will just navigate to `/`)
+      }
       navigate('/');
     } else {
-      setError(true);
-      setTimeout(() => setError(false), 2000);
+      setError(res.error || 'Erro ao processar a solicitação.');
     }
   };
 
@@ -46,28 +64,60 @@ const Login = () => {
           </div>
         </div>
 
+          <div className="flex bg-secondary/50 p-1 rounded-xl mb-6">
+            <button type="button" onClick={() => { setIsLogin(true); setError(null); }} className={`flex-1 text-sm font-semibold rounded-lg py-2 transition-all ${isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Login</button>
+            <button type="button" onClick={() => { setIsLogin(false); setError(null); }} className={`flex-1 text-sm font-semibold rounded-lg py-2 transition-all ${!isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Cadastro</button>
+          </div>
+
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="relative group">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!isLogin && (
+            <div className="relative group animate-fade-in">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+              <Input
+                type="text"
+                placeholder="Seu nome"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                required
+                className="pl-11 h-12 bg-secondary/40 border-border/50 focus:border-primary/50 text-base rounded-xl placeholder:text-muted-foreground/60 transition-all"
+              />
+            </div>
+          )}
+          <div className="relative group animate-fade-in" style={{ animationDelay: '50ms' }}>
+            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            <Input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+              className="pl-11 h-12 bg-secondary/40 border-border/50 focus:border-primary/50 text-base rounded-xl placeholder:text-muted-foreground/60 transition-all"
+            />
+          </div>
+          <div className="relative group animate-fade-in" style={{ animationDelay: '100ms' }}>
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
             <Input
               type="password"
               placeholder="Senha de acesso"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="off"
-              data-lpignore="true"
+              autoComplete={isLogin ? "current-password" : "new-password"}
+              required
+              minLength={6}
               className="pl-11 h-12 bg-secondary/40 border-border/50 focus:border-primary/50 text-base rounded-xl placeholder:text-muted-foreground/60 transition-all"
             />
           </div>
           {error && (
-            <p className="text-destructive text-sm text-center animate-fade-in font-medium">
-              Senha incorreta
+            <p className="text-destructive text-sm text-center animate-fade-in font-medium mt-1">
+              {error === 'Invalid login credentials' ? 'Email ou senha incorretos' : error}
             </p>
           )}
-          <Button type="submit" className="w-full h-12 text-base font-semibold btn-primary-glow rounded-xl group">
-            Entrar
-            <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+          <Button type="submit" disabled={loading} className="w-full h-12 text-base font-semibold btn-primary-glow rounded-xl group mt-2">
+            {isLogin ? 'Entrar' : 'Criar Conta'}
+            {isLogin ? <LogIn className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" /> : <UserPlus className="w-4 h-4 ml-2 transition-transform group-hover:scale-110" />}
           </Button>
         </form>
 

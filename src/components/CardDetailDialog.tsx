@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import Timer from './Timer';
-import { Trash2, Upload, X, ZoomIn, Save } from 'lucide-react';
+import { Trash2, Upload, X, ZoomIn, Save, LayoutList, History } from 'lucide-react';
 
 interface Props {
   card: KanbanCardType;
@@ -25,6 +25,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const [isDragging, setIsDragging] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const markChanged = () => setHasChanges(true);
 
   const handleSave = () => {
-    updateKanbanCard(card.id, { clientName, description, notes, images: localImages });
+    updateKanbanCard(card.id, { clientName, description, notes, images: localImages }, "Atualizou informações do card");
     setHasChanges(false);
   };
 
@@ -70,9 +71,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     const now = Date.now();
     if (card.timerRunning) {
       const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
-      updateKanbanCard(card.id, { timerRunning: false, timeSpent: card.timeSpent + elapsed, timerStart: undefined });
+      updateKanbanCard(card.id, { timerRunning: false, timeSpent: card.timeSpent + elapsed, timerStart: undefined }, "Parou o timer");
     } else {
-      updateKanbanCard(card.id, { timerRunning: true, timerStart: now });
+      updateKanbanCard(card.id, { timerRunning: true, timerStart: now }, "Iniciou o timer");
     }
   };
 
@@ -87,7 +88,25 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 mt-2">
+          <div className="flex border-b border-border/30 mt-2 mb-4 space-x-6">
+            <button
+               onClick={() => setActiveTab('details')}
+               className={`pb-2.5 text-sm outline-none font-medium transition-colors relative ${activeTab === 'details' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <LayoutList className="w-4 h-4 inline-block mr-1.5 align-text-bottom" /> Detalhes
+              {activeTab === 'details' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />}
+            </button>
+            <button
+               onClick={() => setActiveTab('history')}
+               className={`pb-2.5 text-sm outline-none font-medium transition-colors relative ${activeTab === 'history' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <History className="w-4 h-4 inline-block mr-1.5 align-text-bottom" /> Histórico
+              {activeTab === 'history' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />}
+            </button>
+          </div>
+
+          {activeTab === 'details' ? (
+            <div className="space-y-5 relative">
             <div>
               <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Cliente</label>
               <Input
@@ -164,6 +183,30 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
               </div>
             </div>
           </div>
+          ) : (
+            <div className="space-y-4 py-2 min-h-[300px]">
+              {card.history && card.history.length > 0 ? (
+                <div className="space-y-5 pl-3 border-l-2 border-border/40 ml-2">
+                  {card.history.map(item => (
+                    <div key={item.id} className="relative">
+                      <div className="absolute -left-[19px] top-1 w-3 h-3 rounded-full bg-secondary border-2 border-primary ring-4 ring-background" />
+                      <p className="text-[13px] text-foreground font-medium flex items-center gap-1.5">
+                        {item.userName}
+                        <span className="text-muted-foreground/40 font-normal text-xs">•</span>
+                        <span className="text-muted-foreground font-normal text-xs">{new Date(item.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-0.5">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 opacity-50">
+                  <History className="w-10 h-10 mb-3 text-muted-foreground" />
+                  <p className="text-sm">Nenhum histórico registrado para este card.</p>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

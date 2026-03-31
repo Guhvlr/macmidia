@@ -1,3 +1,12 @@
+export interface CardAction {
+  id: string;
+  userId: string;
+  userName: string;
+  actionType: 'create' | 'move' | 'edit' | 'status_change';
+  description: string;
+  createdAt: string;
+}
+
 export interface KanbanCard {
   id: string;
   clientName: string;
@@ -11,6 +20,7 @@ export interface KanbanCard {
   timerStart?: number;
   employeeId: string;
   archivedAt?: string;
+  history?: CardAction[];
 }
 
 export interface KanbanColumnDef {
@@ -50,6 +60,8 @@ export interface Employee {
   role: string;
   avatar: string;
   photoUrl?: string;
+  email?: string;
+  password?: string;
 }
 
 export interface CalendarClient {
@@ -84,13 +96,16 @@ export interface AppState {
   dashboardBanner?: string;
   dashboardLogo?: string;
   loading: boolean;
-  login: (password: string) => boolean;
+  loggedUserId: string | null;
+  loggedUserName: string | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string, deleteData?: boolean) => void;
   addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
-  updateKanbanCard: (id: string, updates: Partial<KanbanCard>) => void;
+  updateKanbanCard: (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => void;
   deleteKanbanCard: (id: string) => void;
   moveKanbanCard: (id: string, column: string) => void;
   addKanbanColumn: (employeeId: string, title: string, color: string) => void;

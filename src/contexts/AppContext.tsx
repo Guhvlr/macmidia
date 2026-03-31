@@ -10,11 +10,12 @@ import type {
   Employee,
   KanbanCard,
   KanbanColumnDef,
+  CardAction,
 } from './app-types';
 import { DEFAULT_COLUMNS, slugify } from './app-types';
 
 function mapEmployee(row: any): Employee {
-  return { id: row.id, name: row.name, role: row.role, avatar: row.avatar, photoUrl: row.photo_url || undefined };
+  return { id: row.id, name: row.name, role: row.role, avatar: row.avatar, photoUrl: row.photo_url || undefined, email: row.email || undefined, password: row.password || undefined };
 }
 
 function mapKanbanCard(row: any): KanbanCard {
@@ -24,6 +25,7 @@ function mapKanbanCard(row: any): KanbanCard {
     column: row.column, timeSpent: row.time_spent ?? 0,
     timerRunning: row.timer_running ?? false, timerStart: row.timer_start || undefined,
     employeeId: row.employee_id, archivedAt: row.archived_at || undefined,
+    history: row.history || [],
   };
 }
 
@@ -53,9 +55,9 @@ function mapCalendarClient(row: any): CalendarClient {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('auth') || 'false'); } catch { return false; }
-  });
+  const [loggedUserId, setLoggedUserId] = useState<string | null>(null);
+  const [loggedUserName, setLoggedUserName] = useState<string | null>(null);
+  const isAuthenticated = !!loggedUserId;
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
   const [kanbanColumns, setKanbanColumns] = useState<KanbanColumnDef[]>([]);
@@ -147,13 +149,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, fetchAll, cleanupOldArchived]);
 
-  useEffect(() => { localStorage.setItem('auth', JSON.stringify(isAuthenticated)); }, [isAuthenticated]);
+  useEffect(() => { 
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setLoggedUserId(session.user.id);
+        setLoggedUserName(session.user.user_metadata?.full_name || session.user.email || 'Usuário');
+      } else {
+        setLoggedUserId(null);
+        setLoggedUserName(null);
+      }
+    });
 
-  const login = (password: string) => {
-    if (password === 'Mudar@123') { setIsAuthenticated(true); return true; }
-    return false;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setLoggedUserId(session.user.id);
+        setLoggedUserName(session.user.user_metadata?.full_name || session.user.email || 'Usuário');
+      } else {
+        setLoggedUserId(null);
+        setLoggedUserName(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   };
-  const logout = () => setIsAuthenticated(false);
+
+  const register = async (name: string, email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { full_name: name } }
+      });
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const logout = async () => { 
+    await supabase.auth.signOut();
+  };
+
+  const createHistoryAction = (actionType: 'create' | 'move' | 'edit' | 'status_change', description: string): CardAction => {
+    return {
+      id: crypto.randomUUID(),
+      userId: loggedUserId || 'unknown',
+      userName: loggedUserName || 'Sistema',
+      actionType,
+      description,
+      createdAt: new Date().toISOString()
+    };
+  };
 
   const addEmployee = async (emp: Omit<Employee, 'id'>) => {
     try {
@@ -206,12 +262,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addKanbanCard = async (card: Omit<KanbanCard, 'id'>) => {
     try {
+      const history = [createHistoryAction('create', `Criou o card na coluna`)];
       const { error } = await supabase.from('kanban_cards').insert({
         employee_id: card.employeeId, client_name: card.clientName,
         description: card.description || '', notes: card.notes || null,
         images: card.images || [], column: card.column,
         time_spent: card.timeSpent ?? 0, timer_running: card.timerRunning ?? false,
         timer_start: card.timerStart || null,
+        history
       });
       if (error) throw error;
     } catch (err: any) {
@@ -220,9 +278,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateKanbanCard = async (id: string, updates: Partial<KanbanCard>) => {
+  const updateKanbanCard = async (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => {
     try {
       const dbUpdates: any = {};
+      const card = kanbanCards.find(c => c.id === id);
+      if (actionDescription && card) {
+        const currentHistory = Array.isArray(card.history) ? card.history : [];
+        const newHistory = [createHistoryAction('edit', actionDescription), ...currentHistory];
+        dbUpdates.history = newHistory;
+      }
+      
       if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
       if (updates.description !== undefined) dbUpdates.description = updates.description;
       if ('notes' in updates) dbUpdates.notes = updates.notes || null;
@@ -232,6 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.timerRunning !== undefined) dbUpdates.timer_running = updates.timerRunning;
       if ('timerStart' in updates) dbUpdates.timer_start = updates.timerStart || null;
       if ('archivedAt' in updates) dbUpdates.archived_at = updates.archivedAt || null;
+      
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       if (error) throw error;
     } catch (err: any) {
@@ -254,8 +320,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const card = kanbanCards.find(c => c.id === id);
       if (!card) return;
+      
+      const colDef = kanbanColumns.find(c => c.columnKey === column);
+      const action = createHistoryAction('move', `Moveu para "${colDef?.title || column}"`);
+      const currentHistory = Array.isArray(card.history) ? card.history : [];
+      const newHistory = [action, ...currentHistory];
+      
       const now = Date.now();
-      const dbUpdates: any = { column };
+      const dbUpdates: any = { column, history: newHistory };
+      
       if (column === 'em-producao' && card.column !== 'em-producao') {
         dbUpdates.timer_running = true;
         dbUpdates.timer_start = now;
@@ -487,7 +560,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isAuthenticated, employees, kanbanCards, kanbanColumns,
       calendarTasks, credentials, calendarClients,
       dashboardBanner, dashboardLogo, loading,
-      login, logout,
+      loggedUserId, loggedUserName,
+      login, register, logout,
       addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,

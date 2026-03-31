@@ -45,7 +45,7 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button size="sm" className="btn-primary-glow">
           <Plus className="w-4 h-4 mr-1" /> Novo Card
         </Button>
       </DialogTrigger>

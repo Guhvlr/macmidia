@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, FIXED_COLUMN_KEYS } from '@/contexts/AppContext';
 import KanbanColumn from '@/components/KanbanColumn';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
@@ -140,7 +140,7 @@ const Employee = () => {
             color={col.color}
             count={cards.filter(c => c.column === col.columnKey).length}
             onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
-            onDelete={!col.id.startsWith('default-') ? () => setDeleteColTarget(col.id) : undefined}
+            onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
           >
             {cards.filter(c => c.column === col.columnKey).map(card => (
               <KanbanCard key={card.id} card={card} />

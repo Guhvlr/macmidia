@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -127,7 +127,12 @@ const Index = () => {
           )}
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button onClick={() => navigate('/postagem')} className="glass-card p-6 text-left hover:glow-primary transition-all duration-300 group cursor-pointer">
+            <Send className="w-8 h-8 text-primary mb-3 group-hover:scale-110 transition-transform" />
+            <h3 className="font-semibold text-card-foreground">Quadros de Postagem</h3>
+            <p className="text-sm text-muted-foreground">Centralizar e postar conteúdos</p>
+          </button>
           <button onClick={() => navigate('/calendario')} className="glass-card p-6 text-left hover:glow-primary transition-all duration-300 group cursor-pointer">
             <Calendar className="w-8 h-8 text-primary mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-semibold text-card-foreground">Calendário</h3>

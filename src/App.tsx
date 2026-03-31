@@ -11,6 +11,7 @@ import ArchivedCards from "./pages/ArchivedCards";
 import CalendarPage from "./pages/CalendarPage";
 import ClientCalendar from "./pages/ClientCalendar";
 import Vault from "./pages/Vault";
+import PostingBoard from "./pages/PostingBoard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const AppRoutes = () => (
     <Route path="/calendario" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
     <Route path="/calendario/:clientId" element={<ProtectedRoute><ClientCalendar /></ProtectedRoute>} />
     <Route path="/cofre" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
+    <Route path="/postagem" element={<ProtectedRoute><PostingBoard /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

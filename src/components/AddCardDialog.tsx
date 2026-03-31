@@ -17,7 +17,7 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
   const [open, setOpen] = useState(false);
   const [clientName, setClientName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedColumn, setSelectedColumn] = useState('todo');
+  const [selectedColumn, setSelectedColumn] = useState('para-producao');
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

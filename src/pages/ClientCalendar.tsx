@@ -516,7 +516,7 @@ const ClientCalendar = () => {
 
       {/* Image preview modal */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="bg-card border-border max-w-4xl p-2">
+        <DialogContent className="glass-card border-border max-w-4xl p-2">
           {previewImage && <img src={previewImage} alt="" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />}
         </DialogContent>
       </Dialog>

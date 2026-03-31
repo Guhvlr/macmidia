@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';

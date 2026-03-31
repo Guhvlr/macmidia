@@ -231,7 +231,7 @@ const ClientCalendar = () => {
 
         {/* Calendar grid view */}
         {viewMode === 'calendar' && (
-        <div className="border border-border rounded-xl overflow-hidden">
+        <div className="border border-border/50 rounded-2xl overflow-hidden shadow-lg">
           {/* Day headers */}
           <div className="grid grid-cols-7 bg-card/60">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (

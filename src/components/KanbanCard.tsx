@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { KanbanCard as KanbanCardType, useApp } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
+import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
 import CardDetailDialog from './CardDetailDialog';
 import { Trash2, ImageIcon } from 'lucide-react';

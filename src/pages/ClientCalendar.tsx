@@ -165,7 +165,7 @@ const ClientCalendar = () => {
           </Button>
           <h1 className="text-xl font-bold text-foreground">{client.name}</h1>
           <div className="ml-auto flex items-center gap-3 text-xs">
-            {Object.entries(statusCounts).map(([status, count]) => (
+            {Object.entries(statusCounts as Record<string, number>).map(([status, count]) => (
               <span key={status} className="flex items-center gap-1.5">
                 <span className={`inline-block w-2 h-2 rounded-full ${
                   status === 'pendente' ? 'bg-muted-foreground' :
@@ -173,7 +173,7 @@ const ClientCalendar = () => {
                   status === 'aprovado' ? 'bg-emerald-400' :
                   'bg-primary'
                 }`} />
-                <span className="text-muted-foreground">{count}</span>
+                <span className="text-muted-foreground">{String(count)}</span>
                 <span className="text-muted-foreground capitalize">{status}</span>
               </span>
             ))}

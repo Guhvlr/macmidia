@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
 import { Pencil, Trash2 } from 'lucide-react';
 
 interface Props {

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { useApp, KanbanColumnDef } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/useApp';
+import type { KanbanColumnDef } from '@/contexts/app-types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -95,7 +95,7 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
             </div>
           )}
 
-          <Button type="submit" className="w-full bg-primary text-primary-foreground">Adicionar</Button>
+          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold">Adicionar</Button>
         </form>
       </DialogContent>
     </Dialog>

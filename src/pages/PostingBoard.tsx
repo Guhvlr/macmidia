@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import KanbanCard from '@/components/KanbanCard';
 
 const POSTING_COLUMNS = [
-  { key: 'aprovado', title: 'Aprovado', color: 'bg-success' },
-  { key: 'programar', title: 'Programar', color: 'bg-info' },
+  { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-success' },
   { key: 'postado', title: 'Postado', color: 'bg-success' },
 ];
 

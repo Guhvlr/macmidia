@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { Calendar, LogOut, Shield, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';

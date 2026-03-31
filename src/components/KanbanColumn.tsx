@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { Pencil, Trash2 } from 'lucide-react';
 
@@ -14,37 +14,48 @@ interface Props {
 
 const KanbanColumn = ({ id, title, color, children, count, onEdit, onDelete }: Props) => {
   const { moveKanbanCard } = useApp();
+  const [dragOver, setDragOver] = useState(false);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setDragOver(false);
     const cardId = e.dataTransfer.getData('cardId');
     if (cardId) moveKanbanCard(cardId, id);
   };
 
   return (
     <div
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      className="flex flex-col min-h-[300px] min-w-[280px] w-[300px] flex-shrink-0"
+      className="flex flex-col min-h-[400px] min-w-[290px] w-[310px] flex-shrink-0"
     >
-      <div className="flex items-center gap-2 mb-3 group">
-        <div className={`w-2 h-2 rounded-full ${color}`} />
-        <h3 className="font-semibold text-sm">{title}</h3>
-        <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{count}</span>
+      {/* Column header */}
+      <div className="flex items-center gap-2.5 mb-3 px-1 group">
+        <div className={`w-2.5 h-2.5 rounded-full ${color} shadow-sm`} />
+        <h3 className="font-semibold text-sm tracking-wide text-foreground">{title}</h3>
+        <span className="text-[11px] text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full font-medium">{count}</span>
         <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {onEdit && (
-            <button onClick={onEdit} className="p-1 hover:text-primary transition-colors">
-              <Pencil className="w-3 h-3" />
+            <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-secondary hover:text-primary transition-all">
+              <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="p-1 hover:text-destructive transition-colors">
-              <Trash2 className="w-3 h-3" />
+            <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all">
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
-      <div className="space-y-3 flex-1 p-2 rounded-xl bg-secondary/30 border border-border/30">
+
+      {/* Cards container */}
+      <div className={`space-y-2.5 flex-1 p-2.5 rounded-2xl border transition-all duration-200
+        ${dragOver
+          ? 'bg-primary/5 border-primary/30 shadow-inner'
+          : 'bg-secondary/20 border-border/30'
+        }`}
+      >
         {children}
       </div>
     </div>

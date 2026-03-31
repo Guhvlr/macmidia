@@ -34,11 +34,15 @@ const Timer = ({ timeSpent, timerRunning, timerStart, onToggle }: TimerProps) =>
     <div className="flex items-center gap-2 text-xs">
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className="p-1 rounded hover:bg-secondary transition-colors"
+        className={`p-1.5 rounded-lg transition-all ${
+          timerRunning
+            ? 'bg-primary/20 text-primary hover:bg-primary/30'
+            : 'hover:bg-secondary text-muted-foreground hover:text-primary'
+        }`}
       >
-        {timerRunning ? <Pause className="w-3 h-3 text-accent" /> : <Play className="w-3 h-3 text-primary" />}
+        {timerRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
       </button>
-      <span className={`font-mono ${timerRunning ? 'text-accent' : 'text-muted-foreground'}`}>
+      <span className={`font-mono text-[11px] tracking-wider ${timerRunning ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
         {formatTime(display)}
       </span>
     </div>

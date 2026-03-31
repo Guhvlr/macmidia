@@ -31,7 +31,7 @@ const statusColors: Record<string, string> = {
 const ClientCalendar = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const { employees, calendarTasks, calendarClients, addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard, loading } = useApp();
+  const { employees, calendarTasks, calendarClients, addCalendarTask, updateCalendarTask, deleteCalendarTask, loading } = useApp();
   const [viewMode, setViewMode] = useState<'calendar' | 'feed'>('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -232,14 +232,14 @@ const ClientCalendar = () => {
 
         {/* Calendar grid view */}
         {viewMode === 'calendar' && (
-        <div className="border border-border/30 rounded-2xl overflow-hidden shadow-xl bg-card/20">
-          <div className="grid grid-cols-7 bg-card/40">
+        <div className="bg-black/40 p-3 md:p-4 rounded-[2rem] border border-white/5 shadow-2xl backdrop-blur-xl">
+          <div className="grid grid-cols-7 gap-2 mb-2">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-              <div key={d} className="text-center text-[11px] text-muted-foreground font-semibold py-3 border-b border-border/30 uppercase tracking-wider">{d}</div>
+              <div key={d} className="text-center text-[11px] text-white/60 font-bold py-2 uppercase tracking-widest">{d}</div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7">
+          <div className="grid grid-cols-7 gap-2">
             {cells.map((cell, i) => {
               const tasks = cell.isCurrentMonth ? getTasksForDate(cell.dateStr) : [];
               const isToday = cell.dateStr === todayStr && cell.isCurrentMonth;
@@ -247,46 +247,64 @@ const ClientCalendar = () => {
               return (
                 <div
                   key={i}
-                  className={`min-h-[120px] border-b border-r border-border/20 p-1.5 transition-colors group relative
-                    ${!cell.isCurrentMonth ? 'bg-background/30' : 'bg-card/10 hover:bg-card/30'}
-                    ${isToday ? 'ring-1 ring-inset ring-primary/40 bg-primary/[0.03]' : ''}
+                  className={`min-h-[130px] rounded-2xl p-2 transition-all duration-300 group relative flex flex-col border
+                    ${!cell.isCurrentMonth ? 'bg-white/[0.02] border-transparent opacity-50' : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.06] hover:border-white/20 hover:shadow-lg'}
+                    ${isToday ? 'ring-2 ring-inset ring-red-500/50 bg-red-500/10' : ''}
                   `}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md
-                      ${isToday ? 'bg-primary text-primary-foreground' : ''}
-                      ${!cell.isCurrentMonth ? 'text-muted-foreground/30' : 'text-muted-foreground'}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full
+                      ${isToday ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'text-white/70'}
                     `}>
                       {cell.day}
                     </span>
                     {cell.isCurrentMonth && (
                       <button
                         onClick={() => openAdd(cell.dateStr)}
-                        className="w-5 h-5 flex items-center justify-center rounded-md bg-primary/8 text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20"
+                        className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 text-white/70 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
 
-                  <div className="space-y-1 overflow-y-auto max-h-[90px]">
+                  <div className="space-y-1.5 overflow-y-auto max-h-[100px] flex-1 custom-scrollbar pr-1">
                     {tasks.map(task => (
-                      <button
-                        key={task.id}
-                        onClick={() => setEditTask(task)}
-                        className={`w-full text-left rounded-lg px-1.5 py-1 border transition-all hover:brightness-110 cursor-pointer ${getTypeColor(task.contentType)}`}
-                      >
-                        <div className="flex items-center gap-1">
+                      <div key={task.id} className="relative group/task">
+                        <button
+                          onClick={() => setEditTask(task)}
+                          className={`w-full text-left rounded-lg px-2 py-1.5 border border-white/5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${getTypeColor(task.contentType)}`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {task.imageUrl && (
+                              <img src={task.imageUrl} alt="" className="w-4 h-4 rounded shadow-sm object-cover flex-shrink-0" loading="lazy" />
+                            )}
+                            <span className="text-[10px] font-bold truncate leading-tight tracking-wide">{task.clientName}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[9px] font-semibold opacity-80 truncate">{task.contentType}</span>
+                            {task.time && <span className="text-[9px] font-medium opacity-60 ml-auto">{task.time}</span>}
+                          </div>
+                        </button>
+
+                        {/* Hover Preview Tooltip */}
+                        <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-[#0f0f11] border border-white/10 rounded-2xl shadow-2xl opacity-0 scale-95 pointer-events-none group-hover/task:opacity-100 group-hover/task:scale-100 transition-all duration-200 origin-bottom flex flex-col overflow-hidden">
                           {task.imageUrl && (
-                            <img src={task.imageUrl} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" loading="lazy" />
+                            <div className="h-24 w-full bg-black/50 relative overflow-hidden border-b border-white/5">
+                              <img src={task.imageUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
                           )}
-                          <span className="text-[10px] font-medium truncate leading-tight">{task.clientName}</span>
+                          <div className="p-3 bg-gradient-to-b from-transparent to-black/40">
+                            <p className="text-white text-xs font-extrabold leading-tight line-clamp-2">{task.clientName}</p>
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${getTypeColor(task.contentType)} border-0`}>{task.contentType}</span>
+                              {task.time && <span className="text-[10px] text-white/50 font-medium tracking-wide">{task.time}</span>}
+                            </div>
+                          </div>
+                          {/* Arrow */}
+                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#0f0f11] rotate-45 border-r border-b border-white/10" />
                         </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-[9px] opacity-70 truncate">{task.contentType}</span>
-                          {task.time && <span className="text-[9px] opacity-50">{task.time}</span>}
-                        </div>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -496,12 +514,9 @@ const ClientCalendar = () => {
                 <input ref={editFileInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'edit')} />
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-border/30">
-                <Button variant="outline" size="sm" onClick={() => { convertTaskToCard(editTask.id); setEditTask(null); }} className="rounded-xl text-xs">
-                  Enviar para Kanban
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => { deleteCalendarTask(editTask.id); setEditTask(null); }} className="rounded-xl text-xs">
-                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+              <div className="flex items-center justify-end pt-3 border-t border-border/30">
+                <Button variant="destructive" size="sm" onClick={() => { deleteCalendarTask(editTask.id); setEditTask(null); }} className="rounded-xl text-xs hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20">
+                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir Tarefa
                 </Button>
               </div>
             </div>

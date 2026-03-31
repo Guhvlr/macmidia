@@ -459,19 +459,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const convertTaskToCard = async (taskId: string) => {
-    try {
-      const task = calendarTasks.find(t => t.id === taskId);
-      if (!task) return;
-      await addKanbanCard({
-        clientName: task.clientName, description: `${task.contentType}: ${task.description}`,
-        column: 'para-producao', timeSpent: 0, timerRunning: false, employeeId: task.employeeId,
-      });
-    } catch (err: any) {
-      console.error('Erro ao converter tarefa:', err);
-      toast.error('Erro ao converter tarefa em card.');
-    }
-  };
 
   const addCredential = async (cred: Omit<Credential, 'id'>) => {
     try {
@@ -565,7 +552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
-      addCalendarTask, updateCalendarTask, deleteCalendarTask, convertTaskToCard,
+      addCalendarTask, updateCalendarTask, deleteCalendarTask,
       addCredential, updateCredential, deleteCredential,
       addCalendarClient, deleteCalendarClient,
       setDashboardBanner, setDashboardLogo,

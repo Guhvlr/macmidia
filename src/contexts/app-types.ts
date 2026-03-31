@@ -115,7 +115,6 @@ export interface AppState {
   addCalendarTask: (task: Omit<CalendarTask, 'id'>) => void;
   updateCalendarTask: (id: string, updates: Partial<CalendarTask>) => void;
   deleteCalendarTask: (id: string) => void;
-  convertTaskToCard: (taskId: string) => void;
   addCredential: (cred: Omit<Credential, 'id'>) => void;
   updateCredential: (id: string, updates: Partial<Credential>) => void;
   deleteCredential: (id: string) => void;

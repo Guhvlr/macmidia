@@ -101,9 +101,9 @@ const ArchivedCards = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map(card => (
-          <div key={card.id} className="glass-card p-4 space-y-2">
-            {card.images[0] && <img src={card.images[0]} alt="" className="w-full h-24 object-cover rounded-lg" />}
-            <h4 className="font-medium text-card-foreground">{card.clientName}</h4>
+          <div key={card.id} className="glass-card-hover p-5 space-y-3">
+            {card.images[0] && <img src={card.images[0]} alt="" className="w-full h-28 object-cover rounded-xl" />}
+            <h4 className="font-bold text-card-foreground">{card.clientName}</h4>
             <p className="text-xs text-muted-foreground line-clamp-2">{card.description}</p>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Tempo: {formatTime(card.timeSpent)}</span>

@@ -402,7 +402,7 @@ const ClientCalendar = () => {
 
       {/* Edit Task Detail Dialog */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
-        <DialogContent className="bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="glass-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalhes da Tarefa</DialogTitle></DialogHeader>
           {editTask && (
             <div className="space-y-4">

@@ -68,7 +68,7 @@ export const DEFAULT_COLUMNS = [
   { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 7 },
 ] as const;
 
-export const FIXED_COLUMN_KEYS = DEFAULT_COLUMNS.map((c) => c.columnKey);
+export const FIXED_COLUMN_KEYS: string[] = DEFAULT_COLUMNS.map((c) => c.columnKey);
 
 export function slugify(text: string) {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');

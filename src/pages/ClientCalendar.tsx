@@ -346,7 +346,7 @@ const ClientCalendar = () => {
 
       {/* Add Task Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="bg-card border-border max-w-lg">
+        <DialogContent className="glass-card border-border max-w-lg">
           <DialogHeader><DialogTitle>Nova Tarefa — {addDate}</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-3">
             <Input placeholder="Nome do conteúdo" value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} className="bg-secondary border-border" />

@@ -45,11 +45,11 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button size="sm" className="btn-primary-glow">
           <Plus className="w-4 h-4 mr-1" /> Novo Card
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-card border-border">
+      <DialogContent className="glass-card border-border">
         <DialogHeader>
           <DialogTitle>Novo Card</DialogTitle>
         </DialogHeader>
@@ -95,7 +95,7 @@ const AddCardDialog = ({ employeeId, columns }: Props) => {
             </div>
           )}
 
-          <Button type="submit" className="w-full bg-primary text-primary-foreground">Adicionar</Button>
+          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold">Adicionar</Button>
         </form>
       </DialogContent>
     </Dialog>

@@ -156,11 +156,11 @@ const ClientCalendar = () => {
   const getTypeColor = (type: string) => typeColors[type] || typeColors['Outro'];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen gradient-bg">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-4 px-6 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-xl font-bold text-foreground">{client.name}</h1>
@@ -206,7 +206,7 @@ const ClientCalendar = () => {
                 Hoje
               </Button>
             )}
-            <div className="flex bg-secondary rounded-lg p-0.5 gap-0.5">
+            <div className="flex bg-secondary/50 rounded-xl p-0.5 gap-0.5 border border-border/30">
               <Button
                 size="sm"
                 variant={viewMode === 'calendar' ? 'default' : 'ghost'}
@@ -231,7 +231,7 @@ const ClientCalendar = () => {
 
         {/* Calendar grid view */}
         {viewMode === 'calendar' && (
-        <div className="border border-border rounded-xl overflow-hidden">
+        <div className="border border-border/50 rounded-2xl overflow-hidden shadow-lg">
           {/* Day headers */}
           <div className="grid grid-cols-7 bg-card/60">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
@@ -346,7 +346,7 @@ const ClientCalendar = () => {
 
       {/* Add Task Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="bg-card border-border max-w-lg">
+        <DialogContent className="glass-card border-border max-w-lg">
           <DialogHeader><DialogTitle>Nova Tarefa — {addDate}</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-3">
             <Input placeholder="Nome do conteúdo" value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} className="bg-secondary border-border" />
@@ -395,14 +395,14 @@ const ClientCalendar = () => {
               <p className="text-xs text-muted-foreground">Nenhum funcionário cadastrado.</p>
             )}
 
-            <Button type="submit" className="w-full" disabled={!form.clientName.trim() || !form.employeeId}>Criar Tarefa</Button>
+            <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold" disabled={!form.clientName.trim() || !form.employeeId}>Criar Tarefa</Button>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Edit Task Detail Dialog */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
-        <DialogContent className="bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="glass-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalhes da Tarefa</DialogTitle></DialogHeader>
           {editTask && (
             <div className="space-y-4">
@@ -516,7 +516,7 @@ const ClientCalendar = () => {
 
       {/* Image preview modal */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="bg-card border-border max-w-4xl p-2">
+        <DialogContent className="glass-card border-border max-w-4xl p-2">
           {previewImage && <img src={previewImage} alt="" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />}
         </DialogContent>
       </Dialog>

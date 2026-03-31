@@ -13,7 +13,7 @@ const PostingBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
 
-  const activeCards = kanbanCards.filter(c => !c.archivedAt || ['aprovado', 'programar', 'postado'].includes(c.column));
+  const activeCards = kanbanCards.filter(c => !c.archivedAt || ['aprovado-programar', 'postado'].includes(c.column));
 
   const getEmployeeName = (id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido';
 

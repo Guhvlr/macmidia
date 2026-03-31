@@ -63,9 +63,8 @@ export const DEFAULT_COLUMNS = [
   { columnKey: 'alteracao', title: 'Alteração', color: 'bg-primary', position: 2 },
   { columnKey: 'para-correcao', title: 'Para Correção', color: 'bg-destructive', position: 3 },
   { columnKey: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive', position: 4 },
-  { columnKey: 'aprovado', title: 'Aprovado', color: 'bg-success', position: 5 },
-  { columnKey: 'programar', title: 'Programar', color: 'bg-info', position: 6 },
-  { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 7 },
+  { columnKey: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-success', position: 5 },
+  { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 6 },
 ] as const;
 
 export const FIXED_COLUMN_KEYS: string[] = DEFAULT_COLUMNS.map((c) => c.columnKey);

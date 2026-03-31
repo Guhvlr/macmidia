@@ -11,6 +11,7 @@ import ArchivedCards from "./pages/ArchivedCards";
 import CalendarPage from "./pages/CalendarPage";
 import ClientCalendar from "./pages/ClientCalendar";
 import Vault from "./pages/Vault";
+import PostingBoard from "./pages/PostingBoard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import KanbanCard from '@/components/KanbanCard';
 
 const POSTING_COLUMNS = [
-  { key: 'aprovado', title: 'Aprovado', color: 'bg-success' },
-  { key: 'programar', title: 'Programar', color: 'bg-info' },
+  { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-success' },
   { key: 'postado', title: 'Postado', color: 'bg-success' },
 ];
 
@@ -14,7 +13,7 @@ const PostingBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
 
-  const activeCards = kanbanCards.filter(c => !c.archivedAt || ['aprovado', 'programar', 'postado'].includes(c.column));
+  const activeCards = kanbanCards.filter(c => !c.archivedAt || ['aprovado-programar', 'postado'].includes(c.column));
 
   const getEmployeeName = (id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido';
 

@@ -125,6 +125,6 @@ const ArchivedCards = () => {
       )}
       </div>
     </div>
-};
+  );
 
 export default ArchivedCards;

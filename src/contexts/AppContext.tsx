@@ -11,8 +11,10 @@ import type {
   KanbanCard,
   KanbanColumnDef,
   CardAction,
+  SystemUser,
 } from './app-types';
 import { DEFAULT_COLUMNS, slugify } from './app-types';
+import { useMemo } from 'react';
 
 function mapEmployee(row: any): Employee {
   return { id: row.id, name: row.name, role: row.role, avatar: row.avatar, photoUrl: row.photo_url || undefined, email: row.email || undefined, password: row.password || undefined };
@@ -22,6 +24,9 @@ function mapKanbanCard(row: any): KanbanCard {
   return {
     id: row.id, clientName: row.client_name, description: row.description,
     notes: row.notes || undefined, images: row.images || [],
+    imageUrl: row.image_url || undefined, coverImage: row.cover_image || undefined,
+    labels: row.labels || [], checklists: row.checklists || [], comments: row.comments || [],
+    assignedUsers: row.assigned_users || [],
     column: row.column, timeSpent: row.time_spent ?? 0,
     timerRunning: row.timer_running ?? false, timerStart: row.timer_start || undefined,
     employeeId: row.employee_id, archivedAt: row.archived_at || undefined,
@@ -54,10 +59,26 @@ function mapCalendarClient(row: any): CalendarClient {
   return { id: row.id, name: row.name };
 }
 
+function mapSystemUser(row: any): SystemUser {
+  return {
+    id: row.id, fullName: row.full_name, email: row.email,
+    role: row.role as 'ADMIN' | 'USER', avatarUrl: row.avatar_url || undefined,
+    createdAt: row.created_at,
+  };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [loggedUserId, setLoggedUserId] = useState<string | null>(null);
   const [loggedUserName, setLoggedUserName] = useState<string | null>(null);
   const isAuthenticated = !!loggedUserId;
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
+  
+  const loggedUserRole = useMemo(() => {
+    if (!loggedUserId || systemUsers.length === 0) return null;
+    return systemUsers.find(u => u.id === loggedUserId)?.role || 'USER';
+  }, [loggedUserId, systemUsers]);
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
   const [kanbanColumns, setKanbanColumns] = useState<KanbanColumnDef[]>([]);
@@ -71,7 +92,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [empRes, cardsRes, colsRes, tasksRes, credsRes, clientsRes, settingsRes] = await Promise.all([
+      const [empRes, cardsRes, colsRes, tasksRes, credsRes, clientsRes, settingsRes, usersRes] = await Promise.all([
         supabase.from('employees').select('*'),
         supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('kanban_columns').select('*'),
@@ -79,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('credentials').select('*'),
         supabase.from('calendar_clients').select('*'),
         supabase.from('settings').select('*'),
+        (supabase as any).from('system_users').select('*'),
       ]);
       setEmployees(empRes.data?.map(mapEmployee) || []);
       setKanbanCards(cardsRes.data?.map(mapKanbanCard) || []);
@@ -86,6 +108,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCalendarTasks(tasksRes.data?.map(mapCalendarTask) || []);
       setCredentials(credsRes.data?.map(mapCredential) || []);
       setCalendarClients(clientsRes.data?.map(mapCalendarClient) || []);
+      setSystemUsers((usersRes.data as any[])?.map(mapSystemUser) || []);
+      
       if (settingsRes.data) {
         const banner = settingsRes.data.find((s: any) => s.key === 'dashboardBanner');
         const logo = settingsRes.data.find((s: any) => s.key === 'dashboardLogo');
@@ -144,6 +168,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_users' }, () => {
+        (supabase as any).from('system_users').select('*').then((r: any) => { 
+          if (r.data) {
+            setSystemUsers((r.data as any[]).map(mapSystemUser)); 
+          }
+        });
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -158,6 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLoggedUserId(null);
         setLoggedUserName(null);
       }
+      setIsAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -172,6 +204,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const adminDeleteUser = async (id: string) => {
+    try {
+      const { data, error } = await (supabase as any).rpc('admin_delete_user', { target_user_id: id });
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error('Erro ao excluir usuário:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const adminUpdateUserRole = async (id: string, newRole: string) => {
+    try {
+      const { data, error } = await (supabase as any).rpc('admin_update_user_role', { target_user_id: id, new_role: newRole });
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error('Erro ao atualizar papel do usuário:', err);
+      return { success: false, error: err.message };
+    }
+  };
 
   const login = async (email: string, password: string) => {
     try {
@@ -266,7 +320,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('kanban_cards').insert({
         employee_id: card.employeeId, client_name: card.clientName,
         description: card.description || '', notes: card.notes || null,
-        images: card.images || [], column: card.column,
+        images: card.images || [], image_url: card.imageUrl || null,
+        cover_image: card.coverImage || null, labels: card.labels || [],
+        checklists: card.checklists || [], comments: card.comments || [],
+        assigned_users: card.assignedUsers || [],
+        column: card.column,
         time_spent: card.timeSpent ?? 0, timer_running: card.timerRunning ?? false,
         timer_start: card.timerStart || null,
         history
@@ -292,6 +350,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updates.description !== undefined) dbUpdates.description = updates.description;
       if ('notes' in updates) dbUpdates.notes = updates.notes || null;
       if (updates.images !== undefined) dbUpdates.images = updates.images;
+      if ('imageUrl' in updates) dbUpdates.image_url = updates.imageUrl || null;
+      if ('coverImage' in updates) dbUpdates.cover_image = updates.coverImage || null;
+      if (updates.labels !== undefined) dbUpdates.labels = updates.labels;
+      if (updates.checklists !== undefined) dbUpdates.checklists = updates.checklists;
+      if (updates.comments !== undefined) dbUpdates.comments = updates.comments;
+      if (updates.assignedUsers !== undefined) dbUpdates.assigned_users = updates.assignedUsers;
       if (updates.column !== undefined) dbUpdates.column = updates.column;
       if (updates.timeSpent !== undefined) dbUpdates.time_spent = updates.timeSpent;
       if (updates.timerRunning !== undefined) dbUpdates.timer_running = updates.timerRunning;
@@ -544,11 +608,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      isAuthenticated, employees, kanbanCards, kanbanColumns,
+      isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
+      systemUsers, employees, kanbanCards, kanbanColumns,
       calendarTasks, credentials, calendarClients,
       dashboardBanner, dashboardLogo, loading,
-      loggedUserId, loggedUserName,
-      login, register, logout,
+      login, register, logout, adminDeleteUser, adminUpdateUserRole,
       addEmployee, updateEmployee, deleteEmployee,
       addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
       addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,

@@ -7,6 +7,15 @@ export interface CardAction {
   createdAt: string;
 }
 
+export interface SystemUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: 'ADMIN' | 'USER';
+  avatarUrl?: string;
+  createdAt: string;
+}
+
 export interface KanbanCard {
   id: string;
   clientName: string;
@@ -14,6 +23,11 @@ export interface KanbanCard {
   notes?: string;
   images?: string[];
   imageUrl?: string;
+  coverImage?: string;
+  labels?: string[];
+  checklists?: { id: string; title: string; completed: boolean }[];
+  comments?: { id: string; text: string; createdAt: string; userId: string; userName: string }[];
+  assignedUsers?: SystemUser[];
   column: string;
   timeSpent: number;
   timerRunning: boolean;
@@ -87,6 +101,11 @@ export function slugify(text: string) {
 
 export interface AppState {
   isAuthenticated: boolean;
+  isAuthLoading: boolean;
+  loggedUserId: string | null;
+  loggedUserName: string | null;
+  loggedUserRole: 'ADMIN' | 'USER' | null;
+  systemUsers: SystemUser[];
   employees: Employee[];
   kanbanCards: KanbanCard[];
   kanbanColumns: KanbanColumnDef[];
@@ -96,11 +115,11 @@ export interface AppState {
   dashboardBanner?: string;
   dashboardLogo?: string;
   loading: boolean;
-  loggedUserId: string | null;
-  loggedUserName: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  adminDeleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
+  adminUpdateUserRole: (id: string, role: string) => Promise<{ success: boolean; error?: string }>;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string, deleteData?: boolean) => void;

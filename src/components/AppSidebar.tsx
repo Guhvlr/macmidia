@@ -18,7 +18,7 @@ interface Props {
 const AppSidebar = ({ children }: Props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, dashboardLogo } = useApp();
+  const { logout, dashboardLogo, loggedUserRole } = useApp();
   const [collapsed, setCollapsed] = useState(false);
 
   const logoSrc = dashboardLogo || defaultLogo;
@@ -71,6 +71,29 @@ const AppSidebar = ({ children }: Props) => {
               {!collapsed && <span className="animate-fade-in">{label}</span>}
             </button>
           ))}
+          {loggedUserRole === 'ADMIN' && (
+            <>
+              <div className={`mt-6 mb-2 text-[10px] font-bold tracking-wider text-muted-foreground/50 uppercase ${collapsed ? 'text-center' : 'px-4'}`}>
+                {collapsed ? 'ADM' : 'Administração'}
+              </div>
+              <button
+                onClick={() => navigate('/usuarios')}
+                className={`relative w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 group
+                  ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5'}
+                  ${isActive('/usuarios')
+                    ? 'bg-primary/12 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                  }`}
+                title={collapsed ? 'Acessos do Sistema' : undefined}
+              >
+                {isActive('/usuarios') && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-primary rounded-r-full" />
+                )}
+                <Shield className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${isActive('/usuarios') ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                {!collapsed && <span className="animate-fade-in">Membros / Acessos</span>}
+              </button>
+            </>
+          )}
         </nav>
 
         {/* Bottom controls */}

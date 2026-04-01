@@ -3,30 +3,27 @@ import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
 import CardDetailDialog from './CardDetailDialog';
-import { Trash2, ImageIcon } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft } from 'lucide-react';
 
 interface Props {
   card: KanbanCardType;
 }
 
 const KanbanCard = ({ card }: Props) => {
-  const { updateKanbanCard, deleteKanbanCard } = useApp();
+  const { employees } = useApp();
   const [detailOpen, setDetailOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
-  const thumbImage = images[0];
+  const coverImage = card.coverImage || (images.length > 0 ? images[0] : null);
 
-  const toggleTimer = () => {
-    const now = Date.now();
-    if (card.timerRunning) {
-      const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
-      updateKanbanCard(card.id, { timerRunning: false, timeSpent: card.timeSpent + elapsed, timerStart: undefined });
-    } else {
-      updateKanbanCard(card.id, { timerRunning: true, timerStart: now });
-    }
-  };
+  const employee = employees.find(e => e.id === card.employeeId);
+  const safeChecklists = Array.isArray(card.checklists) ? card.checklists : [];
+  const safeComments = Array.isArray(card.comments) ? card.comments : [];
+  const safeAssignees = Array.isArray(card.assignedUsers) ? card.assignedUsers : [];
+  const totalChecklists = safeChecklists.length;
+  const completedChecklists = safeChecklists.filter(c => c?.completed).length;
+  const hasComments = safeComments.length > 0;
+  const hasDescription = !!card.description;
 
   return (
     <>
@@ -34,68 +31,81 @@ const KanbanCard = ({ card }: Props) => {
         draggable
         onDragStart={(e) => e.dataTransfer.setData('cardId', card.id)}
         onClick={() => setDetailOpen(true)}
-        className="glass-card p-4 space-y-3 cursor-pointer group
-          hover:border-primary/25 hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5),0_0_20px_-4px_hsl(0_80%_52%/0.06)]
-          active:cursor-grabbing active:scale-[0.97]
-          transition-all duration-250 animate-fade-in"
+        className="bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:cursor-grabbing active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col"
       >
-        {thumbImage && (
-          <div className="relative overflow-hidden rounded-xl -mx-0.5 -mt-0.5">
-            <img src={thumbImage} alt="" className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-card/70 to-transparent" />
+        {/* Quick action edit on hover */}
+        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="bg-black/60 hover:bg-black/80 p-1.5 rounded-md backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}>
+            <Edit3 className="w-3.5 h-3.5" />
+          </div>
+        </div>
+
+        {coverImage && (
+          <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 h-32 bg-black/40">
+            <img src={coverImage} alt="Capa" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <h4 className="font-semibold text-sm text-card-foreground flex-1 truncate">{card.clientName}</h4>
-          {images.length > 1 && (
-            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded-full border border-border/20">
-              <ImageIcon className="w-2.5 h-2.5" /> {images.length}
-            </span>
+        <div className="space-y-2 flex-1">
+          {/* Labels */}
+          {Array.isArray(card.labels) && card.labels.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {card.labels.map(label => (
+                <span key={label} className="px-2 py-0.5 text-[9px] font-bold text-white bg-red-600/90 rounded-sm truncate max-w-full" title={label}>
+                  {label}
+                </span>
+              ))}
+            </div>
           )}
+
+          <h4 className="font-bold text-[13px] text-white leading-tight uppercase line-clamp-2">{card.clientName}</h4>
         </div>
 
-        {card.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{card.description}</p>
-        )}
-
-        <div className="flex items-center justify-between pt-2 border-t border-border/20" onClick={e => e.stopPropagation()}>
-          <Timer
-            timeSpent={card.timeSpent}
-            timerRunning={card.timerRunning}
-            timerStart={card.timerStart}
-            onToggle={toggleTimer}
-          />
-          <button
-            onClick={() => setDeleteOpen(true)}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+        {/* Footer info: Icons & Avatar */}
+        <div className="flex items-center justify-between mt-auto pt-1">
+          <div className="flex items-center gap-2.5 text-white/50">
+            {hasDescription && (
+              <div title="Este card possui descrição"><AlignLeft className="w-3.5 h-3.5" /></div>
+            )}
+            {hasComments && (
+              <div className="flex items-center gap-1 text-[11px] font-medium" title="Comentários">
+                <MessageSquare className="w-3 h-3" />
+                <span>{safeComments.length}</span>
+              </div>
+            )}
+            {totalChecklists > 0 && (
+              <div className={`flex items-center gap-1 text-[11px] font-medium ${completedChecklists === totalChecklists ? 'text-emerald-500 bg-emerald-500/10 px-1 rounded-sm' : ''}`} title="Itens de checklist">
+                <CheckSquare className="w-3 h-3" />
+                <span>{completedChecklists}/{totalChecklists}</span>
+              </div>
+            )}
+            {images.length > 0 && (
+              <div className="flex items-center gap-1 text-[11px] font-medium">
+                <ImageIcon className="w-3 h-3" />
+                <span>{images.length}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-1.5 ml-2">
+            {safeAssignees.length > 0 ? (
+              <div className="flex items-center -space-x-1.5">
+                {safeAssignees.map(u => (
+                  <div key={u.id} className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-rose-600 border border-[#1C1C1E] flex items-center justify-center text-[9px] font-bold text-white shadow-sm ring-1 ring-white/10" title={`Responsável: ${u.fullName}`}>
+                    {(u.fullName || 'U').substring(0, 2).toUpperCase()}
+                  </div>
+                ))}
+              </div>
+            ) : employee && (
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-rose-600 border border-white/10 flex items-center justify-center text-[9px] font-bold text-white shadow-sm" title={`Responsável: ${employee.name || 'Equipe'}`}>
+                {(employee.name || 'U').substring(0, 2).toUpperCase()}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <CardDetailDialog card={card} open={detailOpen} onOpenChange={setDetailOpen} />
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="glass-card border-border/50">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir card</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o card "{card.clientName}"? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
-              onClick={() => deleteKanbanCard(card.id)}
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 };

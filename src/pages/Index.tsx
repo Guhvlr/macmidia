@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send, Shield, ArrowRight } from 'lucide-react';
+import { Calendar, Users, Plus, Camera, ImageIcon, Trash2, Loader2, Send, Shield, ArrowRight, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -86,9 +86,10 @@ const Index = () => {
 
       <div className="p-6 md:p-8 max-w-7xl mx-auto">
         {/* Quick action cards */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 animate-slide-up">
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10 animate-slide-up">
           {[
             { icon: Send, label: 'Quadros de Postagem', desc: 'Centralizar e publicar conteúdos', path: '/postagem', color: 'from-rose-500/10 to-transparent' },
+            { icon: Wrench, label: 'Correções', desc: 'Visão geral de alterações', path: '/correcao', color: 'from-blue-500/10 to-transparent' },
             { icon: Calendar, label: 'Calendário', desc: 'Planejamento de conteúdo mensal', path: '/calendario', color: 'from-amber-500/10 to-transparent' },
             { icon: Shield, label: 'Cofre de Acessos', desc: 'Credenciais seguras dos clientes', path: '/cofre', color: 'from-emerald-500/10 to-transparent' },
           ].map(({ icon: Icon, label, desc, path, color }) => (

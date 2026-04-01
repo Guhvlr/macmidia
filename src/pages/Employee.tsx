@@ -39,7 +39,8 @@ const Employee = () => {
   const cards = searchQuery.trim()
     ? allCards.filter(c => c.clientName.toLowerCase().includes(searchQuery.toLowerCase()) || c.description.toLowerCase().includes(searchQuery.toLowerCase()))
     : allCards;
-  const columns = employee ? getColumnsForEmployee(employee.id) : [];
+  // Oculta a coluna Postado do Kanban do usuário (centralizada apenas no Postagem)
+  const columns = employee ? getColumnsForEmployee(employee.id).filter(c => c.columnKey !== 'postado') : [];
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

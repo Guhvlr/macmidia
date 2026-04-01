@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanColumnDef } from '@/contexts/app-types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -6,22 +6,39 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Upload, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Props {
-  employeeId: string;
+  employeeId?: string;
   /** When provided, the card is created directly in this column (no selector shown) */
   fixedColumnKey?: string;
+  columnKey?: string;
   /** Custom trigger element. If omitted, a default "+" button is rendered */
   trigger?: React.ReactNode;
+  
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showEmployeeSelect?: boolean;
 }
 
-const AddCardDialog = ({ employeeId, fixedColumnKey, trigger }: Props) => {
-  const { addKanbanCard } = useApp();
-  const [open, setOpen] = useState(false);
+const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKey, trigger, open, onOpenChange, showEmployeeSelect }: Props) => {
+  const { addKanbanCard, employees } = useApp();
+  const [internalOpen, setInternalOpen] = useState(false);
   const [clientName, setClientName] = useState('');
   const [description, setDescription] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployeeId || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isControlled = open !== undefined && onOpenChange !== undefined;
+  const dialogOpen = isControlled ? open : internalOpen;
+  const setDialogOpen = isControlled ? onOpenChange : setInternalOpen;
+
+  useEffect(() => {
+    if (dialogOpen && initialEmployeeId && !selectedEmployeeId) {
+      setSelectedEmployeeId(initialEmployeeId);
+    }
+  }, [dialogOpen, initialEmployeeId]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
@@ -38,22 +55,24 @@ const AddCardDialog = ({ employeeId, fixedColumnKey, trigger }: Props) => {
     if (!clientName.trim()) return;
     addKanbanCard({
       clientName, description, images,
-      column: fixedColumnKey || 'para-producao',
-      timeSpent: 0, timerRunning: false, employeeId,
+      column: fixedColumnKey || columnKey || 'para-producao',
+      timeSpent: 0, timerRunning: false, employeeId: selectedEmployeeId || initialEmployeeId || '',
     });
-    setClientName(''); setDescription(''); setImages([]); setOpen(false);
+    setClientName(''); setDescription(''); setImages([]); setDialogOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <button className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-all group">
-            <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-            <span>Adicionar card</span>
-          </button>
-        )}
-      </DialogTrigger>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <button className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-all group">
+              <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span>Adicionar card</span>
+            </button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="glass-card border-border/50">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Novo Card</DialogTitle>
@@ -95,7 +114,23 @@ const AddCardDialog = ({ employeeId, fixedColumnKey, trigger }: Props) => {
             </div>
           )}
 
-          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold rounded-xl">Adicionar</Button>
+          {showEmployeeSelect && employees.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Responsável pelo Card</label>
+              <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl">
+                  <SelectValue placeholder="Selecione o funcionário" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold rounded-xl" disabled={!clientName.trim() || (showEmployeeSelect && !selectedEmployeeId)}>Adicionar</Button>
         </form>
       </DialogContent>
     </Dialog>

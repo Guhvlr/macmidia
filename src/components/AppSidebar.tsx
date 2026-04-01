@@ -1,11 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
-import { LayoutDashboard, Calendar, Shield, Send, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Calendar, Shield, Send, LogOut, ChevronLeft, ChevronRight, Users, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/equipe', icon: Users, label: 'Equipe' },
+  { path: '/correcao', icon: Wrench, label: 'Correções' },
   { path: '/postagem', icon: Send, label: 'Postagens' },
   { path: '/calendario', icon: Calendar, label: 'Calendário' },
   { path: '/cofre', icon: Shield, label: 'Cofre' },
@@ -18,8 +20,9 @@ interface Props {
 const AppSidebar = ({ children }: Props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, dashboardLogo, loggedUserRole } = useApp();
+  const { logout, dashboardLogo, loggedUserRole, employees } = useApp();
   const [collapsed, setCollapsed] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
 
   const logoSrc = dashboardLogo || defaultLogo;
 
@@ -52,25 +55,66 @@ const AppSidebar = ({ children }: Props) => {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1">
-          {navItems.map(({ path, icon: Icon, label }) => (
-            <button
-              key={path}
-              onClick={() => navigate(path)}
-              className={`relative w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 group
-                ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5'}
-                ${isActive(path)
-                  ? 'bg-primary/12 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                }`}
-              title={collapsed ? label : undefined}
-            >
-              {isActive(path) && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-primary rounded-r-full" />
-              )}
-              <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${isActive(path) ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
-              {!collapsed && <span className="animate-fade-in">{label}</span>}
-            </button>
-          ))}
+          {navItems.map(({ path, icon: Icon, label }) => {
+            if (path === '/equipe') {
+              return (
+                <div key={path} className="space-y-1">
+                  <button
+                    onClick={() => setTeamOpen(!teamOpen)}
+                    className={`relative w-full flex items-center justify-between gap-3 rounded-xl text-sm font-medium transition-all duration-200 group
+                      ${collapsed ? 'px-0 py-2.5 justify-center' : 'px-3.5 py-2.5'}
+                      ${location.pathname.startsWith('/funcionario') ? 'bg-primary/12 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}
+                    title={collapsed ? label : undefined}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${location.pathname.startsWith('/funcionario') ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                      {!collapsed && <span className="animate-fade-in">{label}</span>}
+                    </div>
+                    {!collapsed && (
+                      <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${teamOpen ? 'rotate-90' : ''}`} />
+                    )}
+                  </button>
+                  {teamOpen && !collapsed && (
+                    <div className="pl-10 pr-2 space-y-1 py-1 animate-in slide-in-from-top-2 fade-in duration-200">
+                      {employees.map(emp => (
+                        <button
+                          key={emp.id}
+                          onClick={() => navigate(`/funcionario/${emp.id}`)}
+                          className={`w-full text-left truncate rounded-lg py-1.5 px-2 text-xs font-medium transition-colors hover:bg-secondary hover:text-foreground
+                            ${location.pathname === `/funcionario/${emp.id}` ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
+                        >
+                          {emp.name}
+                        </button>
+                      ))}
+                      {employees.length === 0 && (
+                        <span className="text-[10px] text-muted-foreground px-2">Nenhum membro</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                className={`relative w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 group
+                  ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5'}
+                  ${isActive(path)
+                    ? 'bg-primary/12 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                  }`}
+                title={collapsed ? label : undefined}
+              >
+                {isActive(path) && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-primary rounded-r-full" />
+                )}
+                <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${isActive(path) ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                {!collapsed && <span className="animate-fade-in">{label}</span>}
+              </button>
+            );
+          })}
           {loggedUserRole === 'ADMIN' && (
             <>
               <div className={`mt-6 mb-2 text-[10px] font-bold tracking-wider text-muted-foreground/50 uppercase ${collapsed ? 'text-center' : 'px-4'}`}>

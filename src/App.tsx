@@ -14,6 +14,7 @@ import CalendarPage from "./pages/CalendarPage";
 import ClientCalendar from "./pages/ClientCalendar";
 import Vault from "./pages/Vault";
 import PostingBoard from "./pages/PostingBoard";
+import CorrectionBoard from "./pages/CorrectionBoard";
 import UsersAdmin from "./pages/UsersAdmin";
 import NotFound from "./pages/NotFound";
 
@@ -43,6 +44,7 @@ const AppRoutes = () => (
     <Route path="/calendario/:clientId" element={<ProtectedRoute><ClientCalendar /></ProtectedRoute>} />
     <Route path="/cofre" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
     <Route path="/postagem" element={<ProtectedRoute><PostingBoard /></ProtectedRoute>} />
+    <Route path="/correcao" element={<ProtectedRoute><CorrectionBoard /></ProtectedRoute>} />
     <Route path="/usuarios" element={<ProtectedRoute><UsersAdmin /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>

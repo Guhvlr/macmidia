@@ -402,15 +402,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbUpdates.time_spent = card.timeSpent + elapsed;
         dbUpdates.timer_start = null;
       }
-      if (column === 'postado' && card.column !== 'postado') {
+
+      // Auto-archive in postado, resurrect if returning to active columns
+      if (column === 'postado') {
         dbUpdates.archived_at = new Date().toISOString();
-      } else if (column !== 'postado' && card.column === 'postado') {
+      } else if (card.archivedAt && card.column === 'postado') {
         dbUpdates.archived_at = null;
       }
-      // Migrate legacy column keys
-      if (['aprovado', 'programar'].includes(card.column)) {
-        // handled by the column update above
-      }
+      
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       if (error) throw error;
     } catch (err: any) {

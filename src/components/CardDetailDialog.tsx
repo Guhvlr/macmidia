@@ -63,18 +63,30 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     setIsEditingDesc(false);
   };
 
-  const handleImagesUpload = (files: FileList | null) => {
+  const handleImagesUpload = async (files: FileList | null) => {
     if (!files) return;
-    Array.from(files).forEach(file => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const newImgs = [...localImages, reader.result as string];
-        setLocalImages(newImgs);
-        saveUpdates({ images: newImgs }, "Adicionou anexo(s) ao card");
-      };
-      reader.readAsDataURL(file);
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (validFiles.length === 0) return;
+
+    const base64Promises = validFiles.map(file => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
     });
+
+    const newBase64Images = await Promise.all(base64Promises);
+    const updatedImages = [...localImages, ...newBase64Images];
+    setLocalImages(updatedImages);
+    
+    const updates: Partial<KanbanCardType> = { images: updatedImages };
+    if (!coverImage && newBase64Images.length > 0 && localImages.length === 0) {
+      setCoverImage(newBase64Images[0]);
+      updates.coverImage = newBase64Images[0];
+    }
+    
+    saveUpdates(updates, `Adicionou ${validFiles.length} anexo(s) ao card`);
   };
 
   const removeImage = (index: number) => {
@@ -84,8 +96,10 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     
     let updates: Partial<KanbanCardType> = { images: newImgs };
     if (imgToRemove === coverImage) {
-      setCoverImage(null);
-      updates.coverImage = null;
+      // Pick another image as cover if possible
+      const newCover = newImgs.length > 0 ? newImgs[0] : null;
+      setCoverImage(newCover);
+      updates.coverImage = newCover;
     }
     saveUpdates(updates, "Removeu um anexo do card");
   };
@@ -95,10 +109,26 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates({ coverImage: imgUrl }, "Alterou a capa do card");
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(false);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleImagesUpload(e.dataTransfer.files);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      handleImagesUpload(e.dataTransfer.files);
+    }
   };
 
   // Checklists
@@ -180,7 +210,20 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="p-0 border-white/5 bg-[#161618] text-white max-w-5xl rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent 
+          className="p-0 border-white/5 bg-[#161618] text-white max-w-5xl rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center backdrop-blur-md border-2 border-dashed border-primary/50 animate-in fade-in duration-200">
+              <Upload className="w-16 h-16 text-primary mb-4" />
+              <h2 className="text-xl font-bold text-white mb-2 tracking-wider uppercase">Solte para anexar imagens</h2>
+              <p className="text-white/60 text-sm">As imagens serão adicionadas a este card</p>
+            </div>
+          )}
+
           {/* Cover Header */}
           {coverImage && (
             <div className="w-full h-48 bg-black/50 relative overflow-hidden group">

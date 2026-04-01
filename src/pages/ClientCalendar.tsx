@@ -5,6 +5,7 @@ import type { CalendarTask } from '@/contexts/app-types';
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, Copy, ArrowRightLeft, CopyPlus, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,6 +41,7 @@ const ClientCalendar = () => {
   const [editTask, setEditTask] = useState<CalendarTask | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [form, setForm] = useState({ clientName: '', contentType: '', description: '', time: '09:00', imageUrl: '', status: 'pendente', employeeId: '' });
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -346,7 +348,7 @@ const ClientCalendar = () => {
                                 <div className="p-1 rounded bg-white/5 hover:bg-white/20 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setEditTask(task); }}>
                                   <Edit className="w-[10px] h-[10px]" />
                                 </div>
-                                <div className="p-1 rounded bg-white/5 hover:bg-red-500/80 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); if(window.confirm('Excluir card?')) deleteCalendarTask(task.id); }}>
+                                <div className="p-1 rounded bg-white/5 hover:bg-red-500/80 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(task.id); }}>
                                   <Trash2 className="w-[10px] h-[10px]" />
                                 </div>
                               </div>
@@ -376,7 +378,7 @@ const ClientCalendar = () => {
                           <ContextMenuItem onClick={() => { setActionClientId(''); setActionDialog({ type: 'copy_client', taskId: task.id })}} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><CopyPlus className="w-3.5 h-3.5"/> Duplicar para outro cliente</ContextMenuItem>
                           <ContextMenuSeparator className="bg-white/10 my-1" />
                           <ContextMenuItem onClick={() => setEditTask(task)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><Edit className="w-3.5 h-3.5"/> Editar</ContextMenuItem>
-                          <ContextMenuItem onClick={() => { if(window.confirm('Tem certeza que deseja excluir?')) deleteCalendarTask(task.id); }} className="gap-2.5 cursor-pointer rounded-lg text-red-500 focus:bg-red-500/20 focus:text-red-500 py-2 text-xs"><Trash2 className="w-3.5 h-3.5"/> Excluir</ContextMenuItem>
+                          <ContextMenuItem onClick={() => setDeleteConfirm(task.id)} className="gap-2.5 cursor-pointer rounded-lg text-red-500 focus:bg-red-500/20 focus:text-red-500 py-2 text-xs"><Trash2 className="w-3.5 h-3.5"/> Excluir</ContextMenuItem>
                         </ContextMenuContent>
                       </ContextMenu>
                     ))}
@@ -486,6 +488,33 @@ const ClientCalendar = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <AlertDialogContent className="bg-[#161618] border-white/5 text-white max-w-md rounded-3xl shadow-2xl p-6 sm:p-8">
+          <AlertDialogHeader className="mb-4">
+            <AlertDialogTitle className="text-xl font-bold flex flex-col items-center gap-3 text-white text-center">
+              <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 mb-2">
+                <Trash2 className="w-7 h-7 text-red-500" />
+              </div>
+              Deseja remover este card?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/60 pt-2 text-sm leading-relaxed text-center font-medium max-w-[280px] mx-auto">
+              Esta ação excluirá a postagem do calendário permanentemente e não poderá ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-3 border-t border-white/5 pt-6 mt-2">
+            <AlertDialogCancel className="bg-[#1C1C1E] border-white/5 hover:bg-white/5 hover:text-white text-white rounded-xl h-11 w-full sm:w-1/2 font-medium transition-colors m-0 sm:m-0">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => { if(deleteConfirm) deleteCalendarTask(deleteConfirm); setDeleteConfirm(null); }}
+              className="bg-red-500 hover:bg-red-600 focus:ring-red-500 text-white rounded-xl h-11 w-full sm:w-1/2 font-bold shadow-lg shadow-red-500/20 m-0 sm:m-0"
+            >
+              Sim, Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit Task Detail Dialog */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>

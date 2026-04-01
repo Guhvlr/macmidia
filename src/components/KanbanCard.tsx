@@ -3,15 +3,16 @@ import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
 import CardDetailDialog from './CardDetailDialog';
-import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft } from 'lucide-react';
+import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud } from 'lucide-react';
 
 interface Props {
   card: KanbanCardType;
 }
 
 const KanbanCard = ({ card }: Props) => {
-  const { employees } = useApp();
+  const { employees, updateKanbanCard } = useApp();
   const [detailOpen, setDetailOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
   const coverImage = card.coverImage || (images.length > 0 ? images[0] : null);
@@ -25,14 +26,67 @@ const KanbanCard = ({ card }: Props) => {
   const hasComments = safeComments.length > 0;
   const hasDescription = !!card.description;
 
+  const handleDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+       e.preventDefault();
+       setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+       setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length === 0) return;
+
+      const base64Promises = files.map(file => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      });
+
+      const newBase64Images = await Promise.all(base64Promises);
+      const updatedImages = [...images, ...newBase64Images];
+      
+      const updates: Partial<KanbanCardType> = { images: updatedImages };
+      // If it's the first image ever, automatically make it the cover
+      if (!card.coverImage && updatedImages.length > 0) {
+        updates.coverImage = updatedImages[0];
+      }
+      
+      updateKanbanCard(card.id, updates, `Anexou ${files.length} imagem(ns) pelo painel`);
+    }
+  };
+
   return (
     <>
       <div
         draggable
         onDragStart={(e) => e.dataTransfer.setData('cardId', card.id)}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         onClick={() => setDetailOpen(true)}
-        className="bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:cursor-grabbing active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col"
+        className={`bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:cursor-grabbing active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
       >
+        {isDragOver && (
+          <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none rounded-xl">
+            <UploadCloud className="w-8 h-8 text-primary mb-2" />
+            <p className="text-white text-xs font-bold tracking-wider uppercase">Solte para anexar</p>
+          </div>
+        )}
+
         {/* Quick action edit on hover */}
         <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="bg-black/60 hover:bg-black/80 p-1.5 rounded-md backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}>

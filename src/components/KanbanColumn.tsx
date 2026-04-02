@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useCallback, memo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { Pencil, Trash2 } from 'lucide-react';
 import AddCardDialog from './AddCardDialog';
@@ -14,21 +14,30 @@ interface Props {
   onDelete?: () => void;
 }
 
-const KanbanColumn = ({ id, title, color, children, count, employeeId, onEdit, onDelete }: Props) => {
+const KanbanColumnInner = ({ id, title, color, children, count, employeeId, onEdit, onDelete }: Props) => {
   const { moveKanbanCard } = useApp();
   const [dragOver, setDragOver] = useState(false);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const cardId = e.dataTransfer.getData('cardId');
     if (cardId) moveKanbanCard(cardId, id);
-  };
+  }, [moveKanbanCard, id]);
 
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className="flex flex-col min-h-[420px] min-w-[300px] w-[320px] flex-shrink-0"
     >
@@ -69,5 +78,8 @@ const KanbanColumn = ({ id, title, color, children, count, employeeId, onEdit, o
     </div>
   );
 };
+
+const KanbanColumn = memo(KanbanColumnInner);
+KanbanColumn.displayName = 'KanbanColumn';
 
 export default KanbanColumn;

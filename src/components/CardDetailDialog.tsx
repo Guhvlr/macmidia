@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import Timer from './Timer';
-import { Trash2, Upload, X, ZoomIn, Save, Clock, History, CheckSquare, Paperclip, MessageSquare, Image as ImageIcon, Circle, CheckCircle2, MoreHorizontal, Plus, LayoutList, Users } from 'lucide-react';
+import { Trash2, Upload, X, ZoomIn, Save, Clock, History, CheckSquare, Paperclip, MessageSquare, Image as ImageIcon, Circle, CheckCircle2, MoreHorizontal, Plus, LayoutList, Users, Loader2 } from 'lucide-react';
+import { compressImage } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface Props {
@@ -40,6 +41,10 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [previewInitial, setPreviewInitial] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,25 +73,43 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
     if (validFiles.length === 0) return;
 
-    const base64Promises = validFiles.map(file => {
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-    });
+    setIsUploading(true);
+    setUploadProgress(10);
+    const tempUrl = URL.createObjectURL(validFiles[0]);
+    setPreviewInitial(tempUrl);
 
-    const newBase64Images = await Promise.all(base64Promises);
-    const updatedImages = [...localImages, ...newBase64Images];
-    setLocalImages(updatedImages);
-    
-    const updates: Partial<KanbanCardType> = { images: updatedImages };
-    if (!coverImage && newBase64Images.length > 0 && localImages.length === 0) {
-      setCoverImage(newBase64Images[0]);
-      updates.coverImage = newBase64Images[0];
+    try {
+      const compressPromises = validFiles.map(file => compressImage(file));
+      setUploadProgress(40);
+      
+      const newBase64Images = await Promise.all(compressPromises);
+      setUploadProgress(80);
+      
+      const updatedImages = [...localImages, ...newBase64Images];
+      setLocalImages(updatedImages);
+      
+      const updates: Partial<KanbanCardType> = { images: updatedImages };
+      if (!coverImage && newBase64Images.length > 0 && localImages.length === 0) {
+        setCoverImage(newBase64Images[0]);
+        updates.coverImage = newBase64Images[0];
+      }
+      
+      saveUpdates(updates, `Adicionou ${validFiles.length} anexo(s) ao card`);
+      setUploadProgress(100);
+      setUploadSuccess(true);
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadSuccess(false);
+        setPreviewInitial(null);
+        setUploadProgress(0);
+        URL.revokeObjectURL(tempUrl);
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+      setIsUploading(false);
+      setPreviewInitial(null);
+      URL.revokeObjectURL(tempUrl);
     }
-    
-    saveUpdates(updates, `Adicionou ${validFiles.length} anexo(s) ao card`);
   };
 
   const removeImage = (index: number) => {
@@ -216,11 +239,32 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {isDragging && (
-            <div className="absolute inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center backdrop-blur-md border-2 border-dashed border-primary/50 animate-in fade-in duration-200">
+          {isDragging && !isUploading && (
+            <div className="absolute inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center backdrop-blur-md border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none">
               <Upload className="w-16 h-16 text-primary mb-4" />
               <h2 className="text-xl font-bold text-white mb-2 tracking-wider uppercase">Solte para anexar imagens</h2>
               <p className="text-white/60 text-sm">As imagens serão adicionadas a este card</p>
+            </div>
+          )}
+
+          {isUploading && (
+            <div className="absolute inset-0 z-[110] bg-black/80 flex flex-col items-center justify-center backdrop-blur-md animate-in fade-in">
+              {uploadSuccess ? (
+                <>
+                  <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-4 animate-in zoom-in duration-300" />
+                  <h2 className="text-xl font-bold text-white mb-2 tracking-wider uppercase">Upload Concluído!</h2>
+                  {previewInitial && <img src={previewInitial} className="w-32 h-32 object-cover rounded-xl border-2 border-white/10 opacity-80 shadow-2xl mt-2" />}
+                </>
+              ) : (
+                <>
+                  <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+                  <h2 className="text-xl font-bold text-white mb-2 tracking-wider uppercase">Enviando arquivos... {uploadProgress}%</h2>
+                  <div className="w-64 h-2 bg-white/10 rounded-full mt-2 overflow-hidden mb-6">
+                     <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                  {previewInitial && <div className="p-1 rounded-xl bg-white/5 border border-white/5 shadow-2xl"><img src={previewInitial} className="w-24 h-24 object-cover rounded-lg blur-[2px] opacity-60" /></div>}
+                </>
+              )}
             </div>
           )}
 

@@ -2,8 +2,10 @@ import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import type { CalendarTask } from '@/contexts/app-types';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, Copy, ArrowRightLeft, CopyPlus, Edit } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, Copy, ArrowRightLeft, CopyPlus, Edit, CheckCircle2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { compressImage } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
@@ -24,10 +26,12 @@ const typeColors: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  'pendente': 'bg-muted text-muted-foreground',
-  'em produção': 'bg-warning/20 text-yellow-400',
-  'aprovado': 'bg-emerald-500/20 text-emerald-400',
-  'publicado': 'bg-primary/20 text-primary',
+  'pendente': 'bg-muted text-muted-foreground border-white/10',
+  'em produção': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'alteracao': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'alteração': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'aprovado': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  'publicado': 'bg-primary/20 text-primary border-primary/40',
 };
 
 const ClientCalendar = () => {
@@ -44,11 +48,18 @@ const ClientCalendar = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Tab state for Instagram-style modal
+  const [activeTab, setActiveTab] = useState<'Tema' | 'Conteúdo' | 'Mídia' | 'Legenda'>('Tema');
 
   // Additional states for context menu actions
   const [actionDialog, setActionDialog] = useState<{type: 'move_date' | 'copy_date' | 'copy_client', taskId: string} | null>(null);
   const [actionDate, setActionDate] = useState('');
   const [actionClientId, setActionClientId] = useState('');
+  
+  // Drag and Drop Upload state for Cards
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const [uploadingTask, setUploadingTask] = useState<{id: string, progress: number, success: boolean, preview: string | null} | null>(null);
 
   const client = calendarClients.find(c => c.id === clientId);
 
@@ -165,6 +176,45 @@ const ClientCalendar = () => {
     const taskId = e.dataTransfer.getData('taskId');
     if (taskId) {
       updateCalendarTask(taskId, { date: dateStr } as any);
+    }
+  };
+
+  const handleCardDragOver = (e: React.DragEvent, taskId: string) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOverCardId(taskId);
+    }
+  };
+
+  const handleCardDrop = async (e: React.DragEvent, taskId: string) => {
+    setDragOverCardId(null);
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+    if (!file) return;
+
+    const tempUrl = URL.createObjectURL(file);
+    setUploadingTask({ id: taskId, progress: 10, success: false, preview: tempUrl });
+
+    try {
+      const compressed = await compressImage(file);
+      setUploadingTask({ id: taskId, progress: 80, success: false, preview: tempUrl });
+      
+      updateCalendarTask(taskId, { imageUrl: compressed } as any);
+      
+      setUploadingTask({ id: taskId, progress: 100, success: true, preview: tempUrl });
+      setTimeout(() => {
+        setUploadingTask(null);
+        URL.revokeObjectURL(tempUrl);
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+      setUploadingTask(null);
+      URL.revokeObjectURL(tempUrl);
     }
   };
 
@@ -318,14 +368,40 @@ const ClientCalendar = () => {
                           <div
                             draggable
                             onDragStart={(e) => e.dataTransfer.setData('taskId', task.id)}
-                            className="relative group/task mb-1.5 last:mb-0 block"
+                            onDragOver={(e) => handleCardDragOver(e, task.id)}
+                            onDragLeave={(e) => { if(e.dataTransfer.types.includes('Files')) setDragOverCardId(null) }}
+                            onDrop={(e) => handleCardDrop(e, task.id)}
+                            className={`relative group/task mb-1.5 last:mb-0 block rounded-lg transition-all ${dragOverCardId === task.id ? 'ring-2 ring-primary scale-[1.02] z-10 bg-[#252528]' : ''}`}
                           >
+                            {uploadingTask?.id === task.id && (
+                              <div className="absolute inset-0 z-50 bg-black/80 rounded-lg flex flex-col items-center justify-center backdrop-blur-sm shadow-xl p-2 border border-white/10 overflow-hidden">
+                                {uploadingTask.success ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-500 animate-in zoom-in" />
+                                    <span className="text-[10px] font-bold text-white uppercase">Salvo</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-2 mb-2 w-full px-2">
+                                      <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                                      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadingTask.progress}%` }} />
+                                      </div>
+                                    </div>
+                                    {uploadingTask.preview && (
+                                      <img src={uploadingTask.preview} className="w-full h-10 object-cover opacity-50 rounded" alt="" />
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                            
                             <div
                               onClick={() => setEditTask(task)}
-                              className={`w-full text-left rounded-lg p-2.5 border border-white/5 bg-[#1C1C1E] hover:bg-[#252528] transition-all cursor-pointer shadow-md group/card flex flex-col gap-2 relative overflow-hidden`}
+                              className={`w-full text-left rounded-lg p-2.5 bg-[#1C1C1E] border ${dragOverCardId === task.id ? 'border-primary' : 'border-white/5'} hover:bg-[#252528] transition-all cursor-pointer shadow-md group/card flex flex-col gap-2 relative overflow-hidden`}
                             >
-                              {/* Left colored border indicative of type */}
-                              <div className={`absolute left-0 top-0 bottom-0 w-[3px] opacity-100 ${typeColors[task.contentType]?.split(' ')[0] || 'bg-gray-500'}`} />
+                              {/* Left colored border indicative of status instead of type format */}
+                              <div className={`absolute left-0 top-0 bottom-0 w-[4px] opacity-100 ${statusColors[task.status?.toLowerCase()]?.split(' ')[0] || 'bg-white/10'}`} />
                               
                               <div className="pl-1.5 pr-4">
                                 <span className="text-[11px] font-bold truncate leading-tight text-white block uppercase opacity-90">{task.clientName}</span>
@@ -338,7 +414,7 @@ const ClientCalendar = () => {
                                 </div>
                                 {task.imageUrl && (
                                   <div className="flex items-center gap-1 text-white/30 text-[9px] ml-auto">
-                                    <ImageIcon className="w-3 h-3" />
+                                    <ImageIcon className="w-3 h-3 text-emerald-400/80" />
                                   </div>
                                 )}
                               </div>
@@ -365,7 +441,7 @@ const ClientCalendar = () => {
                                 <p className="text-white text-[11px] font-bold leading-tight line-clamp-2 uppercase">{task.clientName}</p>
                                 <div className="flex items-center gap-2 mt-2">
                                   <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getTypeColor(task.contentType)}`}>{task.contentType}</span>
-                                  {task.time && <span className="text-[10px] text-white/40 font-medium tracking-wide ml-auto">{task.time}</span>}
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ml-auto ${statusColors[task.status?.toLowerCase()] || 'text-white/50'}`}>{task.status || 'Pendente'}</span>
                                 </div>
                               </div>
                             </div>
@@ -407,27 +483,51 @@ const ClientCalendar = () => {
           }
 
           return (
-            <div className="grid grid-cols-3 gap-1.5 md:gap-2.5 max-w-4xl mx-auto">
+            <div className="flex flex-col gap-8 max-w-[480px] w-full mx-auto pb-10">
               {feedTasks.map(task => (
-                <button
-                  key={task.id}
-                  onClick={() => setEditTask(task)}
-                  className="relative aspect-square overflow-hidden rounded-xl group bg-secondary border border-border/30 hover:border-primary/40 transition-all"
-                >
-                  <img
-                    src={task.imageUrl!}
-                    alt={task.clientName}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
-                    <span className="text-xs font-semibold text-white text-center truncate w-full uppercase">{task.clientName}</span>
-                    <Badge variant="secondary" className={`text-[10px] ${getTypeColor(task.contentType)}`}>
-                      {task.contentType}
+                <div key={task.id} className="bg-[#1C1C1E] border border-white/10 rounded-[1.5rem] overflow-hidden shadow-2xl">
+                  {/* Header */}
+                  <div className="flex items-center justify-between p-4 border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center font-bold text-xs shadow-md">
+                        {task.clientName?.substring(0,2).toUpperCase() || 'CX'}
+                      </div>
+                      <span className="font-bold text-sm tracking-wide text-white uppercase">{task.clientName}</span>
+                    </div>
+                    <Badge variant="outline" className={`font-semibold border-white/10 ${statusColors[task.status?.toLowerCase()] || 'bg-white/5 text-white/60'}`}>
+                      {task.status || 'Pendente'}
                     </Badge>
-                    <span className="text-[10px] text-white/50">{task.date}</span>
                   </div>
-                </button>
+                  
+                  {/* Image */}
+                  <div 
+                    className="relative w-full bg-[#121214] cursor-pointer group flex items-center justify-center"
+                    onClick={() => setEditTask(task)}
+                  >
+                    <img 
+                      src={task.imageUrl!} 
+                      className="w-full h-auto max-h-[600px] object-cover transition-transform duration-500 group-hover:scale-[1.01]" 
+                      loading="lazy" 
+                      alt=""
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                      <Button variant="secondary" className="font-bold rounded-xl shadow-2xl h-10 px-6"><Edit className="w-4 h-4 mr-2"/> Editar Card</Button>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-4 space-y-3 bg-[#161618]">
+                    <div className="flex items-center justify-between">
+                      <Badge className={`text-[10px] uppercase tracking-wider ${getTypeColor(task.contentType)}`}>{task.contentType}</Badge>
+                      <span className="text-[11px] text-white/40 font-medium">{task.date.split('-').reverse().join('/')}</span>
+                    </div>
+                    
+                    <div className="text-[13px] text-white/80 leading-relaxed whitespace-pre-wrap mt-2">
+                       <span className="font-bold text-white mr-2 uppercase">{task.clientName}</span>
+                       {task.description || <span className="text-white/30 italic">Nenhuma legenda informada para este post.</span>}
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           );
@@ -436,56 +536,192 @@ const ClientCalendar = () => {
 
       {/* Add Task Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="bg-[#121214] text-white border-white/10 max-w-lg rounded-2xl">
-          <DialogHeader><DialogTitle className="text-lg font-bold">Nova Tarefa — {addDate}</DialogTitle></DialogHeader>
-          <form onSubmit={handleAdd} className="space-y-3">
-            <Input placeholder="Nome do conteúdo" value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-red-500" />
+        <DialogContent className="bg-[#121214] text-white border-white/10 max-w-[950px] p-0 rounded-2xl overflow-hidden flex h-[700px] max-h-[90vh]">
+          {/* Left Instagram Preview */}
+          <div className="w-[380px] bg-[#0c0c0e] border-r border-white/10 flex flex-col items-center p-6 shrink-0 h-full overflow-y-auto custom-scrollbar">
+             <div className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl overflow-hidden flex flex-col mt-4">
+               {/* Header */}
+               <div className="flex items-center justify-between p-3.5 border-b border-white/5">
+                 <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-xs font-bold shadow-md">
+                      {(form.clientName || 'CL').substring(0,2).toUpperCase()}
+                    </div>
+                    <span className="font-bold text-[13px] tracking-wide">{form.clientName || 'Novo Post'}</span>
+                 </div>
+                 <MoreHorizontal className="w-4 h-4 text-white/50" />
+               </div>
+               
+               {/* Image */}
+               <div className="w-full aspect-[4/5] bg-[#0f0f11] flex items-center justify-center relative group">
+                 {form.imageUrl ? (
+                   <img src={form.imageUrl} className="w-full h-full object-cover" />
+                 ) : (
+                    <div className="text-white/20 flex flex-col items-center p-4 text-center">
+                       <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
+                       <span className="text-xs font-medium uppercase tracking-widest text-white/40">Sem Mídia</span>
+                    </div>
+                 )}
+                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center backdrop-blur-[2px]">
+                    <Upload className="w-8 h-8 text-white mb-2" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">Upload</span>
+                    <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => handleFileUpload(e, 'add')} />
+                 </div>
+               </div>
 
-            <Select value={form.contentType} onValueChange={v => setForm(f => ({ ...f, contentType: v }))}>
-              <SelectTrigger className="bg-white/5 border-white/10 rounded-xl focus:ring-red-500"><SelectValue placeholder="Tipo de conteúdo" /></SelectTrigger>
-              <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
-                {CONTENT_TYPES.map(t => <SelectItem key={t} value={t} className="focus:bg-white/10 focus:text-white rounded-lg">{t}</SelectItem>)}
-              </SelectContent>
-            </Select>
+               {/* Interaction Footer */}
+               <div className="p-3.5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-4">
+                      <Heart className="w-5 h-5 text-white hover:text-red-500 cursor-pointer transition-colors" />
+                      <MessageCircle className="w-5 h-5 text-white hover:text-white/70 cursor-pointer transition-colors" />
+                      <Send className="w-5 h-5 text-white hover:text-white/70 cursor-pointer transition-colors" />
+                    </div>
+                    <Bookmark className="w-5 h-5 text-white hover:text-white/70 cursor-pointer transition-colors" />
+                  </div>
+                  
+                  <div className="text-[13px] text-white/90 leading-tight">
+                    <span className="font-bold text-white mr-2">{form.clientName || 'Cliente'}</span>
+                    <span className="whitespace-pre-wrap opacity-80">{form.description || 'Sua legenda aparecerá aqui...'}</span>
+                  </div>
+               </div>
+             </div>
+          </div>
 
-            <Textarea placeholder="Descrição" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-white/5 border-white/10 min-h-[60px] rounded-xl focus-visible:ring-red-500" />
-            <Input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-red-500" />
-
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => handleDropUpload(e, 'add')}
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-white/10 bg-white/[0.02] rounded-xl p-3 text-center cursor-pointer hover:border-red-500/50 hover:bg-red-500/5 transition-all"
-            >
-              {form.imageUrl ? (
-                <div className="relative inline-block">
-                  <img src={form.imageUrl} alt="" className="max-h-32 rounded-lg mx-auto object-contain" />
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imageUrl: '' })); }} className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors">
-                    <X className="w-3 h-3 text-white" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Upload className="w-5 h-5 mx-auto text-white/40 mb-1" />
-                  <p className="text-xs text-white/40">Arraste uma imagem ou clique para upload</p>
-                </>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'add')} />
+          {/* Right Form Tabs */}
+          <div className="flex-1 flex flex-col bg-[#121214] h-full">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <h2 className="text-lg font-bold">Criar Post — {addDate}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowAddDialog(false)} className="rounded-full hover:bg-white/5 text-white/50 hover:text-white">
+                <X className="w-5 h-5" />
+              </Button>
             </div>
 
-            {employees.length > 0 ? (
-              <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
-                <SelectTrigger className="bg-white/5 border-white/10 rounded-xl focus:ring-red-500"><SelectValue placeholder="Responsável" /></SelectTrigger>
-                <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
-                  {employees.map(e => <SelectItem key={e.id} value={e.id} className="focus:bg-white/10 focus:text-white rounded-lg">{e.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-xs text-white/40">Nenhum funcionário cadastrado.</p>
-            )}
+            <div className="p-6 flex-1 overflow-y-auto tab-scrollbar">
+               {/* Custom Tabs */}
+               <div className="grid grid-cols-4 gap-3 mb-8">
+                  {['Tema', 'Conteúdo', 'Mídia', 'Legenda'].map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setActiveTab(tab as any)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 ${
+                        activeTab === tab 
+                          ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(239,68,68,0.1)]' 
+                          : 'border-white/10 bg-[#1C1C1E] hover:border-white/20'
+                      }`}
+                    >
+                       <span className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-white/70'}`}>{tab}</span>
+                       <span className="text-[10px] text-emerald-500 font-semibold uppercase mt-0.5 tracking-wider">Aprovado</span>
+                    </button>
+                  ))}
+               </div>
 
-            <Button type="submit" className="w-full h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-lg shadow-red-600/20 font-bold" disabled={!form.clientName.trim() || !form.employeeId}>Criar Tarefa</Button>
-          </form>
+               <form id="add-task-form" onSubmit={handleAdd} className="space-y-6">
+                 {activeTab === 'Tema' && (
+                   <div className="space-y-5 animate-in fade-in">
+                      <div>
+                        <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Nome da Postagem / Cliente</label>
+                        <Input placeholder="Nome do conteúdo..." value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus-visible:ring-red-500 text-white" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Horário</label>
+                        <Input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus-visible:ring-red-500 text-white w-full sm:w-1/2" />
+                      </div>
+                   </div>
+                 )}
+
+                 {activeTab === 'Conteúdo' && (
+                   <div className="space-y-5 animate-in fade-in">
+                      <div>
+                        <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Tipo de Conteúdo</label>
+                        <Select value={form.contentType} onValueChange={v => setForm(f => ({ ...f, contentType: v }))}>
+                          <SelectTrigger className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus:ring-red-500 text-white"><SelectValue placeholder="Formato" /></SelectTrigger>
+                          <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                            {CONTENT_TYPES.map(t => <SelectItem key={t} value={t} className="focus:bg-white/10 focus:text-white rounded-lg">{t}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Responsável</label>
+                        {employees.length > 0 ? (
+                          <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
+                            <SelectTrigger className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus:ring-red-500 text-white"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                            <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                              {employees.map(e => <SelectItem key={e.id} value={e.id} className="focus:bg-white/10 focus:text-white rounded-lg">{e.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-sm text-white/40 py-2">Nenhum funcionário cadastrado.</p>
+                        )}
+                      </div>
+                   </div>
+                 )}
+
+                 {activeTab === 'Mídia' && (
+                   <div className="space-y-5 animate-in fade-in">
+                      <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Anexo Base</label>
+                      <div
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => handleDropUpload(e, 'add')}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-white/10 bg-white/[0.02] rounded-2xl p-8 text-center cursor-pointer hover:border-red-500/50 hover:bg-red-500/5 transition-all flex flex-col items-center justify-center min-h-[200px]"
+                      >
+                        {form.imageUrl ? (
+                          <div className="relative inline-block w-full h-full max-h-[300px]">
+                            <img src={form.imageUrl} alt="" className="max-h-[300px] w-full rounded-lg object-contain" />
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imageUrl: '' })); }} className="absolute -top-3 -right-3 bg-red-600 rounded-full p-2 shadow-xl hover:bg-red-700 transition-colors">
+                              <X className="w-4 h-4 text-white" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                              <Upload className="w-8 h-8 text-white/40" />
+                            </div>
+                            <p className="text-sm font-bold text-white/80">Arraste uma imagem ou clique aqui</p>
+                            <p className="text-xs text-white/40 mt-1">Recomendado formato 4:5 ou 1:1</p>
+                          </>
+                        )}
+                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'add')} />
+                      </div>
+                   </div>
+                 )}
+
+                 {activeTab === 'Legenda' && (
+                   <div className="space-y-5 animate-in fade-in">
+                      <div>
+                        <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Texto / Legenda da Postagem</label>
+                        <Textarea placeholder="Escreva a legenda aqui..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-[#1C1C1E] border-white/10 min-h-[250px] rounded-xl focus-visible:ring-red-500 text-white resize-none text-[13px] leading-relaxed p-4" />
+                      </div>
+                   </div>
+                 )}
+               </form>
+            </div>
+
+            <div className="p-4 border-t border-white/5 bg-[#161618] flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 border border-white/10 bg-[#1C1C1E] rounded-xl pl-3 pr-1 py-1">
+                   <div className={`w-2.5 h-2.5 rounded-full ${statusColors[form.status]?.split(' ')[0] || 'bg-white/50'}`} />
+                   <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                     <SelectTrigger className="h-8 border-none bg-transparent shadow-none focus:ring-0 text-xs font-bold uppercase w-36"><SelectValue /></SelectTrigger>
+                     <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                        <SelectItem value="em produção">Em Produção</SelectItem>
+                        <SelectItem value="alteracao">Alteração</SelectItem>
+                        <SelectItem value="aprovado">Aprovado</SelectItem>
+                        <SelectItem value="publicado">Publicado</SelectItem>
+                     </SelectContent>
+                   </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" onClick={() => setShowAddDialog(false)} className="rounded-xl hover:bg-white/5">Cancelar</Button>
+                <Button type="submit" form="add-task-form" className="h-10 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-lg font-bold px-8" disabled={!form.clientName.trim() || !form.employeeId}>
+                  Criar Task
+                </Button>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -516,122 +752,199 @@ const ClientCalendar = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Task Detail Dialog */}
+      {/* Edit Task Detail Dialog (Unified Design) */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
-        <DialogContent className="bg-[#121214] text-white border-white/10 max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl p-0">
-          <DialogHeader className="p-6 pb-2 border-b border-white/5 sticky top-0 bg-[#121214] z-10">
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">Detalhes do Card</DialogTitle>
-          </DialogHeader>
-          
+        <DialogContent className="bg-[#121214] text-white border-white/10 max-w-[950px] p-0 rounded-2xl overflow-hidden flex h-[700px] max-h-[90vh]">
           {editTask && (
-            <div className="p-6 space-y-5">
-              <div>
-                <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Nome da Postagem</label>
-                <Input
-                  value={editTask.clientName}
-                  onChange={e => setEditTask(prev => prev ? { ...prev, clientName: e.target.value } : null)}
-                  onBlur={() => handleEditSave('clientName', editTask.clientName)}
-                  className="bg-white/5 border-white/10 rounded-xl font-medium focus-visible:ring-red-500"
-                />
+            <>
+              {/* Left Instagram Preview */}
+              <div className="w-[380px] bg-[#0c0c0e] border-r border-white/10 flex flex-col items-center p-6 shrink-0 h-full overflow-y-auto custom-scrollbar">
+                 <div className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl overflow-hidden flex flex-col mt-4">
+                   {/* Header */}
+                   <div className="flex items-center justify-between p-3.5 border-b border-white/5">
+                     <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-xs font-bold shadow-md">
+                          {(editTask.clientName || 'CL').substring(0,2).toUpperCase()}
+                        </div>
+                        <span className="font-bold text-[13px] tracking-wide uppercase">{editTask.clientName}</span>
+                     </div>
+                     <MoreHorizontal className="w-4 h-4 text-white/50" />
+                   </div>
+                   
+                   {/* Image */}
+                   <div className="w-full aspect-[4/5] bg-[#0f0f11] flex items-center justify-center relative group">
+                     {editTask.imageUrl ? (
+                       <img src={editTask.imageUrl} className="w-full h-full object-cover" />
+                     ) : (
+                        <div className="text-white/20 flex flex-col items-center p-4 text-center">
+                           <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
+                           <span className="text-xs font-medium uppercase tracking-widest text-white/40">Sem Mídia</span>
+                        </div>
+                     )}
+                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center backdrop-blur-[2px]">
+                        <Upload className="w-8 h-8 text-white mb-2" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-white">Upload</span>
+                        <input ref={editFileInputRef} type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => handleFileUpload(e, 'edit')} />
+                     </div>
+                   </div>
+
+                   {/* Interaction Footer */}
+                   <div className="p-3.5 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-4">
+                          <Heart className="w-5 h-5 text-white hover:text-red-500 cursor-pointer transition-colors" />
+                          <MessageCircle className="w-5 h-5 text-white hover:text-white/70 cursor-pointer transition-colors" />
+                          <Send className="w-5 h-5 text-white hover:text-white/70 cursor-pointer transition-colors" />
+                        </div>
+                        <Bookmark className="w-5 h-5 text-white hover:text-white/70 cursor-pointer transition-colors" />
+                      </div>
+                      
+                      <div className="text-[13px] text-white/90 leading-tight">
+                        <span className="font-bold text-white mr-2 uppercase">{editTask.clientName}</span>
+                        <span className="whitespace-pre-wrap opacity-80">{editTask.description || 'Nenhuma legenda'}</span>
+                      </div>
+                   </div>
+                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Formato</label>
-                  <Select value={editTask.contentType} onValueChange={v => { handleEditSave('contentType', v); }}>
-                    <SelectTrigger className="bg-white/5 border-white/10 rounded-xl focus:ring-red-500"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
-                      {CONTENT_TYPES.map(t => <SelectItem key={t} value={t} className="focus:bg-white/10 focus:text-white rounded-lg">{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              {/* Right Form Tabs */}
+              <div className="flex-1 flex flex-col bg-[#121214] h-full">
+                <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                  <h2 className="text-lg font-bold">Resumo do Card</h2>
+                  <Button variant="ghost" size="icon" onClick={() => setEditTask(null)} className="rounded-full hover:bg-white/5 text-white/50 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </Button>
                 </div>
-                <div>
-                  <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Status</label>
-                  <Select value={editTask.status} onValueChange={v => handleEditSave('status', v)}>
-                    <SelectTrigger className={`rounded-xl border border-white/10 focus:ring-red-500 ${statusColors[editTask.status] || ''}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
-                      <SelectItem value="pendente" className="focus:bg-white/10 focus:text-white rounded-lg">Pendente</SelectItem>
-                      <SelectItem value="em produção" className="focus:bg-white/10 focus:text-white rounded-lg">Em Produção</SelectItem>
-                      <SelectItem value="aprovado" className="focus:bg-white/10 focus:text-white rounded-lg">Aprovado</SelectItem>
-                      <SelectItem value="publicado" className="focus:bg-white/10 focus:text-white rounded-lg">Publicado</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                <div className="p-6 flex-1 overflow-y-auto tab-scrollbar">
+                   {/* Custom Tabs */}
+                   <div className="grid grid-cols-4 gap-3 mb-8">
+                      {['Tema', 'Conteúdo', 'Mídia', 'Legenda'].map(tab => (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setActiveTab(tab as any)}
+                          className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 ${
+                            activeTab === tab 
+                              ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(239,68,68,0.1)]' 
+                              : 'border-white/10 bg-[#1C1C1E] hover:border-white/20'
+                          }`}
+                        >
+                           <span className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-white/70'}`}>{tab}</span>
+                           <span className="text-[10px] text-emerald-500 font-semibold uppercase mt-0.5 tracking-wider">Aprovado</span>
+                        </button>
+                      ))}
+                   </div>
+
+                   <div className="space-y-6">
+                     {activeTab === 'Tema' && (
+                       <div className="space-y-5 animate-in fade-in">
+                          <div>
+                            <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Nome da Postagem / Cliente</label>
+                            <Input value={editTask.clientName} onChange={e => setEditTask(prev => prev ? { ...prev, clientName: e.target.value } : null)} onBlur={() => handleEditSave('clientName', editTask.clientName)} className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus-visible:ring-red-500 text-white" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Horário</label>
+                            <Input type="time" value={editTask.time} onChange={e => { const v = e.target.value; setEditTask(prev => prev ? { ...prev, time: v } : null); handleEditSave('time', v); }} className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus-visible:ring-red-500 text-white w-full sm:w-1/2" />
+                          </div>
+                       </div>
+                     )}
+
+                     {activeTab === 'Conteúdo' && (
+                       <div className="space-y-5 animate-in fade-in">
+                          <div>
+                            <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Tipo de Conteúdo</label>
+                            <Select value={editTask.contentType} onValueChange={v => handleEditSave('contentType', v)}>
+                              <SelectTrigger className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus:ring-red-500 text-white"><SelectValue placeholder="Formato" /></SelectTrigger>
+                              <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                                {CONTENT_TYPES.map(t => <SelectItem key={t} value={t} className="focus:bg-white/10 focus:text-white rounded-lg">{t}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Responsável</label>
+                            {employees.length > 0 ? (
+                              <Select value={editTask.employeeId} onValueChange={v => handleEditSave('employeeId', v)}>
+                                <SelectTrigger className="bg-[#1C1C1E] border-white/10 rounded-xl h-12 focus:ring-red-500 text-white"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                                <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                                  {employees.map(e => <SelectItem key={e.id} value={e.id} className="focus:bg-white/10 focus:text-white rounded-lg">{e.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <p className="text-sm text-white/40 py-2">Nenhum funcionário cadastrado.</p>
+                            )}
+                          </div>
+                       </div>
+                     )}
+
+                     {activeTab === 'Mídia' && (
+                       <div className="space-y-5 animate-in fade-in">
+                          <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Anexo Base</label>
+                          <div
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={e => handleDropUpload(e, 'edit')}
+                            onClick={() => editFileInputRef.current?.click()}
+                            className="border-2 border-dashed border-white/10 bg-white/[0.02] rounded-2xl p-8 text-center cursor-pointer hover:border-red-500/50 hover:bg-red-500/5 transition-all flex flex-col items-center justify-center min-h-[200px]"
+                          >
+                            {editTask.imageUrl ? (
+                              <div className="relative inline-block w-full h-full max-h-[300px]">
+                                <img src={editTask.imageUrl} alt="" className="max-h-[300px] w-full rounded-lg object-contain" />
+                                <button type="button" onClick={(e) => { e.stopPropagation(); updateCalendarTask(editTask.id, { imageUrl: undefined }); setEditTask(prev => prev ? { ...prev, imageUrl: undefined } : null); }} className="absolute -top-3 -right-3 bg-red-600 rounded-full p-2 shadow-xl hover:bg-red-700 transition-colors">
+                                  <X className="w-4 h-4 text-white" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                  <Upload className="w-8 h-8 text-white/40" />
+                                </div>
+                                <p className="text-sm font-bold text-white/80">Arraste uma imagem ou clique aqui</p>
+                                <p className="text-xs text-white/40 mt-1">Recomendado formato 4:5 ou 1:1</p>
+                              </>
+                            )}
+                          </div>
+                       </div>
+                     )}
+
+                     {activeTab === 'Legenda' && (
+                       <div className="space-y-5 animate-in fade-in">
+                          <div>
+                            <label className="text-xs text-white/50 uppercase tracking-wider font-bold mb-2 block">Texto / Legenda da Postagem</label>
+                            <Textarea value={editTask.description} onChange={e => setEditTask(prev => prev ? { ...prev, description: e.target.value } : null)} onBlur={() => handleEditSave('description', editTask.description)} className="bg-[#1C1C1E] border-white/10 min-h-[250px] rounded-xl focus-visible:ring-red-500 text-white resize-none text-[13px] leading-relaxed p-4" />
+                          </div>
+                       </div>
+                     )}
+                   </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Horário</label>
-                <Input
-                  type="time"
-                  value={editTask.time}
-                  onChange={e => { const v = e.target.value; setEditTask(prev => prev ? { ...prev, time: v } : null); handleEditSave('time', v); }}
-                  className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-red-500 w-32"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Descrição / Legenda</label>
-                <Textarea
-                  value={editTask.description}
-                  onChange={e => setEditTask(prev => prev ? { ...prev, description: e.target.value } : null)}
-                  onBlur={() => handleEditSave('description', editTask.description)}
-                  className="bg-white/5 border-white/10 min-h-[100px] rounded-xl focus-visible:ring-red-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Mídia do Card</label>
-                {editTask.imageUrl ? (
-                  <div className="relative group rounded-xl overflow-hidden bg-black/40 border border-white/5">
-                    <img src={editTask.imageUrl} alt="" className="w-full max-h-[300px] object-contain rounded-xl" />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
-                      <button onClick={() => setPreviewImage(editTask.imageUrl!)} className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors shadow-lg">
-                        <ZoomIn className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => editFileInputRef.current?.click()} className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors shadow-lg">
-                        <ImageIcon className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => { updateCalendarTask(editTask.id, { imageUrl: undefined }); setEditTask(prev => prev ? { ...prev, imageUrl: undefined } : null); }} className="p-3 rounded-full bg-red-500/80 hover:bg-red-500 text-white transition-colors shadow-lg">
-                        <X className="w-5 h-5" />
-                      </button>
+                {/* Edit Footer (Status & Excluir) */}
+                <div className="p-4 border-t border-white/5 bg-[#161618] flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 border border-white/10 bg-[#1C1C1E] rounded-xl pl-3 pr-1 py-1">
+                       <div className={`w-2.5 h-2.5 rounded-full ${statusColors[editTask.status?.toLowerCase()]?.split(' ')[0] || 'bg-white/50'}`} />
+                       <Select value={editTask.status} onValueChange={v => handleEditSave('status', v)}>
+                         <SelectTrigger className="h-8 border-none bg-transparent shadow-none focus:ring-0 text-xs font-bold uppercase w-36"><SelectValue /></SelectTrigger>
+                         <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                            <SelectItem value="pendente">Pendente</SelectItem>
+                            <SelectItem value="em produção">Em Produção</SelectItem>
+                            <SelectItem value="alteracao">Alteração</SelectItem>
+                            <SelectItem value="aprovado">Aprovado</SelectItem>
+                            <SelectItem value="publicado">Publicado</SelectItem>
+                         </SelectContent>
+                       </Select>
                     </div>
                   </div>
-                ) : (
-                  <div
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => handleDropUpload(e, 'edit')}
-                    onClick={() => editFileInputRef.current?.click()}
-                    className="border-2 border-dashed border-white/10 bg-white/[0.02] rounded-xl p-8 text-center cursor-pointer hover:border-red-500/50 hover:bg-red-500/5 transition-colors"
-                  >
-                    <Upload className="w-8 h-8 mx-auto text-white/30 mb-2" />
-                    <p className="text-sm font-medium text-white/60">Arraste ou clique para upload</p>
-                    <p className="text-[10px] text-white/40 mt-1">Imagens de referência do post</p>
+                  <div className="flex items-center gap-3">
+                    <Button variant="ghost" className="text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl" onClick={() => { if(window.confirm('Excluir este card permanentemente?')) { deleteCalendarTask(editTask.id); setEditTask(null); } }}>
+                      <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                    </Button>
+                    <Button onClick={() => setEditTask(null)} className="h-10 bg-white text-black hover:bg-white/90 rounded-xl transition-all shadow-lg font-bold px-8">
+                      Concluído
+                    </Button>
                   </div>
-                )}
-                <input ref={editFileInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'edit')} />
+                </div>
               </div>
-
-              <div>
-                <label className="text-[10px] text-white/40 mb-1.5 block font-bold uppercase tracking-wider">Responsável</label>
-                <Select value={editTask.employeeId} onValueChange={v => handleEditSave('employeeId', v)}>
-                  <SelectTrigger className="bg-white/5 border-white/10 rounded-xl focus:ring-red-500"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
-                    {employees.map(e => <SelectItem key={e.id} value={e.id} className="focus:bg-white/10 focus:text-white rounded-lg">{e.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center justify-between pt-4 pb-2">
-                <Button variant="ghost" className="text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl px-4" onClick={() => { if(window.confirm('Excluir este card permanentemente?')) { deleteCalendarTask(editTask.id); setEditTask(null); } }}>
-                  <Trash2 className="w-4 h-4 mr-2" /> Excluir Card
-                </Button>
-                <Button onClick={() => setEditTask(null)} className="rounded-xl px-6 bg-white border border-white hover:bg-gray-200 text-black font-bold">
-                  Concluído
-                </Button>
-              </div>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

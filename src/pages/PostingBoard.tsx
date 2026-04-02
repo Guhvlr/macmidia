@@ -1,3 +1,4 @@
+import { useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Send } from 'lucide-react';
@@ -8,18 +9,45 @@ const POSTING_COLUMNS = [
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
   { key: 'postado', title: 'Postado', color: 'bg-success' },
   { key: 'alteracao', title: 'Alterações', color: 'bg-warning' },
-];
+] as const;
 
 const PostingBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
 
-  const activeCards = kanbanCards.filter(c => {
-    if (c.archivedAt && c.column !== 'postado') return false; 
-    return ['aprovado-programar', 'postado', 'alteracao'].includes(c.column);
-  });
+  // Memoize filtered cards to avoid recalculating on every render
+  const activeCards = useMemo(() =>
+    kanbanCards.filter(c => {
+      if (c.archivedAt && c.column !== 'postado') return false; 
+      return ['aprovado-programar', 'postado', 'alteracao'].includes(c.column);
+    }),
+    [kanbanCards]
+  );
 
-  const getEmployeeName = (id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido';
+  // Memoize cards grouped by column for O(1) access
+  const cardsByColumn = useMemo(() => {
+    const grouped: Record<string, typeof activeCards> = {};
+    POSTING_COLUMNS.forEach(col => { grouped[col.key] = []; });
+    activeCards.forEach(card => {
+      if (grouped[card.column]) grouped[card.column].push(card);
+    });
+    return grouped;
+  }, [activeCards]);
+
+  const getEmployeeName = useCallback((id: string) =>
+    employees.find(e => e.id === id)?.name || 'Desconhecido',
+    [employees]
+  );
+
+  const handleDrop = useCallback((e: React.DragEvent, colKey: string) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData('cardId');
+    if (cardId) moveKanbanCard(cardId, colKey);
+  }, [moveKanbanCard]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
 
   if (loading) {
     return (
@@ -51,16 +79,12 @@ const PostingBoard = () => {
       <div className="p-6">
         <div className="flex gap-5 overflow-x-auto pb-4">
           {POSTING_COLUMNS.map(col => {
-            const colCards = activeCards.filter(c => c.column === col.key);
+            const colCards = cardsByColumn[col.key] || [];
             return (
               <div
                 key={col.key}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => {
-                  e.preventDefault();
-                  const cardId = e.dataTransfer.getData('cardId');
-                  if (cardId) moveKanbanCard(cardId, col.key);
-                }}
+                onDragOver={handleDragOver}
+                onDrop={e => handleDrop(e, col.key)}
                 className="flex flex-col min-h-[420px] min-w-[340px] w-[360px] flex-shrink-0"
               >
                 <div className="flex items-center gap-2.5 mb-3 px-1">

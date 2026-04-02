@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Wrench, Plus } from 'lucide-react';
@@ -19,9 +19,27 @@ const CorrectionBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
 
-  const activeCards = kanbanCards.filter(c => !c.archivedAt && CORRECTION_COLUMNS.some(col => col.key === c.column));
+  const activeCards = useMemo(() => kanbanCards.filter(c => !c.archivedAt && CORRECTION_COLUMNS.some(col => col.key === c.column)), [kanbanCards]);
 
-  const getEmployeeName = (id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido';
+  // Pre-group cards by column for O(1) access
+  const cardsByColumn = useMemo(() => {
+    const grouped: Record<string, typeof activeCards> = {};
+    CORRECTION_COLUMNS.forEach(col => { grouped[col.key] = []; });
+    activeCards.forEach(card => {
+      if (grouped[card.column]) grouped[card.column].push(card);
+    });
+    return grouped;
+  }, [activeCards]);
+
+  const getEmployeeName = useCallback((id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido', [employees]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, colKey: string) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData('cardId');
+    if (cardId) moveKanbanCard(cardId, colKey);
+  }, [moveKanbanCard]);
 
   if (loading) {
     return (
@@ -53,16 +71,12 @@ const CorrectionBoard = () => {
       <div className="p-6">
         <div className="flex gap-5 overflow-x-auto pb-4 custom-scrollbar">
           {CORRECTION_COLUMNS.map(col => {
-            const colCards = activeCards.filter(c => c.column === col.key);
+            const colCards = cardsByColumn[col.key] || [];
             return (
               <div
                 key={col.key}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => {
-                  e.preventDefault();
-                  const cardId = e.dataTransfer.getData('cardId');
-                  if (cardId) moveKanbanCard(cardId, col.key);
-                }}
+                onDragOver={handleDragOver}
+                onDrop={e => handleDrop(e, col.key)}
                 className="flex flex-col min-h-[500px] min-w-[340px] w-[360px] flex-shrink-0"
               >
                 <div className="flex items-center gap-2.5 mb-3 px-1">

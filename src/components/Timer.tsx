@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { Play, Pause } from 'lucide-react';
 
 interface TimerProps {
@@ -15,7 +15,7 @@ function formatTime(seconds: number) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-const Timer = ({ timeSpent, timerRunning, timerStart, onToggle }: TimerProps) => {
+const Timer = memo(({ timeSpent, timerRunning, timerStart, onToggle }: TimerProps) => {
   const [display, setDisplay] = useState(timeSpent);
 
   useEffect(() => {
@@ -23,11 +23,27 @@ const Timer = ({ timeSpent, timerRunning, timerStart, onToggle }: TimerProps) =>
       setDisplay(timeSpent);
       return;
     }
-    const interval = setInterval(() => {
-      const elapsed = timerStart ? Math.floor((Date.now() - timerStart) / 1000) : 0;
-      setDisplay(timeSpent + elapsed);
-    }, 1000);
-    return () => clearInterval(interval);
+    // Use requestAnimationFrame-based interval for better perf
+    let rafId: number;
+    let lastUpdate = Date.now();
+    
+    const tick = () => {
+      const now = Date.now();
+      // Only update visual every 1s to minimize re-renders
+      if (now - lastUpdate >= 1000) {
+        const elapsed = timerStart ? Math.floor((now - timerStart) / 1000) : 0;
+        setDisplay(timeSpent + elapsed);
+        lastUpdate = now;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    
+    // Initial calc
+    const elapsed = timerStart ? Math.floor((Date.now() - timerStart) / 1000) : 0;
+    setDisplay(timeSpent + elapsed);
+    
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [timerRunning, timerStart, timeSpent]);
 
   return (
@@ -47,6 +63,8 @@ const Timer = ({ timeSpent, timerRunning, timerStart, onToggle }: TimerProps) =>
       </span>
     </div>
   );
-};
+});
+
+Timer.displayName = 'Timer';
 
 export default Timer;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AppContext } from './app-context';
@@ -67,6 +67,15 @@ function mapSystemUser(row: any): SystemUser {
   };
 }
 
+// ---- Debounced refetch utility ----
+function createDebouncedRefetch(fn: () => void, delayMs = 2000) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { fn(); timer = null; }, delayMs);
+  };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [loggedUserId, setLoggedUserId] = useState<string | null>(null);
@@ -88,6 +97,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dashboardBanner, setDashboardBannerState] = useState<string | undefined>();
   const [dashboardLogo, setDashboardLogoState] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+
+  // Track pending optimistic updates to avoid realtime overwrite
+  const pendingOpsRef = useRef<Set<string>>(new Set());
 
   const fetchAll = useCallback(async () => {
     try {
@@ -133,6 +145,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ---- Debounced realtime refetchers (prevent cascade) ----
+  const debouncedRefetchCards = useMemo(() => createDebouncedRefetch(() => {
+    const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+    supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).then(r => {
+      if (r.data) {
+        // Only apply if no pending ops to avoid overwriting optimistic state
+        if (pendingOpsRef.current.size === 0) {
+          setKanbanCards(r.data.map(mapKanbanCard));
+        }
+      }
+    });
+  }, 2000), []);
+
+  const debouncedRefetchColumns = useMemo(() => createDebouncedRefetch(() => {
+    supabase.from('kanban_columns').select('*').then(r => { if (r.data) setKanbanColumns(r.data.map(mapKanbanColumn)); });
+  }, 2000), []);
+
+  const debouncedRefetchEmployees = useMemo(() => createDebouncedRefetch(() => {
+    supabase.from('employees').select('*').then(r => { if (r.data) setEmployees(r.data.map(mapEmployee)); });
+  }, 3000), []);
+
+  const debouncedRefetchTasks = useMemo(() => createDebouncedRefetch(() => {
+    supabase.from('calendar_tasks').select('*').then(r => { if (r.data) setCalendarTasks(r.data.map(mapCalendarTask)); });
+  }, 3000), []);
+
+  const debouncedRefetchCredentials = useMemo(() => createDebouncedRefetch(() => {
+    supabase.from('credentials').select('*').then(r => { if (r.data) setCredentials(r.data.map(mapCredential)); });
+  }, 3000), []);
+
+  const debouncedRefetchClients = useMemo(() => createDebouncedRefetch(() => {
+    supabase.from('calendar_clients').select('*').then(r => { if (r.data) setCalendarClients(r.data.map(mapCalendarClient)); });
+  }, 3000), []);
+
   useEffect(() => {
     if (!isAuthenticated) { setLoading(false); return; }
     fetchAll();
@@ -140,23 +185,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const channel = supabase.channel('realtime-all')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
-        supabase.from('employees').select('*').then(r => { if (r.data) setEmployees(r.data.map(mapEmployee)); });
+        debouncedRefetchEmployees();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, () => {
-        const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-        supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).then(r => { if (r.data) setKanbanCards(r.data.map(mapKanbanCard)); });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, (payload) => {
+        // Granular update: apply payload directly for UPDATEs when possible
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const updatedRow = payload.new as any;
+          // Skip if this is our own optimistic update
+          if (pendingOpsRef.current.has(updatedRow.id)) return;
+          setKanbanCards(prev => prev.map(c => c.id === updatedRow.id ? mapKanbanCard(updatedRow) : c));
+        } else if (payload.eventType === 'INSERT' && payload.new) {
+          const newRow = payload.new as any;
+          if (pendingOpsRef.current.has(newRow.id)) return;
+          setKanbanCards(prev => {
+            if (prev.some(c => c.id === newRow.id)) return prev;
+            return [...prev, mapKanbanCard(newRow)];
+          });
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          const oldId = (payload.old as any).id;
+          setKanbanCards(prev => prev.filter(c => c.id !== oldId));
+        } else {
+          debouncedRefetchCards();
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, () => {
-        supabase.from('kanban_columns').select('*').then(r => { if (r.data) setKanbanColumns(r.data.map(mapKanbanColumn)); });
+        debouncedRefetchColumns();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_tasks' }, () => {
-        supabase.from('calendar_tasks').select('*').then(r => { if (r.data) setCalendarTasks(r.data.map(mapCalendarTask)); });
+        debouncedRefetchTasks();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'credentials' }, () => {
-        supabase.from('credentials').select('*').then(r => { if (r.data) setCredentials(r.data.map(mapCredential)); });
+        debouncedRefetchCredentials();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_clients' }, () => {
-        supabase.from('calendar_clients').select('*').then(r => { if (r.data) setCalendarClients(r.data.map(mapCalendarClient)); });
+        debouncedRefetchClients();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
         supabase.from('settings').select('*').then(r => {
@@ -178,7 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [isAuthenticated, fetchAll, cleanupOldArchived]);
+  }, [isAuthenticated, fetchAll, cleanupOldArchived, debouncedRefetchCards, debouncedRefetchColumns, debouncedRefetchEmployees, debouncedRefetchTasks, debouncedRefetchCredentials, debouncedRefetchClients]);
 
   useEffect(() => { 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -205,7 +267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const adminDeleteUser = async (id: string) => {
+  const adminDeleteUser = useCallback(async (id: string) => {
     try {
       const { data, error } = await (supabase as any).rpc('admin_delete_user', { target_user_id: id });
       if (error) throw error;
@@ -214,9 +276,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao excluir usuário:', err);
       return { success: false, error: err.message };
     }
-  };
+  }, []);
 
-  const adminUpdateUserRole = async (id: string, newRole: string) => {
+  const adminUpdateUserRole = useCallback(async (id: string, newRole: string) => {
     try {
       const { data, error } = await (supabase as any).rpc('admin_update_user_role', { target_user_id: id, new_role: newRole });
       if (error) throw error;
@@ -225,9 +287,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao atualizar papel do usuário:', err);
       return { success: false, error: err.message };
     }
-  };
+  }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { success: false, error: error.message };
@@ -235,9 +297,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       return { success: false, error: err.message };
     }
-  };
+  }, []);
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = useCallback(async (name: string, email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signUp({
         email, password,
@@ -248,13 +310,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       return { success: false, error: err.message };
     }
-  };
+  }, []);
 
-  const logout = async () => { 
+  const logout = useCallback(async () => { 
     await supabase.auth.signOut();
-  };
+  }, []);
 
-  const createHistoryAction = (actionType: 'create' | 'move' | 'edit' | 'status_change', description: string): CardAction => {
+  const createHistoryAction = useCallback((actionType: 'create' | 'move' | 'edit' | 'status_change', description: string): CardAction => {
     return {
       id: crypto.randomUUID(),
       userId: loggedUserId || 'unknown',
@@ -263,13 +325,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       description,
       createdAt: new Date().toISOString()
     };
-  };
+  }, [loggedUserId, loggedUserName]);
 
-  const addEmployee = async (emp: Omit<Employee, 'id'>) => {
+  const addEmployee = useCallback(async (emp: Omit<Employee, 'id'>) => {
     try {
       const { data, error } = await supabase.from('employees').insert({ name: emp.name, role: emp.role, avatar: emp.avatar, photo_url: emp.photoUrl || null }).select();
       if (error) throw error;
-      // Create default columns for new employee
       if (data && data[0]) {
         const empId = data[0].id;
         const cols = DEFAULT_COLUMNS.map(c => ({
@@ -281,10 +342,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao adicionar funcionário:', err);
       toast.error('Erro ao adicionar funcionário.');
     }
-  };
+  }, []);
 
-  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
+  const updateEmployee = useCallback(async (id: string, updates: Partial<Employee>) => {
     try {
+      // Optimistic
+      setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+      
       const dbUpdates: any = {};
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.role !== undefined) dbUpdates.role = updates.role;
@@ -296,10 +360,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao atualizar funcionário:', err);
       toast.error('Erro ao atualizar funcionário.');
     }
-  };
+  }, []);
 
-  const deleteEmployee = async (id: string) => {
+  const deleteEmployee = useCallback(async (id: string) => {
     try {
+      // Optimistic
+      setEmployees(prev => prev.filter(e => e.id !== id));
+      setKanbanCards(prev => prev.filter(c => c.employeeId !== id));
+      
       await Promise.all([
         supabase.from('kanban_cards').delete().eq('employee_id', id),
         supabase.from('kanban_columns').delete().eq('employee_id', id),
@@ -312,12 +380,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao excluir funcionário:', err);
       toast.error('Erro ao excluir funcionário.');
     }
-  };
+  }, []);
 
-  const addKanbanCard = async (card: Omit<KanbanCard, 'id'>) => {
+  const addKanbanCard = useCallback(async (card: Omit<KanbanCard, 'id'>) => {
     try {
+      const tempId = crypto.randomUUID();
       const history = [createHistoryAction('create', `Criou o card na coluna`)];
-      const { error } = await supabase.from('kanban_cards').insert({
+      
+      // Optimistic: add with temp ID immediately
+      const optimisticCard: KanbanCard = { ...card, id: tempId, history };
+      setKanbanCards(prev => [...prev, optimisticCard]);
+      pendingOpsRef.current.add(tempId);
+
+      const { data, error } = await supabase.from('kanban_cards').insert({
         employee_id: card.employeeId, client_name: card.clientName,
         description: card.description || '', notes: card.notes || null,
         images: card.images || [], image_url: card.imageUrl || null,
@@ -328,23 +403,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         time_spent: card.timeSpent ?? 0, timer_running: card.timerRunning ?? false,
         timer_start: card.timerStart || null,
         history
-      });
+      }).select();
+      
+      // Replace temp ID with real one
+      if (data && data[0]) {
+        const realId = data[0].id;
+        setKanbanCards(prev => prev.map(c => c.id === tempId ? { ...c, id: realId } : c));
+        pendingOpsRef.current.delete(tempId);
+        // Mark real ID briefly to skip incoming realtime event
+        pendingOpsRef.current.add(realId);
+        setTimeout(() => pendingOpsRef.current.delete(realId), 3000);
+      } else {
+        pendingOpsRef.current.delete(tempId);
+      }
+      
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao adicionar card:', err);
       toast.error('Erro ao adicionar card.');
     }
-  };
+  }, [createHistoryAction]);
 
-  const updateKanbanCard = async (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => {
+  const updateKanbanCard = useCallback(async (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => {
     try {
+      // Build full optimistic state first
+      const existingCard = kanbanCards.find(c => c.id === id);
+      const optimistic: Partial<KanbanCard> = { ...updates };
+      
       const dbUpdates: any = {};
-      const card = kanbanCards.find(c => c.id === id);
-      if (actionDescription && card) {
-        const currentHistory = Array.isArray(card.history) ? card.history : [];
+      
+      if (actionDescription && existingCard) {
+        const currentHistory = Array.isArray(existingCard.history) ? existingCard.history : [];
         const newHistory = [createHistoryAction('edit', actionDescription), ...currentHistory];
         dbUpdates.history = newHistory;
+        optimistic.history = newHistory;
       }
+      
+      // ⚡ OPTIMISTIC: Update local state immediately
+      pendingOpsRef.current.add(id);
+      setKanbanCards(prev => prev.map(c => c.id === id ? { ...c, ...optimistic } : c));
       
       if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
       if (updates.description !== undefined) dbUpdates.description = updates.description;
@@ -363,24 +460,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if ('archivedAt' in updates) dbUpdates.archived_at = updates.archivedAt || null;
       
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
+      
+      // Release pending flag after a short delay (for realtime dedup)
+      setTimeout(() => pendingOpsRef.current.delete(id), 3000);
+      
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao atualizar card:', err);
       toast.error('Erro ao atualizar card.');
+      // Rollback on error: refetch
+      pendingOpsRef.current.delete(id);
+      debouncedRefetchCards();
     }
-  };
+  }, [kanbanCards, createHistoryAction, debouncedRefetchCards]);
 
-  const deleteKanbanCard = async (id: string) => {
+  const deleteKanbanCard = useCallback(async (id: string) => {
     try {
+      // ⚡ Optimistic
+      setKanbanCards(prev => prev.filter(c => c.id !== id));
+      
       const { error } = await supabase.from('kanban_cards').delete().eq('id', id);
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao excluir card:', err);
       toast.error('Erro ao excluir card.');
     }
-  };
+  }, []);
 
-  const moveKanbanCard = async (id: string, column: string) => {
+  const moveKanbanCard = useCallback(async (id: string, column: string) => {
     try {
       const card = kanbanCards.find(c => c.id === id);
       if (!card) return;
@@ -391,37 +498,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newHistory = [action, ...currentHistory];
       
       const now = Date.now();
+      const optimistic: Partial<KanbanCard> = { column, history: newHistory };
       const dbUpdates: any = { column, history: newHistory };
       
       if (column === 'em-producao' && card.column !== 'em-producao') {
         dbUpdates.timer_running = true;
         dbUpdates.timer_start = now;
+        optimistic.timerRunning = true;
+        optimistic.timerStart = now;
       } else if (column !== 'em-producao' && card.column === 'em-producao' && card.timerRunning) {
         const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
         dbUpdates.timer_running = false;
         dbUpdates.time_spent = card.timeSpent + elapsed;
         dbUpdates.timer_start = null;
+        optimistic.timerRunning = false;
+        optimistic.timeSpent = card.timeSpent + elapsed;
+        optimistic.timerStart = undefined;
       }
 
-      // Auto-archive in postado, resurrect if returning to active columns
       if (column === 'postado') {
         dbUpdates.archived_at = new Date().toISOString();
+        optimistic.archivedAt = new Date().toISOString();
       } else if (card.archivedAt && card.column === 'postado') {
         dbUpdates.archived_at = null;
+        optimistic.archivedAt = undefined;
       }
       
+      // ⚡ OPTIMISTIC: move card instantly in UI
+      pendingOpsRef.current.add(id);
+      setKanbanCards(prev => prev.map(c => c.id === id ? { ...c, ...optimistic } : c));
+      
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
+      
+      setTimeout(() => pendingOpsRef.current.delete(id), 3000);
+      
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao mover card:', err);
       toast.error('Erro ao mover card.');
+      pendingOpsRef.current.delete(id);
+      debouncedRefetchCards();
     }
-  };
+  }, [kanbanCards, kanbanColumns, createHistoryAction, debouncedRefetchCards]);
 
-  const addKanbanColumn = async (employeeId: string, title: string, color: string) => {
+  const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
     try {
       const existing = kanbanColumns.filter(c => c.employeeId === employeeId);
-      // If no columns in DB yet, persist the defaults first
       if (existing.length === 0) {
         const defaultInserts = DEFAULT_COLUMNS.map(c => ({
           employee_id: employeeId, column_key: c.columnKey, title: c.title, color: c.color, position: c.position,
@@ -441,10 +563,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao adicionar coluna:', err);
       toast.error('Erro ao adicionar coluna.');
     }
-  };
+  }, [kanbanColumns]);
 
-  const updateKanbanColumn = async (id: string, updates: Partial<KanbanColumnDef>) => {
+  const updateKanbanColumn = useCallback(async (id: string, updates: Partial<KanbanColumnDef>) => {
     try {
+      // Optimistic
+      setKanbanColumns(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+      
       const dbUpdates: any = {};
       if (updates.title !== undefined) dbUpdates.title = updates.title;
       if (updates.color !== undefined) dbUpdates.color = updates.color;
@@ -455,17 +580,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao atualizar coluna:', err);
       toast.error('Erro ao atualizar coluna.');
     }
-  };
+  }, []);
 
-  const deleteKanbanColumn = async (id: string) => {
+  const deleteKanbanColumn = useCallback(async (id: string) => {
     try {
+      // Optimistic
+      setKanbanColumns(prev => prev.filter(c => c.id !== id));
+      
       const { error } = await supabase.from('kanban_columns').delete().eq('id', id);
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao excluir coluna:', err);
       toast.error('Erro ao excluir coluna.');
     }
-  };
+  }, []);
 
   const getColumnsForEmployee = useCallback((employeeId: string): KanbanColumnDef[] => {
     const cols = kanbanColumns.filter(c => c.employeeId === employeeId);
@@ -478,7 +606,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return cols.sort((a, b) => a.position - b.position);
   }, [kanbanColumns]);
 
-  const addCalendarTask = async (task: Omit<CalendarTask, 'id'>) => {
+  const addCalendarTask = useCallback(async (task: Omit<CalendarTask, 'id'>) => {
     try {
       const { error } = await supabase.from('calendar_tasks').insert({
         calendar_client_id: task.calendarClientId, employee_id: task.employeeId,
@@ -491,10 +619,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao adicionar tarefa:', err);
       toast.error('Erro ao adicionar tarefa.');
     }
-  };
+  }, []);
 
-  const updateCalendarTask = async (id: string, updates: Partial<CalendarTask>) => {
+  const updateCalendarTask = useCallback(async (id: string, updates: Partial<CalendarTask>) => {
     try {
+      // Optimistic
+      setCalendarTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+      
       const dbUpdates: any = {};
       if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
       if (updates.contentType !== undefined) dbUpdates.content_type = updates.contentType;
@@ -510,20 +641,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao atualizar tarefa:', err);
       toast.error('Erro ao atualizar tarefa.');
     }
-  };
+  }, []);
 
-  const deleteCalendarTask = async (id: string) => {
+  const deleteCalendarTask = useCallback(async (id: string) => {
     try {
+      // Optimistic
+      setCalendarTasks(prev => prev.filter(t => t.id !== id));
+      
       const { error } = await supabase.from('calendar_tasks').delete().eq('id', id);
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao excluir tarefa:', err);
       toast.error('Erro ao excluir tarefa.');
     }
-  };
+  }, []);
 
 
-  const addCredential = async (cred: Omit<Credential, 'id'>) => {
+  const addCredential = useCallback(async (cred: Omit<Credential, 'id'>) => {
     try {
       const { error } = await supabase.from('credentials').insert({
         employee_id: cred.employeeId, label: cred.label,
@@ -534,9 +668,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao adicionar credencial:', err);
       toast.error('Erro ao adicionar credencial.');
     }
-  };
+  }, []);
 
-  const updateCredential = async (id: string, updates: Partial<Credential>) => {
+  const updateCredential = useCallback(async (id: string, updates: Partial<Credential>) => {
     try {
       const dbUpdates: any = {};
       if (updates.label !== undefined) dbUpdates.label = updates.label;
@@ -549,9 +683,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao atualizar credencial:', err);
       toast.error('Erro ao atualizar credencial.');
     }
-  };
+  }, []);
 
-  const deleteCredential = async (id: string) => {
+  const deleteCredential = useCallback(async (id: string) => {
     try {
       const { error } = await supabase.from('credentials').delete().eq('id', id);
       if (error) throw error;
@@ -559,9 +693,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao excluir credencial:', err);
       toast.error('Erro ao excluir credencial.');
     }
-  };
+  }, []);
 
-  const addCalendarClient = async (name: string) => {
+  const addCalendarClient = useCallback(async (name: string) => {
     try {
       const id = slugify(name) || crypto.randomUUID();
       const { error } = await supabase.from('calendar_clients').insert({ id, name });
@@ -570,10 +704,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao adicionar cliente:', err);
       toast.error('Erro ao adicionar cliente.');
     }
-  };
+  }, []);
 
-  const deleteCalendarClient = async (id: string) => {
+  const deleteCalendarClient = useCallback(async (id: string) => {
     try {
+      // Optimistic
+      setCalendarClients(prev => prev.filter(c => c.id !== id));
+      
       await supabase.from('calendar_tasks').delete().eq('calendar_client_id', id);
       const { error } = await supabase.from('calendar_clients').delete().eq('id', id);
       if (error) throw error;
@@ -581,9 +718,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao excluir cliente:', err);
       toast.error('Erro ao excluir cliente.');
     }
-  };
+  }, []);
 
-  const setDashboardBanner = async (url: string) => {
+  const setDashboardBanner = useCallback(async (url: string) => {
     try {
       setDashboardBannerState(url);
       const { error } = await supabase.from('settings').upsert({ key: 'dashboardBanner', value: url });
@@ -592,9 +729,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao salvar banner:', err);
       toast.error('Erro ao salvar banner.');
     }
-  };
+  }, []);
 
-  const setDashboardLogo = async (url: string) => {
+  const setDashboardLogo = useCallback(async (url: string) => {
     try {
       setDashboardLogoState(url);
       const { error } = await supabase.from('settings').upsert({ key: 'dashboardLogo', value: url });
@@ -603,25 +740,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Erro ao salvar logo:', err);
       toast.error('Erro ao salvar logo.');
     }
-  };
+  }, []);
+
+  // Stable context value to prevent unnecessary re-renders
+  const contextValue = useMemo<AppState>(() => ({
+    isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
+    systemUsers, employees, kanbanCards, kanbanColumns,
+    calendarTasks, credentials, calendarClients,
+    dashboardBanner, dashboardLogo, loading,
+    login, register, logout, adminDeleteUser, adminUpdateUserRole,
+    addEmployee, updateEmployee, deleteEmployee,
+    addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+    addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
+    addCalendarTask, updateCalendarTask, deleteCalendarTask,
+    addCredential, updateCredential, deleteCredential,
+    addCalendarClient, deleteCalendarClient,
+    setDashboardBanner, setDashboardLogo,
+  }), [
+    isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
+    systemUsers, employees, kanbanCards, kanbanColumns,
+    calendarTasks, credentials, calendarClients,
+    dashboardBanner, dashboardLogo, loading,
+    login, register, logout, adminDeleteUser, adminUpdateUserRole,
+    addEmployee, updateEmployee, deleteEmployee,
+    addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+    addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
+    addCalendarTask, updateCalendarTask, deleteCalendarTask,
+    addCredential, updateCredential, deleteCredential,
+    addCalendarClient, deleteCalendarClient,
+    setDashboardBanner, setDashboardLogo,
+  ]);
 
   return (
-    <AppContext.Provider value={{
-      isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
-      systemUsers, employees, kanbanCards, kanbanColumns,
-      calendarTasks, credentials, calendarClients,
-      dashboardBanner, dashboardLogo, loading,
-      login, register, logout, adminDeleteUser, adminUpdateUserRole,
-      addEmployee, updateEmployee, deleteEmployee,
-      addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
-      addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
-      addCalendarTask, updateCalendarTask, deleteCalendarTask,
-      addCredential, updateCredential, deleteCredential,
-      addCalendarClient, deleteCalendarClient,
-      setDashboardBanner, setDashboardLogo,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
 }
-

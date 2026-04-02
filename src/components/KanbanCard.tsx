@@ -1,18 +1,25 @@
-import { useState } from 'react';
+import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
-import CardDetailDialog from './CardDetailDialog';
-import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud } from 'lucide-react';
+import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2 } from 'lucide-react';
+import { compressImage } from '@/lib/utils';
+
+// Lazy load the heavy dialog component — only mount when user clicks a card
+const CardDetailDialog = lazy(() => import('./CardDetailDialog'));
 
 interface Props {
   card: KanbanCardType;
 }
 
-const KanbanCard = ({ card }: Props) => {
+const KanbanCardInner = ({ card }: Props) => {
   const { employees, updateKanbanCard } = useApp();
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [previewInitial, setPreviewInitial] = useState<string | null>(null);
 
   const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
   const coverImage = card.coverImage || (images.length > 0 ? images[0] : null);
@@ -26,20 +33,20 @@ const KanbanCard = ({ card }: Props) => {
   const hasComments = safeComments.length > 0;
   const hasDescription = !!card.description;
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('Files')) {
        e.preventDefault();
        setIsDragOver(true);
     }
-  };
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('Files')) {
        setIsDragOver(false);
     }
-  };
+  }, []);
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       e.preventDefault();
@@ -48,42 +55,84 @@ const KanbanCard = ({ card }: Props) => {
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       if (files.length === 0) return;
 
-      const base64Promises = files.map(file => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-      });
+      setIsUploading(true);
+      setUploadProgress(10);
+      const tempUrl = URL.createObjectURL(files[0]);
+      setPreviewInitial(tempUrl);
 
-      const newBase64Images = await Promise.all(base64Promises);
-      const updatedImages = [...images, ...newBase64Images];
-      
-      const updates: Partial<KanbanCardType> = { images: updatedImages };
-      // If it's the first image ever, automatically make it the cover
-      if (!card.coverImage && updatedImages.length > 0) {
-        updates.coverImage = updatedImages[0];
+      try {
+        const compressPromises = files.map(file => compressImage(file));
+        setUploadProgress(40);
+        
+        const newBase64Images = await Promise.all(compressPromises);
+        setUploadProgress(80);
+        
+        const currentImages = card.images || (card.imageUrl ? [card.imageUrl] : []);
+        const updatedImages = [...currentImages, ...newBase64Images];
+        
+        const updates: Partial<KanbanCardType> = { images: updatedImages };
+        if (!card.coverImage && updatedImages.length > 0) {
+          updates.coverImage = updatedImages[0];
+        }
+        
+        updateKanbanCard(card.id, updates, `Anexou ${files.length} imagem(ns) pelo painel`);
+        setUploadProgress(100);
+        setUploadSuccess(true);
+        setTimeout(() => {
+          setIsUploading(false);
+          setUploadSuccess(false);
+          setPreviewInitial(null);
+          setUploadProgress(0);
+          URL.revokeObjectURL(tempUrl);
+        }, 2000);
+      } catch (err) {
+        console.error('Upload error', err);
+        setIsUploading(false);
+        setPreviewInitial(null);
+        URL.revokeObjectURL(tempUrl);
       }
-      
-      updateKanbanCard(card.id, updates, `Anexou ${files.length} imagem(ns) pelo painel`);
     }
-  };
+  }, [card.id, card.images, card.imageUrl, card.coverImage, updateKanbanCard]);
+
+  const handleOpenDetail = useCallback(() => setDetailOpen(true), []);
+  const handleDragStart = useCallback((e: React.DragEvent) => e.dataTransfer.setData('cardId', card.id), [card.id]);
 
   return (
     <>
       <div
         draggable
-        onDragStart={(e) => e.dataTransfer.setData('cardId', card.id)}
+        onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => setDetailOpen(true)}
+        onClick={handleOpenDetail}
         className={`bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:cursor-grabbing active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
       >
-        {isDragOver && (
+        {isDragOver && !isUploading && (
           <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none rounded-xl">
             <UploadCloud className="w-8 h-8 text-primary mb-2" />
             <p className="text-white text-xs font-bold tracking-wider uppercase">Solte para anexar</p>
+          </div>
+        )}
+
+        {isUploading && (
+          <div className="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in rounded-xl">
+            {uploadSuccess ? (
+              <>
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-2 animate-in zoom-in duration-300" />
+                <p className="text-white text-[11px] font-bold tracking-wider uppercase mb-2">Concluído!</p>
+                {previewInitial && <img src={previewInitial} className="w-16 h-16 object-cover rounded-lg border border-white/10 opacity-80" />}
+              </>
+            ) : (
+              <>
+                <Loader2 className="w-7 h-7 text-primary animate-spin mb-2" />
+                <p className="text-white text-[10px] font-bold tracking-wider uppercase">Carregando {uploadProgress}%</p>
+                <div className="w-20 h-1 bg-white/10 rounded-full mt-2 overflow-hidden mb-3">
+                   <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                </div>
+                {previewInitial && <div className="p-1 rounded-lg bg-white/5 border border-white/5"><img src={previewInitial} className="w-12 h-12 object-cover rounded blur-[1px] opacity-60" /></div>}
+              </>
+            )}
           </div>
         )}
 
@@ -96,7 +145,7 @@ const KanbanCard = ({ card }: Props) => {
 
         {coverImage && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 h-32 bg-black/40">
-            <img src={coverImage} alt="Capa" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <img src={coverImage} alt="Capa" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
           </div>
         )}
 
@@ -159,9 +208,41 @@ const KanbanCard = ({ card }: Props) => {
         </div>
       </div>
 
-      <CardDetailDialog card={card} open={detailOpen} onOpenChange={setDetailOpen} />
+      {/* Lazy-loaded CardDetailDialog: only mounts when opened */}
+      {detailOpen && (
+        <Suspense fallback={null}>
+          <CardDetailDialog card={card} open={detailOpen} onOpenChange={setDetailOpen} />
+        </Suspense>
+      )}
     </>
   );
 };
+
+// React.memo: only re-render when the card data actually changed
+const KanbanCard = memo(KanbanCardInner, (prevProps, nextProps) => {
+  const prev = prevProps.card;
+  const next = nextProps.card;
+  
+  // Shallow compare the most frequently changing fields
+  return (
+    prev.id === next.id &&
+    prev.clientName === next.clientName &&
+    prev.column === next.column &&
+    prev.description === next.description &&
+    prev.coverImage === next.coverImage &&
+    prev.timeSpent === next.timeSpent &&
+    prev.timerRunning === next.timerRunning &&
+    prev.timerStart === next.timerStart &&
+    prev.archivedAt === next.archivedAt &&
+    prev.images === next.images &&
+    prev.labels === next.labels &&
+    prev.checklists === next.checklists &&
+    prev.comments === next.comments &&
+    prev.assignedUsers === next.assignedUsers &&
+    prev.employeeId === next.employeeId
+  );
+});
+
+KanbanCard.displayName = 'KanbanCard';
 
 export default KanbanCard;

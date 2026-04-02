@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { FIXED_COLUMN_KEYS } from '@/contexts/app-types';
@@ -34,13 +34,28 @@ const Employee = () => {
   const [deleteColTarget, setDeleteColTarget] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const employee = employees.find(e => e.id === id);
-  const allCards = kanbanCards.filter(c => c.employeeId === id && !c.archivedAt);
-  const cards = searchQuery.trim()
-    ? allCards.filter(c => c.clientName.toLowerCase().includes(searchQuery.toLowerCase()) || c.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    : allCards;
+  const employee = useMemo(() => employees.find(e => e.id === id), [employees, id]);
+
+  const allCards = useMemo(() => kanbanCards.filter(c => c.employeeId === id && !c.archivedAt), [kanbanCards, id]);
+  
+  const cards = useMemo(() => {
+    if (!searchQuery.trim()) return allCards;
+    const q = searchQuery.toLowerCase();
+    return allCards.filter(c => c.clientName.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+  }, [allCards, searchQuery]);
+
   // Oculta a coluna Postado do Kanban do usuário (centralizada apenas no Postagem)
-  const columns = employee ? getColumnsForEmployee(employee.id).filter(c => c.columnKey !== 'postado') : [];
+  const columns = useMemo(() => employee ? getColumnsForEmployee(employee.id).filter(c => c.columnKey !== 'postado') : [], [employee, getColumnsForEmployee]);
+
+  // Pre-group cards by column key to avoid O(n) filter per column
+  const cardsByColumn = useMemo(() => {
+    const grouped: Record<string, typeof cards> = {};
+    columns.forEach(col => { grouped[col.columnKey] = []; });
+    cards.forEach(card => {
+      if (grouped[card.column]) grouped[card.column].push(card);
+    });
+    return grouped;
+  }, [cards, columns]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -139,12 +154,12 @@ const Employee = () => {
               id={col.columnKey}
               title={col.title}
               color={col.color}
-              count={cards.filter(c => c.column === col.columnKey).length}
+              count={(cardsByColumn[col.columnKey] || []).length}
               employeeId={employee.id}
               onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
               onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
             >
-              {cards.filter(c => c.column === col.columnKey).map(card => (
+              {(cardsByColumn[col.columnKey] || []).map(card => (
                 <KanbanCard key={card.id} card={card} />
               ))}
             </KanbanColumn>

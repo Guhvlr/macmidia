@@ -2,7 +2,7 @@ import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
-import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2 } from 'lucide-react';
+import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Bot, Smartphone } from 'lucide-react';
 import { compressImage } from '@/lib/utils';
 
 // Lazy load the heavy dialog component — only mount when user clicks a card
@@ -35,14 +35,14 @@ const KanbanCardInner = ({ card }: Props) => {
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('Files')) {
-       e.preventDefault();
-       setIsDragOver(true);
+      e.preventDefault();
+      setIsDragOver(true);
     }
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('Files')) {
-       setIsDragOver(false);
+      setIsDragOver(false);
     }
   }, []);
 
@@ -63,18 +63,18 @@ const KanbanCardInner = ({ card }: Props) => {
       try {
         const compressPromises = files.map(file => compressImage(file));
         setUploadProgress(40);
-        
+
         const newBase64Images = await Promise.all(compressPromises);
         setUploadProgress(80);
-        
+
         const currentImages = card.images || (card.imageUrl ? [card.imageUrl] : []);
         const updatedImages = [...currentImages, ...newBase64Images];
-        
+
         const updates: Partial<KanbanCardType> = { images: updatedImages };
         if (!card.coverImage && updatedImages.length > 0) {
           updates.coverImage = updatedImages[0];
         }
-        
+
         updateKanbanCard(card.id, updates, `Anexou ${files.length} imagem(ns) pelo painel`);
         setUploadProgress(100);
         setUploadSuccess(true);
@@ -128,7 +128,7 @@ const KanbanCardInner = ({ card }: Props) => {
                 <Loader2 className="w-7 h-7 text-primary animate-spin mb-2" />
                 <p className="text-white text-[10px] font-bold tracking-wider uppercase">Carregando {uploadProgress}%</p>
                 <div className="w-20 h-1 bg-white/10 rounded-full mt-2 overflow-hidden mb-3">
-                   <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                 </div>
                 {previewInitial && <div className="p-1 rounded-lg bg-white/5 border border-white/5"><img src={previewInitial} className="w-12 h-12 object-cover rounded blur-[1px] opacity-60" /></div>}
               </>
@@ -162,6 +162,34 @@ const KanbanCardInner = ({ card }: Props) => {
           )}
 
           <h4 className="font-bold text-[13px] text-white leading-tight uppercase line-clamp-2">{card.clientName}</h4>
+
+          {/* AI Status Badge */}
+          {card.aiStatus === 'analyzing' && (
+            <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span className="text-[9px] font-bold uppercase tracking-wider">IA Analisando</span>
+            </div>
+          )}
+          {card.aiStatus === 'approved' && (
+            <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <CheckCircle2 className="w-3 h-3" />
+              <span className="text-[9px] font-bold uppercase tracking-wider">IA Aprovado</span>
+            </div>
+          )}
+          {card.aiStatus === 'issues_found' && (
+            <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <AlertTriangle className="w-3 h-3" />
+              <span className="text-[9px] font-bold uppercase tracking-wider">Problemas Encontrados</span>
+            </div>
+          )}
+
+          {/* WhatsApp source indicator */}
+          {card.source === 'whatsapp' && (
+            <div className="flex items-center gap-1 mt-1 text-emerald-500/60">
+              <Smartphone className="w-3 h-3" />
+              <span className="text-[9px] font-medium">WhatsApp</span>
+            </div>
+          )}
         </div>
 
         {/* Footer info: Icons & Avatar */}
@@ -189,7 +217,7 @@ const KanbanCardInner = ({ card }: Props) => {
               </div>
             )}
           </div>
-          
+
           <div className="flex items-center gap-1.5 ml-2">
             {safeAssignees.length > 0 ? (
               <div className="flex items-center -space-x-1.5">
@@ -222,7 +250,7 @@ const KanbanCardInner = ({ card }: Props) => {
 const KanbanCard = memo(KanbanCardInner, (prevProps, nextProps) => {
   const prev = prevProps.card;
   const next = nextProps.card;
-  
+
   // Shallow compare the most frequently changing fields
   return (
     prev.id === next.id &&
@@ -239,7 +267,10 @@ const KanbanCard = memo(KanbanCardInner, (prevProps, nextProps) => {
     prev.checklists === next.checklists &&
     prev.comments === next.comments &&
     prev.assignedUsers === next.assignedUsers &&
-    prev.employeeId === next.employeeId
+    prev.employeeId === next.employeeId &&
+    prev.history === next.history &&
+    prev.aiStatus === next.aiStatus &&
+    prev.source === next.source
   );
 });
 

@@ -2,7 +2,7 @@ export interface CardAction {
   id: string;
   userId: string;
   userName: string;
-  actionType: 'create' | 'move' | 'edit' | 'status_change';
+  actionType: 'create' | 'move' | 'edit' | 'status_change' | 'image_add' | 'image_remove';
   description: string;
   createdAt: string;
 }
@@ -35,6 +35,24 @@ export interface KanbanCard {
   employeeId: string;
   archivedAt?: string;
   history?: CardAction[];
+  // AI fields
+  aiStatus?: 'analyzing' | 'approved' | 'issues_found' | null;
+  aiReport?: any;
+  source?: 'manual' | 'whatsapp';
+  originalMessage?: string;
+}
+
+export interface AICorrection {
+  id: string;
+  kanbanCardId: string;
+  status: 'pending' | 'analyzing' | 'completed' | 'error';
+  analysisResult?: any;
+  issuesFound?: any[];
+  correctionsApplied?: any[];
+  processingSteps?: { step: string; status: string; timestamp: string }[];
+  movedToAlteration: boolean;
+  createdAt: string;
+  completedAt?: string;
 }
 
 export interface KanbanColumnDef {
@@ -127,6 +145,7 @@ export interface AppState {
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => void;
   deleteKanbanCard: (id: string) => void;
   moveKanbanCard: (id: string, column: string) => void;
+  triggerAICorrection: (cardId: string) => void;
   addKanbanColumn: (employeeId: string, title: string, color: string) => void;
   updateKanbanColumn: (id: string, updates: Partial<KanbanColumnDef>) => void;
   deleteKanbanColumn: (id: string) => void;

@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import Timer from './Timer';
-import { Trash2, Upload, X, ZoomIn, Save, Clock, History, CheckSquare, Paperclip, MessageSquare, Image as ImageIcon, Circle, CheckCircle2, MoreHorizontal, Plus, LayoutList, Users, Loader2 } from 'lucide-react';
+import { Trash2, Upload, X, ZoomIn, Save, Clock, History, CheckSquare, Paperclip, MessageSquare, Image as ImageIcon, Circle, CheckCircle2, MoreHorizontal, Plus, LayoutList, Users, Loader2, ArrowRight, Edit3, Bot } from 'lucide-react';
 import { compressImage } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from 'sonner';
 
 interface Props {
   card: KanbanCardType;
@@ -57,7 +58,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     setChecklists(Array.isArray(card.checklists) ? card.checklists : []);
     setComments(Array.isArray(card.comments) ? card.comments : []);
     setAssignedUsers(Array.isArray(card.assignedUsers) ? card.assignedUsers : []);
-  }, [card.id, card.clientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers]);
+  }, [card.id, card.clientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history]);
 
   const saveUpdates = (updates: Partial<KanbanCardType>, actionDesc?: string) => {
     updateKanbanCard(card.id, updates, actionDesc);
@@ -273,7 +274,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             <div className="w-full h-48 bg-black/50 relative overflow-hidden group">
               <img src={coverImage} alt="Capa" className="w-full h-full object-cover opacity-80" />
               <button 
-                onClick={() => setPreviewImage(coverImage)} 
+                onClick={() => window.open(coverImage, '_blank')} 
                 className="absolute inset-0 w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity"
               >
                 <ZoomIn className="w-8 h-8 text-white/70" />
@@ -401,6 +402,47 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                   </div>
                 </div>
 
+                {/* AI REPORT (If any) */}
+                {card.aiReport && (card.aiStatus === 'issues_found' || card.aiStatus === 'approved') && (
+                  <div className={`mb-6 p-5 rounded-[1rem] border ${card.aiStatus === 'approved' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'} space-y-4`}>
+                    <h3 className={`font-bold flex items-center gap-2 ${card.aiStatus === 'approved' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <Bot className="w-5 h-5" /> 
+                      {card.aiStatus === 'approved' ? 'Card Aprovado Mestre!' : 'Relatório da IA de Correção'}
+                    </h3>
+                    
+                    {card.aiReport.textAnalysis?.hasErrors && (
+                      <div className="bg-black/30 p-3.5 rounded-xl border border-red-500/20 shadow-inner">
+                        <h4 className="font-bold text-[13px] text-white/90 mb-2"> Erros no Texto:</h4>
+                        <p className="text-[13px] text-white/70">{card.aiReport.textAnalysis.summary}</p>
+                      </div>
+                    )}
+
+                    {card.aiReport.imageAnalysis?.hasIssues && (
+                      <div className="bg-black/30 p-3.5 rounded-xl border border-red-500/20 shadow-inner">
+                        <h4 className="font-bold text-[13px] text-white/90 mb-2"> Erros nas Imagens:</h4>
+                        <p className="text-[13px] text-white/70">{card.aiReport.imageAnalysis.summary}</p>
+                      </div>
+                    )}
+
+                    {card.aiReport.correctedDescription && card.aiStatus === 'issues_found' && (
+                      <div className="bg-emerald-500/10 p-3.5 rounded-xl border border-emerald-500/20">
+                        <h4 className="font-bold text-[13px] text-emerald-400 mb-2">✅ Sugestão de Descrição Corrigida:</h4>
+                        <pre className="text-[12px] text-white/80 whitespace-pre-wrap font-sans bg-black/40 p-3 rounded-lg border border-white/5">{card.aiReport.correctedDescription}</pre>
+                        <Button 
+                          className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg h-9 shadow-lg hover:shadow-emerald-900/50 transition-all border border-emerald-500/50"
+                          onClick={() => {
+                            setDescription(card.aiReport.correctedDescription);
+                            saveUpdates({ description: card.aiReport.correctedDescription }, 'Aplicou sugestão da IA');
+                            toast.success('Descrição atualizada com a correção da IA!');
+                          }}
+                        >
+                          Aplicar Correção no Card
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Description */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -413,10 +455,20 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                   {isEditingDesc ? (
                     <div className="space-y-2">
                       <Textarea
+                        ref={(e) => {
+                          if (e) {
+                            e.style.height = "auto";
+                            e.style.height = e.scrollHeight + 5 + "px";
+                          }
+                        }}
                         value={description}
-                        onChange={e => setDescription(e.target.value)}
+                        onChange={e => {
+                          setDescription(e.target.value);
+                          e.target.style.height = "auto";
+                          e.target.style.height = e.target.scrollHeight + 5 + "px";
+                        }}
                         placeholder="Adicione uma descrição mais detalhada..."
-                        className="bg-black/20 border border-white/10 min-h-[140px] text-[13px] rounded-lg focus-visible:ring-red-500 shadow-inner"
+                        className="bg-black/20 border border-white/10 min-h-[140px] text-[13px] rounded-lg focus-visible:ring-red-500 shadow-inner overflow-hidden resize-none"
                         autoFocus
                       />
                       <div className="flex gap-2">
@@ -500,7 +552,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                           const isCover = coverImage === img;
                           return (
                             <div key={i} className="flex gap-4 p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
-                              <div className="w-24 h-16 rounded overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer" onClick={() => setPreviewImage(img)}>
+                              <div className="w-24 h-16 rounded overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer" onClick={() => window.open(img, '_blank')}>
                                 <img src={img} alt="Anexo" className="w-full h-full object-cover" />
                               </div>
                               <div className="flex flex-col justify-center flex-1">
@@ -570,14 +622,31 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                           </div>
                         );
                       } else {
-                        // Action History
+                        // Action History — color-coded by type
+                        const iconMap: Record<string, React.ReactNode> = {
+                          'move': <ArrowRight className="w-3 h-3" />,
+                          'create': <Plus className="w-3 h-3" />,
+                          'image_add': <ImageIcon className="w-3 h-3" />,
+                          'image_remove': <Trash2 className="w-3 h-3" />,
+                          'edit': <Edit3 className="w-3 h-3" />,
+                          'status_change': <CheckCircle2 className="w-3 h-3" />,
+                        };
+                        const bgMap: Record<string, string> = {
+                          'move': 'bg-blue-500/10 text-blue-400',
+                          'create': 'bg-emerald-500/10 text-emerald-400',
+                          'image_add': 'bg-purple-500/10 text-purple-400',
+                          'image_remove': 'bg-red-500/10 text-red-400',
+                          'edit': 'bg-white/10 text-white/60',
+                          'status_change': 'bg-amber-500/10 text-amber-400',
+                        };
                         return (
-                          <div key={item.id} className="flex gap-3 items-center opacity-80 pl-[1px]">
-                            <div className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold bg-white/10 text-white/60 flex-shrink-0">
-                               <History className="w-3 h-3" />
+                          <div key={item.id} className="flex gap-3 items-start opacity-80 pl-[1px]">
+                            <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5 ${bgMap[item.actionType] || 'bg-white/10 text-white/60'}`}>
+                               {iconMap[item.actionType] || <History className="w-3 h-3" />}
                             </div>
                             <div className="text-[12px] text-white/60">
-                               <span className="font-bold text-white/90">{item.userName}</span> {item.description.toLowerCase().startsWith('moveu') ? '' : ''} <span className="text-white/80">{item.description}</span>
+                               <span className="font-bold text-white/90">{item.userName}</span>{' '}
+                               <span className="text-white/70">{item.description}</span>
                                <span className="text-[10px] text-white/30 ml-2">{getRelativeTime(item.createdAt)}</span>
                             </div>
                           </div>

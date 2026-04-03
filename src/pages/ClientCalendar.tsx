@@ -26,12 +26,45 @@ const typeColors: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  'pendente': 'bg-muted text-muted-foreground border-white/10',
+  'pendente': 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
   'em produção': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
-  'alteracao': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
-  'alteração': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'em producao': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'alteracao': 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  'alteração': 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  'para correção': 'bg-red-500/20 text-red-400 border-red-500/40',
+  'para-correcao': 'bg-red-500/20 text-red-400 border-red-500/40',
+  'correcao-cliente': 'bg-red-500/20 text-red-400 border-red-500/40',
   'aprovado': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  'aprovado-programar': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  'concluído': 'bg-green-500/20 text-green-400 border-green-500/40',
+  'concluido': 'bg-green-500/20 text-green-400 border-green-500/40',
   'publicado': 'bg-primary/20 text-primary border-primary/40',
+  'postado': 'bg-primary/20 text-primary border-primary/40',
+};
+
+// Helper: get a display-friendly status label
+const getStatusLabel = (status: string | undefined): string => {
+  if (!status) return 'Pendente';
+  const lower = status.toLowerCase();
+  const labels: Record<string, string> = {
+    'pendente': 'Pendente',
+    'em produção': 'Em Produção',
+    'em producao': 'Em Produção',
+    'alteracao': 'Alteração',
+    'alteração': 'Alteração',
+    'aprovado': 'Aprovado',
+    'publicado': 'Publicado',
+    'concluido': 'Concluído',
+    'concluído': 'Concluído',
+  };
+  return labels[lower] || status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+// Helper: get color classes for status
+const getStatusColorClasses = (status: string | undefined): string => {
+  if (!status) return 'text-zinc-500';
+  const lower = status.toLowerCase();
+  return statusColors[lower]?.split(' ').find(c => c.startsWith('text-')) || 'text-white/50';
 };
 
 const ClientCalendar = () => {
@@ -260,9 +293,11 @@ const ClientCalendar = () => {
             {Object.entries(statusCounts as Record<string, number>).map(([status, count]) => (
               <span key={status} className="flex items-center gap-1.5">
                 <span className={`inline-block w-2 h-2 rounded-full ${
-                  status === 'pendente' ? 'bg-muted-foreground' :
-                  status === 'em produção' ? 'bg-yellow-400' :
-                  status === 'aprovado' ? 'bg-emerald-400' :
+                  status === 'pendente' ? 'bg-zinc-400' :
+                  status === 'em produção' || status === 'em producao' ? 'bg-yellow-400' :
+                  status === 'alteracao' || status === 'alteração' ? 'bg-orange-400' :
+                  status === 'aprovado' || status === 'aprovado-programar' ? 'bg-emerald-400' :
+                  status === 'concluido' || status === 'concluído' ? 'bg-green-400' :
                   'bg-primary'
                 }`} />
                 <span className="text-muted-foreground tabular-nums">{String(count)}</span>
@@ -611,7 +646,7 @@ const ClientCalendar = () => {
                       }`}
                     >
                        <span className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-white/70'}`}>{tab}</span>
-                       <span className="text-[10px] text-emerald-500 font-semibold uppercase mt-0.5 tracking-wider">Aprovado</span>
+                       <span className={`text-[10px] font-semibold uppercase mt-0.5 tracking-wider ${getStatusColorClasses(form.status)}`}>{getStatusLabel(form.status)}</span>
                     </button>
                   ))}
                </div>
@@ -831,7 +866,7 @@ const ClientCalendar = () => {
                           }`}
                         >
                            <span className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-white/70'}`}>{tab}</span>
-                           <span className="text-[10px] text-emerald-500 font-semibold uppercase mt-0.5 tracking-wider">Aprovado</span>
+                           <span className={`text-[10px] font-semibold uppercase mt-0.5 tracking-wider ${getStatusColorClasses(editTask?.status)}`}>{getStatusLabel(editTask?.status)}</span>
                         </button>
                       ))}
                    </div>

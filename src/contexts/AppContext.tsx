@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, ReactNode, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AppContext } from './app-context';
@@ -14,7 +14,7 @@ import type {
   SystemUser,
 } from './app-types';
 import { DEFAULT_COLUMNS, slugify } from './app-types';
-import { useMemo } from 'react';
+// useMemo already imported above
 
 function mapEmployee(row: any): Employee {
   return { id: row.id, name: row.name, role: row.role, avatar: row.avatar, photoUrl: row.photo_url || undefined, email: row.email || undefined, password: row.password || undefined };
@@ -30,7 +30,12 @@ function mapKanbanCard(row: any): KanbanCard {
     column: row.column, timeSpent: row.time_spent ?? 0,
     timerRunning: row.timer_running ?? false, timerStart: row.timer_start || undefined,
     employeeId: row.employee_id, archivedAt: row.archived_at || undefined,
-    history: row.history || [],
+    // AI fields
+    aiStatus: row.ai_status || undefined,
+    aiReport: row.ai_report ? (typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report) : undefined,
+    source: row.source || 'manual',
+    originalMessage: row.original_message || undefined,
+    history: row.history ? (typeof row.history === 'string' ? JSON.parse(row.history) : row.history) : [],
   };
 }
 
@@ -150,13 +155,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
     supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).then(r => {
       if (r.data) {
-        // Only apply if no pending ops to avoid overwriting optimistic state
-        if (pendingOpsRef.current.size === 0) {
-          setKanbanCards(r.data.map(mapKanbanCard));
-        }
+        setKanbanCards(prev => {
+          // Merge: keep optimistic pending ops, update everything else
+          const pending = pendingOpsRef.current;
+          if (pending.size === 0) return r.data!.map(mapKanbanCard);
+          const freshMap = new Map(r.data!.map(row => [row.id, row]));
+          const merged = prev.map(c => {
+            if (pending.has(c.id)) return c; // keep optimistic
+            const fresh = freshMap.get(c.id);
+            return fresh ? mapKanbanCard(fresh) : c;
+          });
+          // Add any new rows not in prev
+          r.data!.forEach(row => {
+            if (!merged.some(c => c.id === row.id)) merged.push(mapKanbanCard(row));
+          });
+          return merged;
+        });
       }
     });
-  }, 2000), []);
+  }, 1500), []);
 
   const debouncedRefetchColumns = useMemo(() => createDebouncedRefetch(() => {
     supabase.from('kanban_columns').select('*').then(r => { if (r.data) setKanbanColumns(r.data.map(mapKanbanColumn)); });
@@ -188,18 +205,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         debouncedRefetchEmployees();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, (payload) => {
-        // Granular update: apply payload directly for UPDATEs when possible
         if (payload.eventType === 'UPDATE' && payload.new) {
           const updatedRow = payload.new as any;
           // Skip if this is our own optimistic update
           if (pendingOpsRef.current.has(updatedRow.id)) return;
-          setKanbanCards(prev => prev.map(c => c.id === updatedRow.id ? mapKanbanCard(updatedRow) : c));
+          // Re-fetch the full row from DB to ensure large JSONB columns (images, etc.) are complete.
+          // Supabase realtime payloads may truncate or omit large JSONB fields.
+          supabase.from('kanban_cards').select('*').eq('id', updatedRow.id).single().then(({ data }) => {
+            if (data) {
+              setKanbanCards(prev => prev.map(c => c.id === data.id ? mapKanbanCard(data) : c));
+            }
+          });
         } else if (payload.eventType === 'INSERT' && payload.new) {
           const newRow = payload.new as any;
           if (pendingOpsRef.current.has(newRow.id)) return;
-          setKanbanCards(prev => {
-            if (prev.some(c => c.id === newRow.id)) return prev;
-            return [...prev, mapKanbanCard(newRow)];
+          // Fetch full row to ensure complete data
+          supabase.from('kanban_cards').select('*').eq('id', newRow.id).single().then(({ data }) => {
+            if (data) {
+              setKanbanCards(prev => {
+                if (prev.some(c => c.id === data.id)) return prev;
+                return [...prev, mapKanbanCard(data)];
+              });
+            }
           });
         } else if (payload.eventType === 'DELETE' && payload.old) {
           const oldId = (payload.old as any).id;
@@ -211,8 +238,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, () => {
         debouncedRefetchColumns();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_tasks' }, () => {
-        debouncedRefetchTasks();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_tasks' }, (payload) => {
+        // Granular real-time updates for calendar tasks (instant status sync)
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const row = payload.new as any;
+          setCalendarTasks(prev => prev.map(t => t.id === row.id ? mapCalendarTask(row) : t));
+        } else if (payload.eventType === 'INSERT' && payload.new) {
+          const row = payload.new as any;
+          setCalendarTasks(prev => {
+            if (prev.some(t => t.id === row.id)) return prev;
+            return [...prev, mapCalendarTask(row)];
+          });
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          const oldId = (payload.old as any).id;
+          setCalendarTasks(prev => prev.filter(t => t.id !== oldId));
+        } else {
+          debouncedRefetchTasks();
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'credentials' }, () => {
         debouncedRefetchCredentials();
@@ -316,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
-  const createHistoryAction = useCallback((actionType: 'create' | 'move' | 'edit' | 'status_change', description: string): CardAction => {
+  const createHistoryAction = useCallback((actionType: CardAction['actionType'], description: string): CardAction => {
     return {
       id: crypto.randomUUID(),
       userId: loggedUserId || 'unknown',
@@ -462,7 +504,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       
       // Release pending flag after a short delay (for realtime dedup)
-      setTimeout(() => pendingOpsRef.current.delete(id), 3000);
+      setTimeout(() => pendingOpsRef.current.delete(id), 1500);
       
       if (error) throw error;
     } catch (err: any) {
@@ -530,7 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const { error } = await supabase.from('kanban_cards').update(dbUpdates).eq('id', id);
       
-      setTimeout(() => pendingOpsRef.current.delete(id), 3000);
+      setTimeout(() => pendingOpsRef.current.delete(id), 1500);
       
       if (error) throw error;
     } catch (err: any) {
@@ -540,6 +582,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       debouncedRefetchCards();
     }
   }, [kanbanCards, kanbanColumns, createHistoryAction, debouncedRefetchCards]);
+
+  const triggerAICorrection = useCallback(async (cardId: string) => {
+    try {
+      // Optimistic: set analyzing status
+      setKanbanCards(prev => prev.map(c => c.id === cardId ? { ...c, aiStatus: 'analyzing' as const } : c));
+      toast.info('🤖 IA está analisando o card...');
+
+      const { data, error } = await supabase.functions.invoke('ai-correction', {
+        body: { cardId },
+      });
+
+      if (error) throw error;
+      
+      if (data?.hasErrors) {
+        toast.warning(`🤖 IA encontrou ${data.issueCount} problema(s). Card movido para Alteração.`);
+      } else {
+        toast.success('🤖 IA: Análise concluída — Nenhum problema crítico.');
+      }
+      
+      // Refetch to get the server-side updates
+      debouncedRefetchCards();
+    } catch (err: any) {
+      console.error('Erro AI correction:', err);
+      toast.error('Erro ao executar correção com IA.');
+      setKanbanCards(prev => prev.map(c => c.id === cardId ? { ...c, aiStatus: null } : c));
+    }
+  }, [debouncedRefetchCards]);
 
   const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
     try {
@@ -751,6 +820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     login, register, logout, adminDeleteUser, adminUpdateUserRole,
     addEmployee, updateEmployee, deleteEmployee,
     addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+    triggerAICorrection,
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask,
     addCredential, updateCredential, deleteCredential,
@@ -764,6 +834,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     login, register, logout, adminDeleteUser, adminUpdateUserRole,
     addEmployee, updateEmployee, deleteEmployee,
     addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+    triggerAICorrection,
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask,
     addCredential, updateCredential, deleteCredential,

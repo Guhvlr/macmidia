@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Wrench, Plus } from 'lucide-react';
+import { ArrowLeft, Loader2, Wrench, Plus, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
@@ -17,7 +17,7 @@ const CORRECTION_COLUMNS = [
 
 const CorrectionBoard = () => {
   const navigate = useNavigate();
-  const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
+  const { kanbanCards, employees, moveKanbanCard, triggerAICorrection, loading } = useApp();
 
   const activeCards = useMemo(() => kanbanCards.filter(c => !c.archivedAt && CORRECTION_COLUMNS.some(col => col.key === c.column)), [kanbanCards]);
 
@@ -104,6 +104,16 @@ const CorrectionBoard = () => {
                           </div>
                         </div>
                         <KanbanCard card={card} />
+                        {/* AI Correction button for para-correcao */}
+                        {col.key === 'para-correcao' && card.aiStatus !== 'analyzing' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); triggerAICorrection(card.id); }}
+                            className="mt-1.5 w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/15 hover:border-blue-500/50 transition-all text-[10px] font-bold uppercase tracking-wider"
+                          >
+                            <Bot className="w-3.5 h-3.5" />
+                            Analisar com IA
+                          </button>
+                        )}
                       </div>
                     ))
                   )}

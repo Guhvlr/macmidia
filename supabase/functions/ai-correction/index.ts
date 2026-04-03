@@ -42,25 +42,24 @@ Analise o texto abaixo e retorne um JSON com:
   "hasErrors": boolean,
   "issues": [
     {
-      "type": "spelling" | "formatting" | "price" | "organization" | "missing_info",
+      "type": "spelling" | "formatting" | "price" | "organization" | "missing_info" | "mismatch",
       "severity": "low" | "medium" | "high",
-      "description": "descrição curta do problema",
-      "original": "trecho original",
-      "suggestion": "sugestão de correção"
+      "description": "descrição curta do erro ou divergência",
+      "original": "trecho original ou erro visual"
     }
   ],
-  "correctedDescription": "descrição completa corrigida",
   "organizationScore": 1-10,
-  "summary": "resumo geral em 1 frase"
+  "summary": "resumo geral das divergências encontradas"
 }
 
 REGRAS:
-- Verifique ortografia de nomes de produtos. Se houver erro, diga EXATAMENTE qual produto está errado no campo "description".
-- Verifique formatação de preços (deve ser X,XX). Especifique qual produto está com preço fora do padrão.
-- Verifique se produtos semelhantes estão agrupados.
-- NÃO altere os preços, apenas aponte se o formato está inconsistente.
-- Aponte duplicatas ou produtos muito semelhantes, listando exatamente quais são.
-- Verifique se há informações mínimas (nome, preço)`;
+- FOCO TOTAL NA CONFERÊNCIA: Verifique se o que está escrito no texto bate com o que está na imagem (caso haja imagem).
+- Se houver divergência de preço ou produto entre imagem e texto, marque como "mismatch" com gravidade "high".
+- NÃO sugira um novo texto, apenas aponte onde o atual falha.
+- Verifique ortografia de nomes de produtos.
+- Verifique se os produtos estão organizados de forma lógica.
+- Aponte duplicatas ou produtos inconsistentes.
+- Verifique se há informações mínimas (nome, preço).`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -198,18 +197,25 @@ Deno.serve(async (req) => {
     // Delete any previous AI correction for this card to allow re-analysis
     await supabase.from('ai_corrections').delete().eq('kanban_card_id', cardId);
 
-    // Create correction record
-    const { data: correction, error: corrError } = await supabase
-      .from('ai_corrections')
-      .insert({
-        kanban_card_id: cardId,
-        status: 'analyzing',
-        processing_steps: [{ step: 'Iniciando análise', status: 'in_progress', timestamp: new Date().toISOString() }],
-      })
-      .select()
-      .single();
-
-    if (corrError) throw corrError;
+    // Create correction record (optional, wrapped in try-catch)
+    let correctionId = null;
+    try {
+      const { data: correction, error: corrError } = await supabase
+        .from('ai_corrections')
+        .insert({
+          kanban_card_id: cardId,
+          status: 'analyzing',
+          processing_steps: [{ step: 'Iniciando análise', status: 'in_progress', timestamp: new Date().toISOString() }],
+        })
+        .select()
+        .single();
+      
+      if (!corrError && correction) {
+        correctionId = correction.id;
+      }
+    } catch (err) {
+      console.warn('ai_corrections table error (ignoring and proceeding with direct card updates):', err);
+    }
 
     // Update card AI status
     await supabase.from('kanban_cards').update({ 
@@ -217,39 +223,35 @@ Deno.serve(async (req) => {
     }).eq('id', cardId);
 
     // Step 1: Analyze description/text
-    await updateStep(supabase, correction.id, 'Analisando descrição', 'in_progress');
+    if (correctionId) await updateStep(supabase, correctionId, 'Analisando descrição', 'in_progress').catch(() => {});
     
     let textAnalysis;
     try {
       textAnalysis = await analyzeText(card.description || '', card.client_name, openaiKey);
-      await updateStep(supabase, correction.id, 'Descrição analisada', 'completed');
+      if (correctionId) await updateStep(supabase, correctionId, 'Descrição analisada', 'completed').catch(() => {});
     } catch (err: any) {
-      await updateStep(supabase, correction.id, 'Erro na análise de texto', 'error');
-      textAnalysis = { hasErrors: false, issues: [], summary: 'Não foi possível analisar' };
+      console.error('Text analysis error:', err.message);
+      if (correctionId) await updateStep(supabase, correctionId, 'Erro na análise de texto', 'error').catch(() => {});
+      textAnalysis = { hasErrors: false, issues: [], summary: 'Não foi possível analisar o texto automaticamente.' };
     }
-
-    // Step 2: Analyze prices
-    await updateStep(supabase, correction.id, 'Verificando preços', 'in_progress');
-    // Price verification is part of the text analysis, just update step
-    await updateStep(supabase, correction.id, 'Preços verificados', 'completed');
 
     // Step 3: Analyze images (only if card has images)
     let imageAnalysis = { hasImageIssues: false, issues: [], summary: 'Sem imagens' };
     const images = card.images || [];
     
     if (images.length > 0) {
-      await updateStep(supabase, correction.id, 'Validando imagens', 'in_progress');
+      if (correctionId) await updateStep(supabase, correctionId, 'Validando imagens', 'in_progress').catch(() => {});
       try {
         imageAnalysis = await analyzeImages(images, card.client_name, card.description || '', openaiKey);
-        await updateStep(supabase, correction.id, 'Imagens validadas', 'completed');
+        if (correctionId) await updateStep(supabase, correctionId, 'Imagens validadas', 'completed').catch(() => {});
       } catch (err: any) {
-        await updateStep(supabase, correction.id, 'Erro na validação de imagens', 'error');
+        console.error('Image analysis error:', err.message);
+        if (correctionId) await updateStep(supabase, correctionId, 'Erro na validação de imagens', 'error').catch(() => {});
+        imageAnalysis = { hasImageIssues: false, issues: [], summary: 'Erro ao validar imagens, prosseguindo com texto.' };
       }
     }
 
-    // Step 4: Compile results
-    await updateStep(supabase, correction.id, 'Compilando resultados', 'in_progress');
-
+    // Compile results
     const allIssues = [
       ...(textAnalysis.issues || []).map((i: any) => ({ ...i, source: 'text' })),
       ...(imageAnalysis.issues || []).map((i: any) => ({ ...i, source: 'image' })),
@@ -270,7 +272,6 @@ Deno.serve(async (req) => {
       imageAnalysis: {
         hasIssues: imageAnalysis.hasImageIssues,
         summary: imageAnalysis.summary,
-        quality: imageAnalysis.generalQuality,
         issueCount: (imageAnalysis.issues || []).length,
       },
       totalIssues: allIssues.length,
@@ -279,16 +280,7 @@ Deno.serve(async (req) => {
       correctedDescription: textAnalysis.correctedDescription,
     };
 
-    // Update correction record
-    await supabase.from('ai_corrections').update({
-      status: 'completed',
-      analysis_result: report,
-      issues_found: allIssues,
-      moved_to_alteration: shouldMoveToAlteration,
-      completed_at: new Date().toISOString(),
-    }).eq('id', correction.id);
-
-    // Update card with report
+    // Update card with report (THE MOST IMPORTANT PART)
     const cardUpdates: any = {
       ai_status: hasErrors ? 'issues_found' : 'approved',
       ai_report: report,
@@ -298,7 +290,6 @@ Deno.serve(async (req) => {
     if (shouldMoveToAlteration) {
       cardUpdates.column = 'alteracao';
       
-      // Add history entry
       const currentHistory = Array.isArray(card.history) ? card.history : 
         (typeof card.history === 'string' ? JSON.parse(card.history) : []);
       
@@ -307,22 +298,7 @@ Deno.serve(async (req) => {
         userId: 'system',
         userName: '🤖 IA de Correção',
         actionType: 'move',
-        description: `Movido para "Alteração" — ${highSeverityIssues.length} problema(s) encontrado(s): ${highSeverityIssues.map((i: any) => i.description).join('; ')}`,
-        createdAt: new Date().toISOString(),
-      });
-      
-      cardUpdates.history = currentHistory;
-    } else {
-      // Add approval history
-      const currentHistory = Array.isArray(card.history) ? card.history : 
-        (typeof card.history === 'string' ? JSON.parse(card.history) : []);
-      
-      currentHistory.unshift({
-        id: crypto.randomUUID(),
-        userId: 'system',
-        userName: '🤖 IA de Correção',
-        actionType: 'status_change',
-        description: `Análise concluída — Nenhum problema crítico encontrado. Score: ${textAnalysis.organizationScore || '—'}/10`,
+        description: `Movido para "Alteração" — ${highSeverityIssues.length} problema(s) encontrado(s)`,
         createdAt: new Date().toISOString(),
       });
       
@@ -330,25 +306,31 @@ Deno.serve(async (req) => {
     }
 
     await supabase.from('kanban_cards').update(cardUpdates).eq('id', cardId);
-
-    await updateStep(supabase, correction.id, 'Concluído', 'completed');
-
-    console.log(`✅ AI correction completed for card ${cardId}: ${hasErrors ? 'ISSUES FOUND' : 'APPROVED'}`);
+    
+    if (correctionId) {
+      await supabase.from('ai_corrections').update({
+        status: 'completed',
+        analysis_result: report,
+        issues_found: allIssues,
+        moved_to_alteration: shouldMoveToAlteration,
+        completed_at: new Date().toISOString(),
+      }).eq('id', correctionId).catch(() => {});
+    }
 
     return new Response(JSON.stringify({
       status: 'success',
-      correctionId: correction.id,
       hasErrors,
       issueCount: allIssues.length,
-      recommendation: report.recommendation,
+      report 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error: any) {
-    console.error('AI correction error:', error);
+    console.error('Critical AI error:', error.message);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 200, // Return 200 even on error to let frontend handle it gracefully
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });

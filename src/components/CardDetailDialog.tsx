@@ -27,6 +27,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const [description, setDescription] = useState(card.description);
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   
+  // Image Viewer
+  const [selectedViewerImage, setSelectedViewerImage] = useState<string | null>(null);
+  
   // Custom Fields
   const [labels, setLabels] = useState<string[]>(Array.isArray(card.labels) ? card.labels : []);
   const [checklists, setChecklists] = useState(Array.isArray(card.checklists) ? card.checklists : []);
@@ -269,26 +272,26 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             </div>
           )}
 
-          {/* Cover Header */}
-          {coverImage && (
-            <div className="w-full h-48 bg-black/50 relative overflow-hidden group">
-              <img src={coverImage} alt="Capa" className="w-full h-full object-cover opacity-80" />
-              <button 
-                onClick={() => window.open(coverImage, '_blank')} 
-                className="absolute inset-0 w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity"
-              >
-                <ZoomIn className="w-8 h-8 text-white/70" />
-              </button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setAsCover('')} 
-                className="absolute bottom-3 right-3 bg-black/60 hover:bg-black text-xs text-white rounded-lg border border-white/10"
-              >
-                Remover capa
-              </Button>
-            </div>
-          )}
+              {/* Cover Header */}
+              {coverImage && (
+                <div className="w-full h-48 bg-black/50 relative overflow-hidden group">
+                  <img src={coverImage} alt="Capa" className="w-full h-full object-cover opacity-80" />
+                  <button 
+                    onClick={() => setSelectedViewerImage(coverImage)} 
+                    className="absolute inset-0 w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity"
+                  >
+                    <ZoomIn className="w-8 h-8 text-white/70" />
+                  </button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setAsCover('')} 
+                    className="absolute bottom-3 right-3 bg-black/60 hover:bg-black text-xs text-white rounded-lg border border-white/10"
+                  >
+                    Remover capa
+                  </Button>
+                </div>
+              )}
 
           <div className="flex flex-1 overflow-hidden">
             {/* Left Column (Main Content) */}
@@ -419,25 +422,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
                     {card.aiReport.imageAnalysis?.hasIssues && (
                       <div className="bg-black/30 p-3.5 rounded-xl border border-red-500/20 shadow-inner">
-                        <h4 className="font-bold text-[13px] text-white/90 mb-2"> Erros nas Imagens:</h4>
-                        <p className="text-[13px] text-white/70">{card.aiReport.imageAnalysis.summary}</p>
-                      </div>
-                    )}
-
-                    {card.aiReport.correctedDescription && card.aiStatus === 'issues_found' && (
-                      <div className="bg-emerald-500/10 p-3.5 rounded-xl border border-emerald-500/20">
-                        <h4 className="font-bold text-[13px] text-emerald-400 mb-2">✅ Sugestão de Descrição Corrigida:</h4>
-                        <pre className="text-[12px] text-white/80 whitespace-pre-wrap font-sans bg-black/40 p-3 rounded-lg border border-white/5">{card.aiReport.correctedDescription}</pre>
-                        <Button 
-                          className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg h-9 shadow-lg hover:shadow-emerald-900/50 transition-all border border-emerald-500/50"
-                          onClick={() => {
-                            setDescription(card.aiReport.correctedDescription);
-                            saveUpdates({ description: card.aiReport.correctedDescription }, 'Aplicou sugestão da IA');
-                            toast.success('Descrição atualizada com a correção da IA!');
-                          }}
-                        >
-                          Aplicar Correção no Card
-                        </Button>
+                        <h4 className="font-bold text-[13px] text-white/90 mb-2">🔍 Divergências Imagem x Texto:</h4>
+                        <p className="text-[13px] text-white/70 whitespace-pre-wrap">{card.aiReport.imageAnalysis.summary}</p>
                       </div>
                     )}
                   </div>
@@ -552,7 +538,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                           const isCover = coverImage === img;
                           return (
                             <div key={i} className="flex gap-4 p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
-                              <div className="w-24 h-16 rounded overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer" onClick={() => window.open(img, '_blank')}>
+                              <div className="w-24 h-16 rounded overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer shadow-lg active:scale-95 transition-transform" onClick={() => setSelectedViewerImage(img)}>
                                 <img src={img} alt="Anexo" className="w-full h-full object-cover" />
                               </div>
                               <div className="flex flex-col justify-center flex-1">

@@ -57,11 +57,19 @@ function mapCalendarTask(row: any): CalendarTask {
 }
 
 function mapCredential(row: any): Credential {
-  return { id: row.id, label: row.label, username: row.username, password: row.password, url: row.url || undefined, employeeId: row.employee_id };
+  return { id: row.id, label: row.label, username: row.username, password: row.password, url: row.url || undefined, employeeId: row.employee_id, calendarClientId: row.calendar_client_id || undefined };
 }
 
 function mapCalendarClient(row: any): CalendarClient {
-  return { id: row.id, name: row.name };
+  return { 
+    id: row.id, 
+    name: row.name, 
+    logoUrl: row.logo_url || undefined,
+    email: row.email || undefined,
+    phones: Array.isArray(row.phones) ? row.phones : [],
+    address: row.address || undefined,
+    notes: row.notes || undefined
+  };
 }
 
 function mapSystemUser(row: any): SystemUser {
@@ -729,7 +737,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCredential = useCallback(async (cred: Omit<Credential, 'id'>) => {
     try {
       const { error } = await supabase.from('credentials').insert({
-        employee_id: cred.employeeId, label: cred.label,
+        employee_id: cred.employeeId, 
+        calendar_client_id: cred.calendarClientId || null,
+        label: cred.label,
         username: cred.username, password: cred.password, url: cred.url || null,
       });
       if (error) throw error;
@@ -764,14 +774,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const addCalendarClient = useCallback(async (name: string) => {
+  const addCalendarClient = useCallback(async (name: string, logoUrl?: string) => {
     try {
       const id = slugify(name) || crypto.randomUUID();
-      const { error } = await supabase.from('calendar_clients').insert({ id, name });
+      const { error } = await supabase.from('calendar_clients').insert({ id, name, logo_url: logoUrl || null });
       if (error) throw error;
     } catch (err: any) {
       console.error('Erro ao adicionar cliente:', err);
       toast.error('Erro ao adicionar cliente.');
+    }
+  }, []);
+
+  const updateCalendarClient = useCallback(async (id: string, updates: Partial<CalendarClient>) => {
+    try {
+      // Optimistic
+      setCalendarClients(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+      
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if ('logoUrl' in updates) dbUpdates.logo_url = updates.logoUrl || null;
+      if ('email' in updates) dbUpdates.email = updates.email || null;
+      if ('phones' in updates) dbUpdates.phones = Array.isArray(updates.phones) ? updates.phones : null;
+      if ('address' in updates) dbUpdates.address = updates.address || null;
+      if ('notes' in updates) dbUpdates.notes = updates.notes || null;
+      
+      const { error } = await supabase.from('calendar_clients').update(dbUpdates).eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao atualizar cliente:', err);
+      toast.error('Erro ao atualizar cliente.');
     }
   }, []);
 
@@ -824,7 +855,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask,
     addCredential, updateCredential, deleteCredential,
-    addCalendarClient, deleteCalendarClient,
+    addCalendarClient, updateCalendarClient, deleteCalendarClient,
     setDashboardBanner, setDashboardLogo,
   }), [
     isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
@@ -838,7 +869,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask,
     addCredential, updateCredential, deleteCredential,
-    addCalendarClient, deleteCalendarClient,
+    addCalendarClient, updateCalendarClient, deleteCalendarClient,
     setDashboardBanner, setDashboardLogo,
   ]);
 

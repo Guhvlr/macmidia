@@ -91,7 +91,7 @@ const Index = () => {
             { icon: Send, label: 'Quadros de Postagem', desc: 'Centralizar e publicar conteúdos', path: '/postagem', color: 'from-rose-500/10 to-transparent' },
             { icon: Wrench, label: 'Correções', desc: 'Visão geral de alterações', path: '/correcao', color: 'from-blue-500/10 to-transparent' },
             { icon: Calendar, label: 'Calendário', desc: 'Planejamento de conteúdo mensal', path: '/calendario', color: 'from-amber-500/10 to-transparent' },
-            { icon: Shield, label: 'Cofre de Acessos', desc: 'Credenciais seguras dos clientes', path: '/cofre', color: 'from-emerald-500/10 to-transparent' },
+            { icon: Shield, label: 'Banco de Dados', desc: 'Contatos e credenciais dos clientes', path: '/cofre', color: 'from-emerald-500/10 to-transparent' },
           ].map(({ icon: Icon, label, desc, path, color }) => (
             <button key={path} onClick={() => navigate(path)} className="glass-card-hover p-6 text-left group cursor-pointer relative overflow-hidden">
               <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />

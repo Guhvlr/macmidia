@@ -285,9 +285,18 @@ const ClientCalendar = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary rounded-xl">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">{client.name}</h1>
-            <p className="text-[11px] text-muted-foreground">Calendário de conteúdo</p>
+          <div className="flex items-center gap-3">
+             {client.logoUrl ? (
+               <img src={client.logoUrl} className="w-9 h-9 rounded-full object-cover border border-white/10" alt="" />
+             ) : (
+               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs shrink-0">
+                 {client.name.substring(0, 2).toUpperCase()}
+               </div>
+             )}
+             <div>
+               <h1 className="text-lg font-bold text-foreground">{client.name}</h1>
+               <p className="text-[11px] text-muted-foreground">Calendário de conteúdo</p>
+             </div>
           </div>
           <div className="ml-auto flex items-center gap-3 text-xs">
             {Object.entries(statusCounts as Record<string, number>).map(([status, count]) => (
@@ -433,13 +442,14 @@ const ClientCalendar = () => {
                             
                             <div
                               onClick={() => setEditTask(task)}
-                              className={`w-full text-left rounded-lg p-2.5 bg-[#1C1C1E] border ${dragOverCardId === task.id ? 'border-primary' : 'border-white/5'} hover:bg-[#252528] transition-all cursor-pointer shadow-md group/card flex flex-col gap-2 relative overflow-hidden`}
+                              className={`w-full text-left rounded-lg p-2.5 border transition-all cursor-pointer shadow-md group/card flex flex-col gap-2 relative overflow-hidden
+                                ${statusColors[task.status?.toLowerCase()] || 'bg-[#1C1C1E] border-white/5 text-white/70'}
+                                ${dragOverCardId === task.id ? 'ring-2 ring-primary scale-[1.02] z-10' : ''}
+                                hover:brightness-125 transition-all
+                              `}
                             >
-                              {/* Left colored border indicative of status instead of type format */}
-                              <div className={`absolute left-0 top-0 bottom-0 w-[4px] opacity-100 ${statusColors[task.status?.toLowerCase()]?.split(' ')[0] || 'bg-white/10'}`} />
-                              
-                              <div className="pl-1.5 pr-4">
-                                <span className="text-[11px] font-bold truncate leading-tight text-white block uppercase opacity-90">{task.clientName}</span>
+                              <div className="pr-4">
+                                <span className="text-[10px] font-bold truncate leading-tight block uppercase opacity-100">{task.clientName}</span>
                               </div>
                               
                               <div className="pl-1 flex items-center justify-between mt-auto">
@@ -524,9 +534,13 @@ const ClientCalendar = () => {
                   {/* Header */}
                   <div className="flex items-center justify-between p-4 border-b border-white/5">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center font-bold text-xs shadow-md">
-                        {task.clientName?.substring(0,2).toUpperCase() || 'CX'}
-                      </div>
+                      {client.logoUrl ? (
+                         <img src={client.logoUrl} className="w-9 h-9 rounded-full object-cover border border-white/10 shadow-md" alt="" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center font-bold text-xs shadow-md">
+                          {task.clientName?.substring(0,2).toUpperCase() || 'CX'}
+                        </div>
+                      )}
                       <span className="font-bold text-sm tracking-wide text-white uppercase">{task.clientName}</span>
                     </div>
                     <Badge variant="outline" className={`font-semibold border-white/10 ${statusColors[task.status?.toLowerCase()] || 'bg-white/5 text-white/60'}`}>

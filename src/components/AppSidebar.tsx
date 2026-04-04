@@ -10,7 +10,7 @@ const navItems = [
   { path: '/correcao', icon: Wrench, label: 'Correções' },
   { path: '/postagem', icon: Send, label: 'Postagens' },
   { path: '/calendario', icon: Calendar, label: 'Calendário' },
-  { path: '/cofre', icon: Shield, label: 'Cofre' },
+  { path: '/cofre', icon: Shield, label: 'Banco de Dados' },
 ];
 
 interface Props {

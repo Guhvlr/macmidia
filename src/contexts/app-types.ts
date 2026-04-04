@@ -84,6 +84,7 @@ export interface Credential {
   password: string;
   url?: string;
   employeeId: string;
+  calendarClientId?: string;
 }
 
 export interface Employee {
@@ -99,6 +100,11 @@ export interface Employee {
 export interface CalendarClient {
   id: string;
   name: string;
+  logoUrl?: string;
+  email?: string;
+  phones?: string[];
+  address?: string;
+  notes?: string;
 }
 
 export const DEFAULT_COLUMNS = [
@@ -156,7 +162,8 @@ export interface AppState {
   addCredential: (cred: Omit<Credential, 'id'>) => void;
   updateCredential: (id: string, updates: Partial<Credential>) => void;
   deleteCredential: (id: string) => void;
-  addCalendarClient: (name: string) => void;
+  addCalendarClient: (name: string, logoUrl?: string) => void;
+  updateCalendarClient: (id: string, updates: Partial<CalendarClient>) => void;
   deleteCalendarClient: (id: string) => void;
   setDashboardBanner: (url: string) => void;
   setDashboardLogo: (url: string) => void;

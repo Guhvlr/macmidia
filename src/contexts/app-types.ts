@@ -152,6 +152,7 @@ export interface AppState {
   deleteKanbanCard: (id: string) => void;
   moveKanbanCard: (id: string, column: string) => void;
   triggerAICorrection: (cardId: string) => void;
+  fixDescriptionWithAI: (cardId: string, mode?: 'keep_sequence' | 'organize') => Promise<void>;
   addKanbanColumn: (employeeId: string, title: string, color: string) => void;
   updateKanbanColumn: (id: string, updates: Partial<KanbanColumnDef>) => void;
   deleteKanbanColumn: (id: string) => void;

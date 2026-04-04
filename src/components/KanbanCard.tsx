@@ -2,7 +2,7 @@ import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
-import { Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles } from 'lucide-react';
 import { compressImage } from '@/lib/utils';
 
 // Lazy load the heavy dialog component — only mount when user clicks a card
@@ -48,6 +48,13 @@ const KanbanCardInner = ({ card }: Props) => {
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     setIsDragOver(false);
+    
+    // Se for um card sendo arrastado (drag and drop entre colunas), ignorar
+    // para evitar que um card caia "dentro" do outro
+    if (e.dataTransfer.getData('cardId')) {
+      return;
+    }
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       e.preventDefault();
       e.stopPropagation();
@@ -137,11 +144,25 @@ const KanbanCardInner = ({ card }: Props) => {
         )}
 
         {/* Quick action edit on hover */}
-        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {card.aiStatus === 'issues_found' && (
+            <div className="bg-amber-500/80 p-1.5 rounded-md backdrop-blur-sm border border-white/10 text-white animate-pulse" title="Correções pendentes">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+          )}
           <div className="bg-black/60 hover:bg-black/80 p-1.5 rounded-md backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}>
             <Edit3 className="w-3.5 h-3.5" />
           </div>
         </div>
+
+        {/* Floating star for correction always visible if issues found */}
+        {card.aiStatus === 'issues_found' && (
+          <div className="absolute top-2 right-10 z-10 group-hover:hidden transition-all">
+             <div className="bg-amber-500 p-1 rounded-full shadow-lg border border-white/20 animate-bounce">
+                <Sparkles className="w-2.5 h-2.5 text-white" />
+             </div>
+          </div>
+        )}
 
         {coverImage && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 h-32 bg-black/40">
@@ -163,7 +184,6 @@ const KanbanCardInner = ({ card }: Props) => {
 
           <h4 className="font-bold text-[13px] text-white leading-tight uppercase line-clamp-2">{card.clientName}</h4>
 
-          {/* AI Status Badge - TEMPORARILY DISABLED 
           {card.aiStatus === 'analyzing' && (
             <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -181,7 +201,7 @@ const KanbanCardInner = ({ card }: Props) => {
               <AlertTriangle className="w-3 h-3" />
               <span className="text-[9px] font-bold uppercase tracking-wider">Problemas Encontrados</span>
             </div>
-          )} */}
+          )}
 
           {/* WhatsApp source indicator */}
           {card.source === 'whatsapp' && (

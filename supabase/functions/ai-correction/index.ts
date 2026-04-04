@@ -159,42 +159,48 @@ async function runUnifiedAnalysis(card: any, openaiKey: string): Promise<any> {
     const description = card.description || '';
     const clientName = card.clientName || 'Cliente';
 
-    const systemPrompt = `Você é um auditor técnico de ofertas de supermercado.
-Sua missão é conferir se a descrição do card (texto) bate EXATAMENTE com as imagens fornecidas.
+    const systemPrompt = `Você é um auditor técnico especializado em conferência de materiais publicitários de supermercado.
+Sua missão é realizar uma auditoria rigorosa comparando a DESCRIÇÃO DO CARD (texto) com as IMAGENS fornecidas.
 
-Retorne APENAS um JSON no formato:
+Você deve retornar um JSON no formato EXATO abaixo:
 {
   "hasErrors": boolean,
-  "report": {
-    "descriptionStatus": "✅ OK" | "❌ [Erro no texto]",
-    "priceStatus": "✅ OK" | "❌ [Preço divergente no produto X]",
-    "imageStatus": "✅ OK" | "❌ [Produto X falta na imagem ou no texto]",
-    "dateStatus": "✅ OK (Validade: DD/MM)" | "❌ Data não encontrada"
-  },
-  "summary": "Resumo rápido"
+  "summary": "Resumo rápido do resultado",
+  "checklist": [
+    { "item": "Preços", "status": "✅" | "❌", "observation": "Tudo ok" | "Divergência: [detalhe]" },
+    { "item": "Datas/Validade", "status": "✅" | "❌", "observation": "Validade DD/MM encontrada" | "Data não encontrada ou incorreta" },
+    { "item": "Produtos/Imagens", "status": "✅" | "❌", "observation": "Imagens batem com o texto" | "Faltando imagem do produto X" },
+    { "item": "Gramática/Texto", "status": "✅" | "❌", "observation": "Texto ok" | "Erro em: [detalhe]" }
+  ],
+  "corrections": [
+    { "original": "valor ou texto original", "corrected": "valor ou texto corrigido", "reason": "motivo" }
+  ]
 }
 
-REGRAS:
-- Descrição: Verifique ortografia.
-- Preço: Compare o preço do texto com o da imagem. Se houver diferença, aponte o produto.
-- Imagem: Todo produto no texto deve estar na imagem. Se sobrar ou faltar, aponte o nome.
-- Data: Localize a validade da oferta.`;
+REGRAS CRÍTICAS:
+1. PREÇOS: Se o texto diz R$ 10,00 e na imagem está R$ 12,00, a correção deve mostrar isso.
+2. IMAGENS: Todo produto listado no texto deve estar em pelo menos uma imagem.
+3. DATAS: Verifique se a validade descrita no texto aparece na arte.
+4. CORREÇÕES: Se houver erros, sugira a correção exata para facilitar o trabalho do designer.`;
 
     const messages: any[] = [
         { role: 'system', content: systemPrompt }
     ];
 
     const userContent: any[] = [
-        { type: 'text', text: `CLIENTE: ${clientName}\nDESCRIÇÃO DO CARD:\n${description}` }
+        { type: 'text', text: `CLIENTE: ${clientName}\nDESCRIÇÃO DO CARD:\n${description}\n\nAnalise as imagens comparando com este texto.` }
     ];
 
-    // Add up to 3 images to analysis
     if (images.length > 0) {
         images.slice(0, 3).forEach((img: string) => {
+            let finalUrl = img;
+            if (!img.startsWith('http') && !img.startsWith('data:')) {
+                finalUrl = `data:image/jpeg;base64,${img}`;
+            }
             userContent.push({
                 type: 'image_url',
                 image_url: {
-                    url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`,
+                    url: finalUrl,
                     detail: 'high'
                 }
             });
@@ -231,11 +237,23 @@ Deno.serve(async (req) => {
     const { cardId } = await req.json();
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const openaiKey = Deno.env.get('OPENAI_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { data: card, error: cardError } = await supabase.from('kanban_cards').select('*').eq('id', cardId).single();
     if (cardError || !card) return new Response('Card not found', { status: 404, headers: corsHeaders });
+
+    // Try to get OpenAI key from settings if not in env
+    let openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey) {
+      const { data: settingsData } = await supabase.from('settings').select('value').eq('key', 'openai_api_key').single();
+      openaiKey = settingsData?.value;
+    }
+
+    if (!openaiKey) {
+      return new Response(JSON.stringify({ error: 'OpenAI API Key não encontrada no banco ou ambiente.' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     // Mark as analyzing
     await supabase.from('kanban_cards').update({ ai_status: 'analyzing' }).eq('id', cardId);
@@ -246,7 +264,7 @@ Deno.serve(async (req) => {
     // Update card with new report structure
     const cardUpdates: any = {
       ai_status: analysis.hasErrors ? 'issues_found' : 'approved',
-      ai_report: analysis.report || analysis, // Ensure we store the report
+      ai_report: analysis, // Use the root analysis object directly
     };
 
     // If critical issues, move to alteration
@@ -254,15 +272,52 @@ Deno.serve(async (req) => {
       cardUpdates.column = 'alteracao';
       
       const history = Array.isArray(card.history) ? card.history : [];
+      let issuesSummary = analysis.summary || 'Ver relatório detalhado';
+      const issues = (analysis.checklist || []).filter((item: any) => item.status === '❌').map((item: any) => `${item.item}: ${item.observation}`);
+      
+      if (issues.length > 0) {
+        issuesSummary = issues.join(' | ');
+      }
+
+      // 1. Prepend to description
+      const auditNote = `⚠️ AUDITORIA IA: ${issues.join(' | ')}\n----------------------------------\n`;
+      if (!card.description.includes('⚠️ AUDITORIA IA')) {
+        cardUpdates.description = auditNote + (card.description || '');
+      }
+
+      // 2. Add comment
+      const comment = {
+        id: crypto.randomUUID(),
+        text: `🤖 RELATÓRIO DE AUDITORIA:\n\n${issues.map(i => `• ${i}`).join('\n')}\n\nResumo: ${analysis.summary || 'N/A'}`,
+        createdAt: new Date().toISOString(),
+        userId: 'system',
+        userName: '🤖 IA Auditora'
+      };
+      
+      const comments = Array.isArray(card.comments) ? card.comments : [];
+      comments.unshift(comment);
+      cardUpdates.comments = comments;
+
       history.unshift({
         id: crypto.randomUUID(),
         userId: 'system',
         userName: '🤖 IA Auditora',
         actionType: 'move',
-        description: `❌ Divergências encontradas: ${analysis.summary || 'Ver relatório'}`,
+        description: `❌ ERRO DETECTADO: ${issuesSummary}`,
         createdAt: new Date().toISOString(),
       });
       cardUpdates.history = history;
+    } else {
+        const history = Array.isArray(card.history) ? card.history : [];
+        history.unshift({
+            id: crypto.randomUUID(),
+            userId: 'system',
+            userName: '🤖 IA Auditora',
+            actionType: 'status_change',
+            description: `✅ APROVADO: Nenhuma divergência encontrada.`,
+            createdAt: new Date().toISOString(),
+        });
+        cardUpdates.history = history;
     }
 
     await supabase.from('kanban_cards').update(cardUpdates).eq('id', cardId);

@@ -593,30 +593,174 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const triggerAICorrection = useCallback(async (cardId: string) => {
     try {
-      // Optimistic: set analyzing status
-      setKanbanCards(prev => prev.map(c => c.id === cardId ? { ...c, aiStatus: 'analyzing' as const } : c));
-      toast.info('🤖 IA está analisando o card...');
+      const card = kanbanCards.find(c => c.id === cardId);
+      if (!card) return;
 
-      const { data, error } = await supabase.functions.invoke('ai-correction', {
-        body: { cardId },
+      setKanbanCards(prev => prev.map(c => c.id === cardId ? { ...c, aiStatus: 'analyzing' as const } : c));
+      toast.info('🤖 IA Auditora: Conferindo imagens...');
+
+      // 1. Get API Key
+      const { data: settingsData } = await supabase.from('settings').select('value').eq('key', 'openai_api_key').single();
+      const apiKey = settingsData?.value;
+      if (!apiKey) throw new Error('Cofigurações: Chave da OpenAI não encontrada (openai_api_key).');
+
+      // 2. Prepare images
+      const images = card.images || [];
+      const userContent: any[] = [
+        { type: 'text', text: `CLIENTE: ${card.clientName}\nDESCRIÇÃO DO CARD:\n${card.description}\n\nAnalise as imagens comparando com este texto.` }
+      ];
+
+      if (images.length > 0) {
+        images.slice(0, 10).forEach((img: string, idx: number) => {
+          let finalUrl = img;
+          if (!img.startsWith('http') && !img.startsWith('data:')) {
+            finalUrl = `data:image/jpeg;base64,${img}`;
+          }
+          userContent.push({ type: 'image_url', image_url: { url: finalUrl, detail: 'high' } });
+        });
+      }
+
+      // 3. Call OpenAI directly
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { 
+              role: 'system', 
+              content: `Você é um auditor de marketing SÊNIOR especializado em conferência de encartes de supermercado.
+              
+              CONTEXTO: Hoje é 04/04/2026. O card pode conter MÚLTIPLAS TELAS (vários anexos).
+              
+              MISSÃO: Comparar o TEXTO do card com TODAS as imagens fornecidas. Localize cada item da lista em alguma das imagens.
+              
+              REGRAS CRÍTICAS:
+              1. PREÇOS: Verifique cada centavo. Ex: Requeijão no texto: 5,99. Se na imagem aparecer "99 centavos", é ERRO de preço cortado ou divergência.
+              2. TODAS AS IMAGENS: O cliente enviou várias telas de um vídeo ou encarte. Audite todos os produtos mencionados.
+              3. VEREDITO: Se um produto no texto não aparecer em NENHUMA imagem, relate.
+              
+              Retorne APENAS um JSON:
+              {
+                "hasErrors": boolean,
+                "summary": "Resumo geral das inconsistências",
+                "checklist": [
+                  { "item": "Preços (Todas as Telas)", "status": "✅" | "❌", "observation": "Relate erros específicos vistos nas imagens" },
+                  { "item": "Vigência 2026", "status": "✅" | "❌", "observation": "Validade correta" },
+                  { "item": "Integridade Visual", "status": "✅" | "❌", "observation": "Preços cortados ou ilegíveis?" }
+                ],
+                "corrections": [
+                  { "original": "valor no texto", "corrected": "valor na imagem", "reason": "descrição detalhada" }
+                ]
+              }` 
+            },
+            { role: 'user', content: userContent }
+          ],
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
+        }),
       });
 
-      if (error) throw error;
-      
-      if (data?.hasErrors) {
-        toast.warning(`🤖 IA encontrou ${data.issueCount} problema(s). Card movido para Alteração.`);
-      } else {
-        toast.success('🤖 IA: Análise concluída — Nenhum problema crítico.');
+      if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
+      const aiResponse = await response.json();
+      const analysis = JSON.parse(aiResponse.choices[0].message.content);
+
+      // 4. Update the card in Supabase
+      const cardUpdates: any = {
+        ai_status: analysis.hasErrors ? 'issues_found' : 'approved',
+        ai_report: analysis,
+      };
+
+      if (analysis.hasErrors) {
+        cardUpdates.column = 'alteracao';
+        const issues = (analysis.checklist || []).filter((item: any) => item.status === '❌').map((item: any) => `${item.item}: ${item.observation}`);
+        const auditNote = `⚠️ AUDITORIA IA: ${issues.join(' | ')}\n----------------------------------\n`;
+        if (!card.description.includes('⚠️ AUDITORIA IA')) {
+          cardUpdates.description = auditNote + (card.description || '');
+        }
+
+        // Add history
+        const currentHistory = Array.isArray(card.history) ? card.history : [];
+        cardUpdates.history = [
+          {
+            id: crypto.randomUUID(),
+            userId: 'system',
+            userName: '🤖 IA Auditora',
+            actionType: 'move',
+            description: `❌ ERRO DETECTADO: ${analysis.summary || 'Ver relatório'}`,
+            createdAt: new Date().toISOString(),
+          },
+          ...currentHistory
+        ];
       }
-      
-      // Refetch to get the server-side updates
+
+      await supabase.from('kanban_cards').update(cardUpdates).eq('id', cardId);
+
+      if (analysis.hasErrors) toast.warning('🤖 Auditoria: Encontrei divergências.');
+      else toast.success('🤖 Auditoria: Tudo ok.');
+
       debouncedRefetchCards();
     } catch (err: any) {
-      console.error('Erro AI correction:', err);
-      toast.error('Erro ao executar correção com IA.');
+      console.error(err);
+      toast.error(`IA Auditora: ${err.message || 'Erro desconhecido'}`);
       setKanbanCards(prev => prev.map(c => c.id === cardId ? { ...c, aiStatus: null } : c));
     }
-  }, [debouncedRefetchCards]);
+  }, [kanbanCards, debouncedRefetchCards]);
+
+  const fixDescriptionWithAI = useCallback(async (cardId: string, mode: 'keep_sequence' | 'organize' = 'keep_sequence') => {
+    try {
+      const card = kanbanCards.find(c => c.id === cardId);
+      if (!card) return;
+
+      toast.info(mode === 'keep_sequence' ? '🤖 Mantendo sequência...' : '🤖 Organizando por categorias...');
+      
+      const { data: settingsData } = await (supabase as any).from('settings').select('value').eq('key', 'openai_api_key').single();
+      const apiKey = settingsData?.value;
+      if (!apiKey) throw new Error('OpenAI key missing');
+
+      let systemPrompt = `Você é um auditor ortográfico SÊNIOR de encartes de supermercado.
+Sua missão é corrigir e padronizar listas de produtos e ofertas.
+
+Regras de Ouro:
+1. CORREÇÃO TOTAL: Corrija palavras cortadas ou sem a primeira letra (ex: "ernil" vira "Pernil", "ina" vira "Fina", "queijão" vira "Requeijão").
+2. ACENTUAÇÃO: Aplique acentuação correta em todos os produtos (ex: "cafe" vira "Café", "recheio" vira "Recheio").
+3. ABREVIAÇÕES: Desfaça abreviações informais do dia-a-dia, exceto unidades de medida (kg, g, ml, un, pct).
+4. PREÇOS E DATAS: Mantenha todos os valores numéricos (R$ 0,00) e DATAS DE VALIDADE (Ex: 01/01 a 05/01) exatamente como estão no texto original. NUNCA REMOVA AS DATAS.
+5. FORMATAÇÃO: NUNCA use markdown (negrito, itálico, asteriscos). Cada item em uma nova linha.
+6. IDIOMA: Português do Brasil impecável.
+
+Se o modo for ORGANIZAR, use categorias claras em MAIÚSCULO como cabeçalho (ex: CARNES, HORTIFRUTI, BEBIDAS).`;
+
+      if (mode === 'organize') {
+        systemPrompt += `\n7. ORGANIZE os itens por categorias lógicas de supermercado.`;
+      } else {
+        systemPrompt += `\n7. MANTENHA a ordem original dos itens, corrigindo apenas o texto.`;
+      }
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: card.description }],
+          temperature: 0.2,
+        }),
+      });
+
+      if (!response.ok) throw new Error('GPT Error');
+      const data = await response.json();
+      const fixedText = data.choices[0].message.content.replace(/\*/g, '');
+
+      await updateKanbanCard(cardId, { description: fixedText }, `IA: ${mode === 'organize' ? 'Organizou por categorias' : 'Refinou mantendo ordem'}`);
+      toast.success('✨ Descrição atualizada!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao refinar descrição.');
+    }
+  }, [kanbanCards, updateKanbanCard]);
 
   const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
     try {
@@ -851,7 +995,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     login, register, logout, adminDeleteUser, adminUpdateUserRole,
     addEmployee, updateEmployee, deleteEmployee,
     addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
-    triggerAICorrection,
+    triggerAICorrection, fixDescriptionWithAI,
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask,
     addCredential, updateCredential, deleteCredential,
@@ -865,7 +1009,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     login, register, logout, adminDeleteUser, adminUpdateUserRole,
     addEmployee, updateEmployee, deleteEmployee,
     addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
-    triggerAICorrection,
+    triggerAICorrection, fixDescriptionWithAI,
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask,
     addCredential, updateCredential, deleteCredential,

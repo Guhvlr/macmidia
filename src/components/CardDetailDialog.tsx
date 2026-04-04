@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import Timer from './Timer';
-import { Trash2, Upload, X, ZoomIn, Save, Clock, History, CheckSquare, Paperclip, MessageSquare, Image as ImageIcon, Circle, CheckCircle2, Plus, LayoutList, Loader2, ArrowRight, Edit3, Bot } from 'lucide-react';
+import { Trash2, Upload, X, ZoomIn, Save, Clock, History, CheckSquare, Paperclip, MessageSquare, Image as ImageIcon, Circle, CheckCircle2, Plus, LayoutList, Loader2, ArrowRight, Edit3, Bot, Sparkles, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { compressImage } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -20,7 +20,7 @@ interface Props {
 }
 
 const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
-  const { updateKanbanCard, deleteKanbanCard, loggedUserId, loggedUserName } = useApp();
+  const { updateKanbanCard, deleteKanbanCard, triggerAICorrection, fixDescriptionWithAI, loggedUserId, loggedUserName } = useApp();
   const [clientName, setClientName] = useState(card.clientName);
 
   // Description
@@ -40,7 +40,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const [newComment, setNewComment] = useState("");
   const [newLabelText, setNewLabelText] = useState("");
 
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -59,6 +59,21 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     setComments(Array.isArray(card.comments) ? card.comments : []);
     setAssignedUsers(Array.isArray(card.assignedUsers) ? card.assignedUsers : []);
   }, [card.id, card.clientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (previewIndex === null || localImages.length <= 1) return;
+      if (e.key === 'ArrowLeft') {
+        setPreviewIndex(prev => prev! === 0 ? localImages.length - 1 : prev! - 1);
+      } else if (e.key === 'ArrowRight') {
+        setPreviewIndex(prev => prev! === localImages.length - 1 ? 0 : prev! + 1);
+      } else if (e.key === 'Escape') {
+        setPreviewIndex(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewIndex, localImages.length]);
 
   const saveUpdates = (updates: Partial<KanbanCardType>, actionDesc?: string) => {
     updateKanbanCard(card.id, updates, actionDesc);
@@ -267,7 +282,10 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             <div className="w-full h-48 bg-black/50 relative overflow-hidden group flex-shrink-0">
               <img src={coverImage} alt="Capa" className="w-full h-full object-cover opacity-80" />
               <button
-                onClick={() => setPreviewImage(coverImage)}
+                onClick={() => {
+                  const idx = localImages.indexOf(coverImage);
+                  setPreviewIndex(idx >= 0 ? idx : 0);
+                }}
                 className="absolute inset-0 w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity"
               >
                 <ZoomIn className="w-8 h-8 text-white/70" />
@@ -386,10 +404,99 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                   </div>
                 </div>
 
-                {/* AI REPORT - TEMPORARILY DISABLED (Keeping the commented structure for future) */}
-                {/* 
-                {card.aiReport && ... }
-                */}
+                {/* AI REPORT */}
+                {(card.aiStatus === 'analyzing' || card.aiStatus === 'issues_found' || card.aiStatus === 'approved') && (
+                  <div className={`rounded-2xl border p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500 ${card.aiStatus === 'analyzing' ? 'bg-blue-500/5 border-blue-500/20' : card.aiStatus === 'approved' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold flex items-center gap-2 text-white/90">
+                        <Bot className={`w-5 h-5 ${card.aiStatus === 'analyzing' ? 'text-blue-400 animate-pulse' : card.aiStatus === 'approved' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        Relatório da IA Auditora
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        {card.aiStatus === 'issues_found' && (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/20 border border-red-500/20 text-red-400 text-[9px] font-black uppercase tracking-widest animate-pulse">
+                            <AlertTriangle className="w-3 h-3" /> PRECISA DE ALTERAÇÃO
+                          </div>
+                        )}
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${card.aiStatus === 'analyzing' ? 'bg-blue-500/20 text-blue-400' : card.aiStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                          {card.aiStatus === 'analyzing' ? 'Analisando...' : card.aiStatus === 'approved' ? 'Aprovado' : 'Pendências'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {card.aiStatus === 'issues_found' && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                        <p className="text-[11px] text-red-300 font-bold flex items-center gap-2">
+                          <X className="w-3.5 h-3.5" /> Atenção: O card foi movido para a coluna de Alteração devido às inconsistências abaixo.
+                        </p>
+                      </div>
+                    )}
+
+                    {card.aiStatus === 'approved' && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                        <p className="text-[11px] text-emerald-400 font-bold flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Tudo certo! A IA conferiu os dados e as imagens estão batendo com o texto.
+                        </p>
+                      </div>
+                    )}
+
+                    {card.aiStatus === 'analyzing' ? (
+                      <div className="py-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                          <p className="text-xs text-white/40 italic">A IA está conferindo os preços e imagens com a descrição...</p>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500/40 animate-progress origin-left" style={{ width: '60%' }} />
+                        </div>
+                      </div>
+                    ) : card.aiReport && (
+                      <div className="space-y-5">
+                        {/* Checklist */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {(card.aiReport.checklist || []).map((check: any, idx: number) => (
+                            <div key={idx} className="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5 items-start">
+                              <span className="text-sm mt-0.5">{check.status}</span>
+                              <div>
+                                <p className="text-[11px] font-bold text-white/80">{check.item}</p>
+                                <p className="text-[10px] text-white/40 leading-relaxed">{check.observation}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Summary */}
+                        {card.aiReport.summary && (
+                          <p className="text-[12px] text-white/60 leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">
+                            "{card.aiReport.summary}"
+                          </p>
+                        )}
+
+                        {/* Corrections */}
+                        {card.aiReport.corrections && card.aiReport.corrections.length > 0 && (
+                          <div className="space-y-3 pt-2">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-white/30">Correções sugeridas</h4>
+                            <div className="space-y-2">
+                              {card.aiReport.corrections.map((corr: any, idx: number) => (
+                                <div key={idx} className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 space-y-2 text-[12px]">
+                                  <div className="flex items-center gap-2 text-red-300/50 line-through">
+                                    <span className="font-bold shrink-0">DE:</span>
+                                    <span>{corr.original}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                                    <span className="shrink-0 uppercase text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-400">PARA:</span>
+                                    <span>{corr.corrected}</span>
+                                  </div>
+                                  {corr.reason && <p className="text-[10px] text-white/30 italic mt-1">Motivo: {corr.reason}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Description */}
                 <div className="space-y-4">
@@ -470,7 +577,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                         <div key={i} className="group relative rounded-xl overflow-hidden bg-black/40 border border-white/10 aspect-video">
                           <img src={img} className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <Button size="icon" variant="ghost" onClick={() => setPreviewImage(img)}><ZoomIn className="w-4 h-4" /></Button>
+                            <Button size="icon" variant="ghost" onClick={() => setPreviewIndex(i)}><ZoomIn className="w-4 h-4" /></Button>
                             <Button size="icon" variant="ghost" onClick={() => removeImage(i)} className="text-red-400"><Trash2 className="w-4 h-4" /></Button>
                             {coverImage !== img && <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => setAsCover(img)}>Usar Capa</Button>}
                           </div>
@@ -544,6 +651,42 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
               </div>
 
               <div className="p-4 border-t border-white/5">
+                <Button variant="ghost" onClick={() => triggerAICorrection(card.id)} className="w-full justify-start text-[11px] text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg h-8 mb-1">
+                  <Bot className="w-3.5 h-3.5 mr-2" /> Corrigir Imagem (Auditoria)
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" className="w-full justify-start text-[11px] text-purple-400/60 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg h-8 mb-1">
+                      <Sparkles className="w-3.5 h-3.5 mr-2" /> Corrigir Descrição
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 glass-card border-white/10 p-2" align="start">
+                    <div className="space-y-1">
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start text-[11px] h-9 hover:bg-white/5"
+                        onClick={() => fixDescriptionWithAI(card.id, 'keep_sequence')}
+                      >
+                        <LayoutList className="w-3.5 h-3.5 mr-2 text-purple-400" />
+                        <div>
+                          <p className="font-bold text-left">Manter Sequência</p>
+                          <p className="text-[9px] text-white/40">Corrige apenas o texto e gramática</p>
+                        </div>
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start text-[11px] h-9 hover:bg-white/5"
+                        onClick={() => fixDescriptionWithAI(card.id, 'organize')}
+                      >
+                        <LayoutList className="w-3.5 h-3.5 mr-2 text-emerald-400" />
+                        <div>
+                          <p className="font-bold text-left">Sequência Organizada</p>
+                          <p className="text-[9px] text-white/40">Separa por Hortifruti, Carnes, etc.</p>
+                        </div>
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button variant="ghost" onClick={() => setShowDeleteConfirm(true)} className="w-full justify-start text-[11px] text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg h-8">
                   <Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir permanentemente
                 </Button>
@@ -553,9 +696,51 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="bg-black/95 max-w-[85vw] p-0 border-none shadow-2xl">
-          <img src={previewImage!} className="w-full h-auto max-h-[90vh] object-contain" onClick={() => setPreviewImage(null)} />
+      <Dialog open={previewIndex !== null} onOpenChange={(open) => !open && setPreviewIndex(null)}>
+        <DialogContent className="bg-black/95 max-w-[85vw] p-0 border-none shadow-2xl flex items-center justify-center">
+          {previewIndex !== null && (
+            <div className="relative w-full h-full flex items-center justify-center">
+              {/* Navegação */}
+              {localImages.length > 1 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-4 z-50 rounded-full bg-white/10 hover:bg-white/20 text-white w-12 h-12"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewIndex(prev => prev! === 0 ? localImages.length - 1 : prev! - 1);
+                    }}
+                  >
+                    <ChevronLeft className="w-8 h-8" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-4 z-50 rounded-full bg-white/10 hover:bg-white/20 text-white w-12 h-12"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewIndex(prev => prev! === localImages.length - 1 ? 0 : prev! + 1);
+                    }}
+                  >
+                    <ChevronRight className="w-8 h-8" />
+                  </Button>
+                </>
+              )}
+
+              <img
+                src={localImages[previewIndex]}
+                alt="Preview"
+                className="w-full h-auto max-h-[90vh] object-contain transition-all"
+                onClick={() => setPreviewIndex(null)}
+              />
+              
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[10px] font-bold text-white/50 tracking-widest uppercase">
+                Anexo {previewIndex + 1} de {localImages.length}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

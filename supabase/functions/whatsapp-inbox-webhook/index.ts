@@ -143,60 +143,87 @@ Deno.serve(async (req) => {
     }
 
     const payload = await req.json();
-    console.log('Webhook received:', JSON.stringify(payload).substring(0, 500));
+    console.log('--- [WH-WEBHOOK] NEW HIT ---');
+    console.log('Event:', payload.event || payload.type);
 
     // Evolution API webhook structure
     const event = payload.event || payload.type;
     
-    // Only process text messages
-    if (event !== 'messages.upsert' && event !== 'MESSAGES_UPSERT') {
-      return new Response(JSON.stringify({ status: 'ignored', reason: 'not a message event' }), {
+    // Only process text and media messages
+    if (event !== 'messages.upsert' && event !== 'MESSAGES_UPSERT' && event !== 'messages.update' && event !== 'MESSAGES_UPDATE') {
+      console.log('Ignoring non-upsert/update event:', event);
+      return new Response(JSON.stringify({ status: 'ignored', reason: 'not a target event' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Extract message data from Evolution API payload
+    // Extract message data
     const messageData = payload.data || payload;
     const message = messageData.message || messageData;
     const key = messageData.key || message.key || {};
     
     const remoteJid = key.remoteJid || messageData.remoteJid || '';
     const sender = key.participant || key.remoteJid || '';
-    const messageText = message.conversation || 
-                        message.extendedTextMessage?.text || 
-                        messageData.body || 
-                        '';
+    
+    // ULTRA-ROBUST Media search
+    const findMediaDeep = (obj: any): any => {
+      if (!obj || typeof obj !== 'object') return null;
+      
+      const mediaKeys = ['imageMessage', 'documentMessage', 'videoMessage', 'audioMessage', 'stickerMessage'];
+      for (const k of mediaKeys) {
+        if (obj[k]) return { type: k.replace('Message', ''), data: obj[k] };
+      }
 
-    if (!messageText || messageText.length < 10) {
-      return new Response(JSON.stringify({ status: 'ignored', reason: 'empty or too short message' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+      // Scan all properties
+      for (const k in obj) {
+        const found = findMediaDeep(obj[k]);
+        if (found) return found;
+      }
+      return null;
+    };
 
-    // Check if message looks like an offer (heuristic)
+    const detected = findMediaDeep(message);
+    const mData = detected?.data || {};
+
+    let messageType = detected?.type || (messageData.messageType === 'document' ? 'document' : 'text');
+    let mediaUrl = mData.url || messageData.mediaUrl || payload.mediaUrl || null;
+    let mediaMimeType = mData.mimetype || messageData.mimeType || null;
+    
+    let messageText = message.conversation || 
+                      message.extendedTextMessage?.text || 
+                      messageData.body || 
+                      mData.caption || 
+                      mData.title || 
+                      mData.fileName ||
+                      (messageType === 'document' ? 'Documento anexado' : '');
+
+    const hasMedia = !!mediaUrl;
+    console.log(`Extraction Result: type=${messageType}, hasMedia=${hasMedia}, url=${mediaUrl?.substring(0, 50)}...`);
+
+    // Force allow if it has media or looks like an offer
     const looksLikeOffer = /\d+[,.]?\d{0,2}\s*$|\bdata\b|\boferta\b|\bencarte\b/mi.test(messageText);
-    if (!looksLikeOffer) {
-      return new Response(JSON.stringify({ status: 'ignored', reason: 'does not look like an offer message' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+
+    if (!hasMedia && !looksLikeOffer && messageText.length < 5) {
+      console.log('Filtered out: no media and too short text');
+      return new Response(JSON.stringify({ status: 'ignored' }), { headers: corsHeaders });
     }
 
-    // Init Supabase client
+    // Init Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Save to inbox for manual triage
+    // Save
     const { data: savedMsg, error: saveError } = await supabase
       .from('whatsapp_inbox')
       .insert({
         remote_jid: remoteJid,
         sender: sender,
         sender_name: messageData?.pushName || sender,
-        message_text: messageText,
-        message_type: 'text',
-        media_url: null,
-        media_mime_type: null,
+        message_text: messageText || `[${messageType}]`,
+        message_type: messageType,
+        media_url: mediaUrl,
+        media_mime_type: mediaMimeType,
         raw_payload: payload,
         status: 'pending',
       })
@@ -204,16 +231,17 @@ Deno.serve(async (req) => {
       .single();
 
     if (saveError) {
-      console.error('Error saving to inbox:', saveError);
+      console.error('INSERT ERROR:', saveError);
       throw saveError;
     }
 
-    console.log(`📥 Message saved to inbox: ${savedMsg.id} from ${sender}`);
+    console.log(`✅ Inbox Success: ${savedMsg.id}`);
 
     return new Response(JSON.stringify({ 
       status: 'saved',
       id: savedMsg.id,
       sender: sender,
+      type: messageType
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

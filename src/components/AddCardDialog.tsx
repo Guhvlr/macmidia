@@ -5,8 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Upload, X } from 'lucide-react';
+import { Plus, Upload, X, Sparkles, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Props {
   employeeId?: string;
@@ -28,6 +30,7 @@ const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKe
   const [description, setDescription] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployeeId || '');
+  const [aiLoading, setAiLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isControlled = open !== undefined && onOpenChange !== undefined;
@@ -48,6 +51,56 @@ const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKe
       reader.onload = () => setImages(prev => [...prev, reader.result as string]);
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleProcessWithAI = async () => {
+    if (!description.trim()) {
+      toast.error('Digite uma descrição para corrigir.');
+      return;
+    }
+    setAiLoading(true);
+
+    try {
+      const { data: settingsData } = await (supabase as any).from('settings').select('value').eq('key', 'openai_api_key').single();
+      const apiKey = settingsData?.value;
+      if (!apiKey) {
+        toast.error('Chave da OpenAI não configurada.');
+        setAiLoading(false);
+        return;
+      }
+
+      const systemPrompt = `Você é um assistente de marketing para uma agência de mídia.
+Sua tarefa é receber uma mensagem/briefing e transformá-la em uma descrição profissional organizada.
+REGRAS: 1. Corrija ortografia e gramática. 2. Organize o conteúdo de forma clara. 3. NUNCA use markdown/asteriscos. Retorne o texto puramente plano.
+Retorne JSON: {"clientName": "...", "description": "..."}`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: description }],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
+      const data = await response.json();
+      const parsedData = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+      
+      const processedText = (parsedData.description || description).replace(/\*/g, '');
+      setDescription(processedText);
+      if (parsedData.clientName && !clientName) {
+        setClientName(parsedData.clientName.toUpperCase());
+      }
+      toast.success('✨ Descrição corrigida com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro na IA.');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -85,12 +138,27 @@ const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKe
             className="bg-secondary/40 border-border/50 rounded-xl h-11"
             autoFocus
           />
-          <Textarea
-            placeholder="Descrição (opcional)"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            className="bg-secondary/40 border-border/50 min-h-[80px] rounded-xl"
-          />
+          <div className="space-y-1 relative">
+            <div className="flex items-center justify-between mb-1 px-1">
+               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Descrição</label>
+               <Button 
+                type="button"
+                variant="ghost" 
+                onClick={handleProcessWithAI}
+                disabled={aiLoading || !description.trim()}
+                className="h-6 px-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-[9px] font-bold uppercase tracking-wider border border-purple-500/20"
+              >
+                {aiLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                {aiLoading ? 'Processando...' : 'Corrigir com IA'}
+              </Button>
+            </div>
+            <Textarea
+              placeholder="Adicione o briefing ou lista de produtos aqui..."
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="bg-secondary/40 border-border/50 min-h-[100px] rounded-xl focus-visible:ring-purple-500/30"
+            />
+          </div>
 
           <div
             onClick={() => fileInputRef.current?.click()}

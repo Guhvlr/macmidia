@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Sparkles, User, Clock, Check, X, RefreshCw, ChevronDown } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Sparkles, User, Clock, Check, X, RefreshCw, ChevronDown, Filter, FileSpreadsheet, FileCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
 interface InboxMessage {
@@ -36,6 +37,8 @@ const WhatsAppInbox = () => {
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [editClientName, setEditClientName] = useState('');
   const [isSequencia, setIsSequencia] = useState(false);
+  const [filterActive, setFilterActive] = useState(true);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -81,7 +84,29 @@ const WhatsAppInbox = () => {
       setMessages(prev => prev.filter(m => m.id !== id));
       toast.success('Mensagem descartada.');
     } catch (err) {
+      console.error(err);
       toast.error('Erro ao descartar.');
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      setRefreshing(true);
+      const { error } = await (supabase as any)
+        .from('whatsapp_inbox')
+        .update({ status: 'dismissed' })
+        .eq('status', 'pending');
+
+      if (error) throw error;
+      
+      setMessages([]);
+      setShowClearConfirm(false);
+      toast.success('Caixa de entrada limpa com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao limpar caixa:', err);
+      toast.error('Erro ao limpar caixa de entrada.');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -252,12 +277,39 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'image': return <Image className="w-3.5 h-3.5" />;
-      case 'document': return <FileText className="w-3.5 h-3.5" />;
-      default: return <MessageSquare className="w-3.5 h-3.5" />;
+  const getTypeIcon = (msg: InboxMessage) => {
+    if (msg.message_type === 'image') return <Image className="w-3.5 h-3.5" />;
+    if (msg.message_type === 'document') {
+      const mime = (msg.media_mime_type || '').toLowerCase();
+      if (mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet')) return <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />;
+      if (mime.includes('word') || mime.includes('officedocument.wordprocessingml')) return <FileCode className="w-3.5 h-3.5 text-blue-500" />;
+      return <FileText className="w-3.5 h-3.5" />;
     }
+    if (msg.message_type === 'audio') return <Clock className="w-3.5 h-3.5" />; // Placeholder or specific icon
+    return <MessageSquare className="w-3.5 h-3.5" />;
+  };
+
+  const getFilteredMessages = () => {
+    if (!filterActive) return messages;
+    
+    const parallelKeywords = [
+      'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'oi', 'olá', 
+      'obrigado', 'obrigada', 'valeu', 'vlw', 'entendido', 'ok',
+      'aguardo', 'abração', 'blz'
+    ];
+
+    return messages.filter(msg => {
+      const text = (msg.message_text || '').toLowerCase();
+      
+      // Se tiver anexo (imagem ou doc), manter sempre (geralmente é oferta/arte)
+      if (msg.media_url) return true;
+      
+      // Se não tiver anexo e o texto for muito curto ou tiver só "bom dia" etc, filtrar
+      const isParallel = parallelKeywords.some(k => text === k || text.startsWith(k + ' ') || text.startsWith(k + ','));
+      const isShort = text.length < 15 && isParallel;
+
+      return !isShort;
+    });
   };
 
   const getTypeLabel = (type: string) => {
@@ -304,6 +356,14 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
           <div className="flex items-center gap-3">
             <Button 
               variant="ghost" 
+              onClick={() => setFilterActive(!filterActive)}
+              className={`h-10 rounded-xl border transition-all text-xs font-bold ${filterActive ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-white/5 border-white/5 text-white/50'}`}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              {filterActive ? 'Filtro: Inteligente' : 'Filtro: Desligado'}
+            </Button>
+            <Button 
+              variant="ghost" 
               onClick={handleRefresh}
               disabled={refreshing}
               className="h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-white/50 hover:text-white text-xs font-bold"
@@ -311,10 +371,18 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => setShowClearConfirm(true)}
+              className="h-10 px-4 rounded-xl text-xs font-bold"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Limpar Tudo
+            </Button>
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-[10px] uppercase font-bold text-green-400 tracking-widest">
-                {messages.length} {messages.length === 1 ? 'pendente' : 'pendentes'}
+                {getFilteredMessages().length} {getFilteredMessages().length === 1 ? 'visível' : 'visíveis'}
               </span>
             </div>
           </div>
@@ -337,7 +405,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
 
         {/* Message List */}
         <div className="space-y-3">
-          {messages.map((msg, i) => (
+          {getFilteredMessages().map((msg, i) => (
             <div 
               key={msg.id} 
               className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 hover:border-white/10 hover:bg-white/[0.05] transition-all animate-in fade-in slide-in-from-bottom-2 duration-300 group"
@@ -356,7 +424,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                       {msg.sender_name || msg.sender.replace(/@.*/, '')}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/30 font-bold uppercase flex items-center gap-1">
-                      {getTypeIcon(msg.message_type)} {getTypeLabel(msg.message_type)}
+                      {getTypeIcon(msg)} {getTypeLabel(msg.message_type)}
                     </span>
                     <span className="text-[10px] text-white/20 ml-auto flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {formatTime(msg.created_at)}
@@ -506,6 +574,24 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Clear All Confirmation */}
+      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar toda a caixa?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/50 text-[13px]">
+              Tem certeza que deseja descartar todas as {messages.length} mensagens pendentes? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-white/5 border-none">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={handleClearAll}>
+              Sim, limpar tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

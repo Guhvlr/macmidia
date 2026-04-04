@@ -451,47 +451,32 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                         </div>
                       </div>
                     ) : card.aiReport && (
-                      <div className="space-y-5">
-                        {/* Checklist */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {(card.aiReport.checklist || []).map((check: any, idx: number) => (
-                            <div key={idx} className="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5 items-start">
-                              <span className="text-sm mt-0.5">{check.status}</span>
-                              <div>
-                                <p className="text-[11px] font-bold text-white/80">{check.item}</p>
-                                <p className="text-[10px] text-white/40 leading-relaxed">{check.observation}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Summary */}
-                        {card.aiReport.summary && (
-                          <p className="text-[12px] text-white/60 leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">
-                            "{card.aiReport.summary}"
-                          </p>
-                        )}
-
-                        {/* Corrections */}
-                        {card.aiReport.corrections && card.aiReport.corrections.length > 0 && (
-                          <div className="space-y-3 pt-2">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-white/30">Correções sugeridas</h4>
-                            <div className="space-y-2">
-                              {card.aiReport.corrections.map((corr: any, idx: number) => (
-                                <div key={idx} className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 space-y-2 text-[12px]">
-                                  <div className="flex items-center gap-2 text-red-300/50 line-through">
-                                    <span className="font-bold shrink-0">DE:</span>
-                                    <span>{corr.original}</span>
+                      <div className="space-y-4">
+                        {/* New Professional Report Format */}
+                        {card.aiReport.report ? (
+                          <div className="p-4 rounded-xl bg-black/40 border border-white/5 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-white/80 overflow-x-auto">
+                            {card.aiReport.report}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Fallback for old report format */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {(card.aiReport.checklist || []).map((check: any, idx: number) => (
+                                <div key={idx} className="flex gap-3 p-3 rounded-xl bg-black/20 border border-white/5 items-start">
+                                  <span className="text-sm mt-0.5">{check.status}</span>
+                                  <div>
+                                    <p className="text-[11px] font-bold text-white/80">{check.item}</p>
+                                    <p className="text-[10px] text-white/40 leading-relaxed">{check.observation}</p>
                                   </div>
-                                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                                    <span className="shrink-0 uppercase text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-400">PARA:</span>
-                                    <span>{corr.corrected}</span>
-                                  </div>
-                                  {corr.reason && <p className="text-[10px] text-white/30 italic mt-1">Motivo: {corr.reason}</p>}
                                 </div>
                               ))}
                             </div>
-                          </div>
+                            {card.aiReport.summary && (
+                              <p className="text-[12px] text-white/60 leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">
+                                "{card.aiReport.summary}"
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     )}

@@ -17,6 +17,7 @@ import PostingBoard from "./pages/PostingBoard";
 import CorrectionBoard from "./pages/CorrectionBoard";
 import UsersAdmin from "./pages/UsersAdmin";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
+import Products from "./pages/Products";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const AppRoutes = () => (
     <Route path="/correcao" element={<ProtectedRoute><CorrectionBoard /></ProtectedRoute>} />
     <Route path="/usuarios" element={<ProtectedRoute><UsersAdmin /></ProtectedRoute>} />
     <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppInbox /></ProtectedRoute>} />
+    <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

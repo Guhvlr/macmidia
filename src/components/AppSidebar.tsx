@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
-import { LayoutDashboard, Calendar, Shield, Send, LogOut, ChevronLeft, ChevronRight, Users, Wrench, MessageSquare, LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Calendar, Shield, Send, LogOut, ChevronLeft, ChevronRight, Users, Wrench, MessageSquare, LucideIcon, Package } from 'lucide-react';
 import { useState } from 'react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
@@ -18,7 +18,8 @@ const navItems: NavItem[] = [
   { path: '/postagem', icon: Send, label: 'Postagens' },
   { path: '/calendario', icon: Calendar, label: 'Calendário' },
   { path: '/cofre', icon: Shield, label: 'Banco de Dados' },
-  { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp', isBeta: true },
+  { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp' },
+  { path: '/produtos', icon: Package, label: 'Produtos', isBeta: true },
 ];
 
 interface Props {

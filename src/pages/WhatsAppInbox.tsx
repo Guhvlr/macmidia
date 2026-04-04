@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Sparkles, User, Clock, Check, X, RefreshCw, ChevronDown, Filter, FileSpreadsheet, FileCode } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Sparkles, User, Clock, Check, X, RefreshCw, ChevronDown, Filter, FileSpreadsheet, FileCode, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -125,7 +125,7 @@ const WhatsAppInbox = () => {
     setShowSendDialog(true);
   };
 
-  const handleProcessWithAI = async () => {
+  const handleProcessWithAI = async (mode: 'standard' | 'creative' = 'standard') => {
     if (!selectedMessage) return;
     setAiLoading(true);
 
@@ -146,7 +146,7 @@ const WhatsAppInbox = () => {
         return;
       }
 
-      const systemPrompt = `Você é um assistente de marketing para uma agência de produção de mídia.
+      const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA. 
 Sua tarefa é receber uma mensagem bruta do WhatsApp e transformá-la em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
 
 REGRAS:
@@ -167,6 +167,27 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
 }
 `;
 
+      const creativePrompt = `Você é um REDATOR CRIATIVO E DIRETOR DE CONTEÚDO SÊNIOR da Agência MAC MIDIA.
+Sua tarefa é receber um briefing ou pedido simples do cliente e transformá-lo em uma DESCRIÇÃO DE CARD criativa, com roteiro ou legenda para rede social.
+
+REGRAS:
+1. Seja criativo: Crie títulos chamativos e textos envolventes.
+2. Formato de Roteiro: Se for algo para vídeo, sugira cenas e falas (ex: Cena 1, Locutor).
+3. Legenda para Social: Se for um post de rede social, escreva uma legenda completa com hashtags.
+4. Call to Action (CTA): Sempre inclua um CTA marcante ao final.
+5. Emojis: Use emojis de forma estratégica para atrair atenção.
+6. Tom de Voz: Adapte o tom conforme o briefing (ex: festivo para feriados, varejo agressivo para ofertas relâmpago).
+7. NUNCA USE formatação markdown. Retorne o texto puramente plano.
+
+Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
+{
+  "clientName": "Nome do Cliente/Grupo (ex: Laranjeiras)",
+  "description": "Texto processado da mensagem..."
+}
+`;
+
+      const systemPrompt = mode === 'creative' ? creativePrompt : standardPrompt;
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -174,13 +195,13 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Remetente: ${selectedMessage.sender_name || 'Desconhecido'}\n\nMensagem:\n${selectedMessage.message_text}` },
           ],
           response_format: { type: 'json_object' },
-          temperature: 0.3,
+          temperature: mode === 'creative' ? 0.8 : 0.3,
           max_tokens: 2000,
         }),
       });
@@ -201,7 +222,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
         setEditClientName(parsedData.clientName.toUpperCase());
       }
       
-      toast.success('✨ Informações extraídas com sucesso!');
+      toast.success(mode === 'creative' ? '✨ CriATIVIDADE em ação!' : '✨ Ofertas organizadas!');
     } catch (err: any) {
       console.error('Erro na IA:', err);
       setAiResult(selectedMessage.message_text);
@@ -518,19 +539,26 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Descrição para o Card</label>
-                  <Button 
-                    variant="ghost"
-                    onClick={handleProcessWithAI}
-                    disabled={aiLoading}
-                    className="h-8 px-4 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-[10px] font-bold uppercase tracking-wider border border-purple-500/20"
-                  >
-                    {aiLoading ? (
-                      <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3 h-3 mr-2" />
-                    )}
-                    {aiLoading ? 'Processando...' : 'Melhorar com IA'}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="ghost"
+                      onClick={() => handleProcessWithAI('standard')}
+                      disabled={aiLoading}
+                      className="h-8 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/20"
+                    >
+                      {aiLoading ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Zap className="w-3 h-3 mr-2 text-emerald-400" />}
+                      {aiLoading ? 'Processando...' : 'AI Ofertas'}
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      onClick={() => handleProcessWithAI('creative')}
+                      disabled={aiLoading}
+                      className="h-8 px-3 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-[10px] font-black uppercase tracking-wider border border-purple-500/20"
+                    >
+                      {aiLoading ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2 text-purple-400" />}
+                      {aiLoading ? 'Processando...' : 'AI Criativo'}
+                    </Button>
+                  </div>
                 </div>
                 <Textarea 
                   value={aiResult || selectedMessage.message_text}

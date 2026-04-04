@@ -1017,6 +1017,10 @@ Se o modo for ORGANIZAR, use categorias claras em MAIÚSCULO como cabeçalho (ex
       ? calendarTasks.filter(t => t.clientName.toLowerCase() === loggedUserClientLink.toLowerCase())
       : calendarTasks;
 
+    const filteredClients = loggedUserRole === 'GUEST' && loggedUserClientLink
+      ? calendarClients.filter(c => c.name.toLowerCase() === loggedUserClientLink.toLowerCase())
+      : calendarClients;
+
     return {
       isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
       loggedUserClientLink, loggedUserKanbanLink,
@@ -1024,7 +1028,8 @@ Se o modo for ORGANIZAR, use categorias claras em MAIÚSCULO como cabeçalho (ex
       kanbanCards: filteredCards, 
       kanbanColumns,
       calendarTasks: filteredTasks, 
-      credentials, calendarClients,
+      credentials, 
+      calendarClients: filteredClients,
       dashboardBanner, dashboardLogo, loading,
       login, register, logout, adminDeleteUser, adminUpdateUserRole,
       addEmployee, updateEmployee, deleteEmployee,

@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 
 const CalendarPage = () => {
   const navigate = useNavigate();
-  const { calendarClients, addCalendarClient, deleteCalendarClient, updateCalendarClient } = useApp();
+  const { calendarClients, addCalendarClient, deleteCalendarClient, updateCalendarClient, loggedUserRole } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [editingClient, setEditingClient] = useState<{id: string, name: string, logoUrl?: string} | null>(null);
   const [clientName, setClientName] = useState('');
@@ -74,9 +74,11 @@ const CalendarPage = () => {
               <p className="text-[11px] text-muted-foreground">Planejamento de conteúdo por cliente</p>
             </div>
           </div>
-          <Button size="sm" className="ml-auto btn-primary-glow rounded-xl text-xs" onClick={() => setShowAdd(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" /> Novo Cliente
-          </Button>
+          {loggedUserRole !== 'GUEST' && (
+            <Button size="sm" className="ml-auto btn-primary-glow rounded-xl text-xs" onClick={() => setShowAdd(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> Novo Cliente
+            </Button>
+          )}
         </div>
       </header>
 
@@ -99,24 +101,26 @@ const CalendarPage = () => {
               className="glass-card p-0 group flex flex-col transition-all duration-300 hover:border-primary/30 relative overflow-hidden h-[240px] shadow-xl animate-scale-in"
               style={{ animationDelay: `${i * 0.05}s` }}
             >
-              {/* Client Menu */}
-              <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 hover:bg-black/60 text-white shadow-lg">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-[#1C1C1E] border-white/10 text-white rounded-xl p-1 shadow-2xl min-w-[140px]">
-                    <DropdownMenuItem onClick={() => openEdit(client)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/5 py-2 text-xs">
-                      <Edit2 className="w-3.5 h-3.5" /> Editar Cliente
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => deleteCalendarClient(client.id)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-red-500/20 text-red-400 focus:text-red-400 py-2 text-xs">
-                      <Trash2 className="w-3.5 h-3.5" /> Excluir permanentemente
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {/* Client Menu - Only for non-guests */}
+              {loggedUserRole !== 'GUEST' && (
+                <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 hover:bg-black/60 text-white shadow-lg">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-[#1C1C1E] border-white/10 text-white rounded-xl p-1 shadow-2xl min-w-[140px]">
+                      <DropdownMenuItem onClick={() => openEdit(client)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/5 py-2 text-xs">
+                        <Edit2 className="w-3.5 h-3.5" /> Editar Cliente
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => deleteCalendarClient(client.id)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-red-500/20 text-red-400 focus:text-red-400 py-2 text-xs">
+                        <Trash2 className="w-3.5 h-3.5" /> Excluir permanentemente
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
 
               {/* Main Content Area */}
               <button

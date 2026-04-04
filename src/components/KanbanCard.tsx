@@ -163,7 +163,7 @@ const KanbanCardInner = ({ card }: Props) => {
 
           <h4 className="font-bold text-[13px] text-white leading-tight uppercase line-clamp-2">{card.clientName}</h4>
 
-          {/* AI Status Badge */}
+          {/* AI Status Badge - TEMPORARILY DISABLED 
           {card.aiStatus === 'analyzing' && (
             <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -181,7 +181,7 @@ const KanbanCardInner = ({ card }: Props) => {
               <AlertTriangle className="w-3 h-3" />
               <span className="text-[9px] font-bold uppercase tracking-wider">Problemas Encontrados</span>
             </div>
-          )}
+          )} */}
 
           {/* WhatsApp source indicator */}
           {card.source === 'whatsapp' && (

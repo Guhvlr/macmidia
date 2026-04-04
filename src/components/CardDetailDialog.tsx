@@ -400,7 +400,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                        }} />
                      </div>
                   </div>
-                               {/* AI REPORT (Standardized Checklist) */}
+                {/* AI REPORT (Standardized Checklist) - TEMPORARILY DISABLED 
                 {card.aiReport && (card.aiStatus === 'issues_found' || card.aiStatus === 'approved') && (
                   <div className={`mb-6 p-6 rounded-[1.2rem] border transition-all duration-500 shadow-xl ${card.aiStatus === 'approved' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
                     <div className="flex items-center justify-between mb-6">
@@ -414,25 +414,21 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Descrição */}
                       <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
                         <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Descrição</div>
                         <div className="text-[13px] text-white/90 font-medium">{card.aiReport.descriptionStatus || '✅ OK'}</div>
                       </div>
 
-                      {/* Preço */}
                       <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
                         <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Preço</div>
                         <div className="text-[13px] text-white/90 font-medium">{card.aiReport.priceStatus || '✅ OK'}</div>
                       </div>
 
-                      {/* Imagem */}
                       <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
                         <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Imagem</div>
                         <div className="text-[13px] text-white/90 font-medium">{card.aiReport.imageStatus || '✅ OK'}</div>
                       </div>
 
-                      {/* Data */}
                       <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
                         <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Data de Validade</div>
                         <div className="text-[13px] text-white/90 font-medium">{card.aiReport.dateStatus || '❌ Não encontrada'}</div>
@@ -445,7 +441,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                       </div>
                     )}
                   </div>
-                )}
+                )} */}
 
                 {/* Description */}
                 <div>

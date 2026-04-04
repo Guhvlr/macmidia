@@ -400,27 +400,48 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                        }} />
                      </div>
                   </div>
-                </div>
-
-                {/* AI REPORT (If any) */}
+                               {/* AI REPORT (Standardized Checklist) */}
                 {card.aiReport && (card.aiStatus === 'issues_found' || card.aiStatus === 'approved') && (
-                  <div className={`mb-6 p-5 rounded-[1rem] border ${card.aiStatus === 'approved' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'} space-y-4`}>
-                    <h3 className={`font-bold flex items-center gap-2 ${card.aiStatus === 'approved' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      <Bot className="w-5 h-5" /> 
-                      {card.aiStatus === 'approved' ? 'Card Aprovado Mestre!' : 'Relatório da IA de Correção'}
-                    </h3>
-                    
-                    {card.aiReport.textAnalysis?.hasErrors && (
-                      <div className="bg-black/30 p-3.5 rounded-xl border border-red-500/20 shadow-inner">
-                        <h4 className="font-bold text-[13px] text-white/90 mb-2"> Erros no Texto:</h4>
-                        <p className="text-[13px] text-white/70">{card.aiReport.textAnalysis.summary}</p>
+                  <div className={`mb-6 p-6 rounded-[1.2rem] border transition-all duration-500 shadow-xl ${card.aiStatus === 'approved' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className={`font-bold flex items-center gap-2 text-sm uppercase tracking-widest ${card.aiStatus === 'approved' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <Bot className="w-5 h-5" /> 
+                        Relatório de Auditoria IA
+                      </h3>
+                      <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${card.aiStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {card.aiStatus === 'approved' ? 'Conforme' : 'Divergente'}
                       </div>
-                    )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Descrição */}
+                      <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                        <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Descrição</div>
+                        <div className="text-[13px] text-white/90 font-medium">{card.aiReport.descriptionStatus || '✅ OK'}</div>
+                      </div>
 
-                    {card.aiReport.imageAnalysis?.hasIssues && (
-                      <div className="bg-black/30 p-3.5 rounded-xl border border-red-500/20 shadow-inner">
-                        <h4 className="font-bold text-[13px] text-white/90 mb-2">🔍 Divergências Imagem x Texto:</h4>
-                        <p className="text-[13px] text-white/70 whitespace-pre-wrap">{card.aiReport.imageAnalysis.summary}</p>
+                      {/* Preço */}
+                      <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                        <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Preço</div>
+                        <div className="text-[13px] text-white/90 font-medium">{card.aiReport.priceStatus || '✅ OK'}</div>
+                      </div>
+
+                      {/* Imagem */}
+                      <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                        <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Imagem</div>
+                        <div className="text-[13px] text-white/90 font-medium">{card.aiReport.imageStatus || '✅ OK'}</div>
+                      </div>
+
+                      {/* Data */}
+                      <div className="bg-black/20 p-3.5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                        <div className="text-[10px] uppercase font-bold text-white/40 mb-1.5 tracking-tighter">Data de Validade</div>
+                        <div className="text-[13px] text-white/90 font-medium">{card.aiReport.dateStatus || '❌ Não encontrada'}</div>
+                      </div>
+                    </div>
+
+                    {card.aiReport.summary && (
+                      <div className="mt-5 pt-4 border-t border-white/5">
+                         <p className="text-[12px] text-white/50 italic leading-relaxed">Nota: {card.aiReport.summary}</p>
                       </div>
                     )}
                   </div>

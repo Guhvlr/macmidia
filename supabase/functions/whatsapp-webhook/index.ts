@@ -85,10 +85,11 @@ Extraia os seguintes campos em JSON:
 REGRAS:
 - Corrija ortografia dos produtos (ex: "aros" → "arroz")
 - Mantenha os preços EXATAMENTE como recebidos, nunca altere valores
-- Se encontrar "SEQUENCIA: SIM", defina keepOriginalOrder como true
-- Se não encontrar SEQUENCIA ou encontrar "SEQUENCIA: NÃO", defina keepOriginalOrder como false
+- Se encontrar "SEQUENCIA: SIM" ou apenas "SIM" no final da primeira linha, defina keepOriginalOrder como true
+- Se não encontrar SEQUENCIA ou encontrar "NÃO", defina keepOriginalOrder como false
 - Datas com formato DD.MM.AA devem ser convertidas para YYYY-MM-DD (considere 2025/2026 se ano for 25/26)
-- O campo responsibleName deve ser o último nome da primeira linha (geralmente é o designer/produtor)
+- O campo responsibleName é o nome do editor/designer (ex: CAIO, GUSTAVO, DAVID, ERIC, GABRIEL, TIAGO). 
+- Caso a primeira linha seja "COUTO CAIO SIM", o clientName é "COUTO", o responsibleName é "CAIO" e keepOriginalOrder é true. JAMAIS use "SIM" ou "NÃO" como responsibleName.
 - Normalize o formato dos preços para usar vírgula (ex: 5.99 → 5,99)`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -262,7 +263,17 @@ Deno.serve(async (req) => {
 
     // Find responsible employee
     let employeeId: string | null = null;
-    const responsibleName = parsedData.responsibleName?.toUpperCase();
+    let responsibleName = parsedData.responsibleName?.toUpperCase();
+    
+    // Synonym mapping for employees (WhatsApp name -> DB name)
+    const NAME_SYNONYMS: Record<string, string> = {
+      'CAIO': 'KHAYO',
+      'KHAYO': 'CAIO'
+    };
+
+    if (responsibleName && NAME_SYNONYMS[responsibleName]) {
+      responsibleName = NAME_SYNONYMS[responsibleName];
+    }
     
     if (responsibleName) {
       // Try client_employee_map first

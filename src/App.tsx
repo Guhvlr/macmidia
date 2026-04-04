@@ -40,6 +40,7 @@ const AppRoutes = () => (
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/funcionario/:id" element={<ProtectedRoute><Employee /></ProtectedRoute>} />
     <Route path="/funcionario/:id/arquivados" element={<ProtectedRoute><ArchivedCards /></ProtectedRoute>} />
+    <Route path="/arquivados" element={<ProtectedRoute><ArchivedCards /></ProtectedRoute>} />
     <Route path="/calendario" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
     <Route path="/calendario/:clientId" element={<ProtectedRoute><ClientCalendar /></ProtectedRoute>} />
     <Route path="/cofre" element={<ProtectedRoute><Vault /></ProtectedRoute>} />

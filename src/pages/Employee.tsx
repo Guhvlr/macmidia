@@ -127,9 +127,7 @@ const Employee = () => {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate(`/funcionario/${employee.id}/arquivados`)} className="border-border/50 hover:border-primary/30 rounded-xl text-xs">
-              <Archive className="w-3.5 h-3.5 mr-1" /> Arquivados
-            </Button>
+            {/* Archive button removed - moved to PostingBoard */}
           </div>
         </div>
       </header>

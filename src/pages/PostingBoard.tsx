@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Send, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import KanbanCard from '@/components/KanbanCard';
 
@@ -15,7 +15,6 @@ const PostingBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
 
-  // Memoize filtered cards to avoid recalculating on every render
   const activeCards = useMemo(() =>
     kanbanCards.filter(c => {
       if (c.archivedAt && c.column !== 'postado') return false; 
@@ -24,7 +23,6 @@ const PostingBoard = () => {
     [kanbanCards]
   );
 
-  // Memoize cards grouped by column for O(1) access
   const cardsByColumn = useMemo(() => {
     const grouped: Record<string, typeof activeCards> = {};
     POSTING_COLUMNS.forEach(col => { grouped[col.key] = []; });
@@ -60,19 +58,29 @@ const PostingBoard = () => {
   return (
     <div className="min-h-screen gradient-bg">
       <header className="page-header">
-        <div className="flex items-center gap-4 px-6 py-3.5">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-primary/8">
-              <Send className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Quadros de Postagem</h1>
-              <p className="text-[11px] text-muted-foreground">Gerencie conteúdos para publicação</p>
+        <div className="flex items-center justify-between px-6 py-3.5">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-primary/8">
+                <Send className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-foreground">Quadros de Postagem</h1>
+                <p className="text-[11px] text-muted-foreground">Gerencie conteúdos para publicação</p>
+              </div>
             </div>
           </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => navigate('/arquivados')} 
+            className="border-border/50 hover:border-primary/30 rounded-xl text-xs bg-secondary/20 h-9 px-4 transition-all hover:bg-secondary/40"
+          >
+            <Archive className="w-4 h-4 mr-2 text-primary" /> Central de Arquivados
+          </Button>
         </div>
       </header>
 

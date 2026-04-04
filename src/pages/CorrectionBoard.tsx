@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Wrench, Plus, Bot } from 'lucide-react';
+import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import KanbanCard from '@/components/KanbanCard';
 import AddCardDialog from '@/components/AddCardDialog';
@@ -17,7 +17,7 @@ const CORRECTION_COLUMNS = [
 
 const CorrectionBoard = () => {
   const navigate = useNavigate();
-  const { kanbanCards, employees, moveKanbanCard, triggerAICorrection, loading } = useApp();
+  const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
 
   const activeCards = useMemo(() => kanbanCards.filter(c => !c.archivedAt && CORRECTION_COLUMNS.some(col => col.key === c.column)), [kanbanCards]);
 

@@ -2,7 +2,7 @@ import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import Timer from './Timer';
-import { Trash2, Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Bot, Smartphone } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, CheckSquare, Edit3, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone } from 'lucide-react';
 import { compressImage } from '@/lib/utils';
 
 // Lazy load the heavy dialog component — only mount when user clicks a card

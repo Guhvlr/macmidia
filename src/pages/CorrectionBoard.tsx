@@ -50,8 +50,8 @@ const CorrectionBoard = () => {
   }
 
   return (
-    <div className="min-h-screen gradient-bg">
-      <header className="page-header sticky top-0 z-10">
+    <div className="h-screen overflow-hidden flex flex-col gradient-bg">
+      <header className="page-header flex-shrink-0">
         <div className="flex items-center gap-4 px-6 py-3.5">
           <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
             <ArrowLeft className="w-5 h-5" />
@@ -68,61 +68,50 @@ const CorrectionBoard = () => {
         </div>
       </header>
 
-      <div className="p-6">
-        <div className="flex gap-5 overflow-x-auto pb-4 custom-scrollbar">
-          {CORRECTION_COLUMNS.map(col => {
-            const colCards = cardsByColumn[col.key] || [];
-            return (
-              <div
-                key={col.key}
-                onDragOver={handleDragOver}
-                onDrop={e => handleDrop(e, col.key)}
-                className="flex flex-col min-h-[500px] min-w-[340px] w-[360px] flex-shrink-0"
-              >
-                <div className="flex items-center gap-2.5 mb-3 px-1">
-                  <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
-                  <h3 className="font-semibold text-[13px] tracking-wide uppercase text-white/90">{col.title}</h3>
-                  <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
-                </div>
-                
-                <div className="space-y-3 flex-1 p-3 rounded-2xl bg-[#0f0f11]/60 border border-white/5 shadow-inner">
-                  {colCards.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center p-8 opacity-40">
-                      <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3">
-                        <Wrench className="w-5 h-5" />
-                      </div>
-                      <p className="text-xs text-center">Nenhum card</p>
-                    </div>
-                  ) : (
-                    colCards.map(card => (
-                      <div key={card.id} className="relative animate-in slide-in-from-bottom-2 fade-in duration-300">
-                        {/* Indicador de Responsável (Membro) */}
-                        <div className="text-[10px] text-muted-foreground mb-1.5 px-1.5 flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
-                            <span className="font-bold tracking-wide uppercase text-white/70">{getEmployeeName(card.employeeId)}</span>
-                          </div>
-                        </div>
-                        <KanbanCard card={card} />
-                        {/* AI Correction button for para-correcao */}
-                        {/* AI Correction button TEMPORARILY DISABLED */}
-                      </div>
-                    ))
-                  )}
-                </div>
-                
-                <div className="mt-3">
-                  <AddCardDialog
-                    employeeId={employees.length > 0 ? employees[0].id : ''}
-                    columnKey={col.key}
-                    showEmployeeSelect={true}
-                  />
-                </div>
+      <main className="flex-1 overflow-x-auto min-h-0 p-6 flex gap-5 items-start">
+        {CORRECTION_COLUMNS.map(col => {
+          const colCards = cardsByColumn[col.key] || [];
+          return (
+            <div
+              key={col.key}
+              onDragOver={handleDragOver}
+              onDrop={e => handleDrop(e, col.key)}
+              className="flex flex-col h-full min-w-[340px] w-[360px] flex-shrink-0"
+            >
+              <div className="flex items-center gap-2.5 mb-3 px-1 flex-shrink-0">
+                <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
+                <h3 className="font-semibold text-[13px] tracking-wide uppercase text-white/90">{col.title}</h3>
+                <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
               </div>
-            );
-          })}
-        </div>
-      </div>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 rounded-2xl bg-[#0f0f11]/60 border border-white/5 shadow-inner">
+                {colCards.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center p-8 opacity-40">
+                    <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3">
+                      <Wrench className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs text-center">Nenhum card</p>
+                  </div>
+                ) : (
+                  colCards.map(card => (
+                    <div key={card.id} className="relative animate-in slide-in-from-bottom-2 fade-in duration-300">
+                      <KanbanCard card={card} />
+                    </div>
+                  ))
+                )}
+              </div>
+              
+              <div className="mt-3 flex-shrink-0">
+                <AddCardDialog
+                  employeeId={employees.length > 0 ? employees[0].id : ''}
+                  columnKey={col.key}
+                  showEmployeeSelect={true}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </main>
     </div>
   );
 };

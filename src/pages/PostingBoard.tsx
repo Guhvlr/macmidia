@@ -56,8 +56,8 @@ const PostingBoard = () => {
   }
 
   return (
-    <div className="min-h-screen gradient-bg">
-      <header className="page-header">
+    <div className="h-screen overflow-hidden flex flex-col gradient-bg">
+      <header className="page-header flex-shrink-0">
         <div className="flex items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
@@ -84,42 +84,36 @@ const PostingBoard = () => {
         </div>
       </header>
 
-      <div className="p-6">
-        <div className="flex gap-5 overflow-x-auto pb-4">
-          {POSTING_COLUMNS.map(col => {
-            const colCards = cardsByColumn[col.key] || [];
-            return (
-              <div
-                key={col.key}
-                onDragOver={handleDragOver}
-                onDrop={e => handleDrop(e, col.key)}
-                className="flex flex-col min-h-[420px] min-w-[340px] w-[360px] flex-shrink-0"
-              >
-                <div className="flex items-center gap-2.5 mb-3 px-1">
-                  <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
-                  <h3 className="font-semibold text-[13px] tracking-wide uppercase">{col.title}</h3>
-                  <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
-                </div>
-                <div className="space-y-3 flex-1 p-3 rounded-2xl bg-secondary/15 border border-border/25">
-                  {colCards.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-12">Nenhum card</p>
-                  ) : (
-                    colCards.map(card => (
-                      <div key={card.id} className="relative">
-                        <div className="text-[10px] text-muted-foreground mb-1.5 px-1 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
-                          <span className="font-medium">{getEmployeeName(card.employeeId)}</span>
-                        </div>
-                        <KanbanCard card={card} />
-                      </div>
-                    ))
-                  )}
-                </div>
+      <main className="flex-1 overflow-x-auto min-h-0 p-6 flex gap-5 items-start">
+        {POSTING_COLUMNS.map(col => {
+          const colCards = cardsByColumn[col.key] || [];
+          return (
+            <div
+              key={col.key}
+              onDragOver={handleDragOver}
+              onDrop={e => handleDrop(e, col.key)}
+              className="flex flex-col h-full min-w-[340px] w-[360px] flex-shrink-0"
+            >
+              <div className="flex items-center gap-2.5 mb-3 px-1 flex-shrink-0">
+                <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
+                <h3 className="font-semibold text-[13px] tracking-wide uppercase">{col.title}</h3>
+                <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
               </div>
-            );
-          })}
-        </div>
-      </div>
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 rounded-2xl bg-secondary/15 border border-border/25">
+                {colCards.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-12">Nenhum card</p>
+                ) : (
+                  colCards.map(card => (
+                    <div key={card.id} className="relative">
+                      <KanbanCard card={card} />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </main>
     </div>
   );
 };

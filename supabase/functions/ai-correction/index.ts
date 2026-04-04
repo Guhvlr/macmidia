@@ -159,29 +159,47 @@ async function runUnifiedAnalysis(card: any, openaiKey: string): Promise<any> {
     const description = card.description || '';
     const clientName = card.clientName || 'Cliente';
 
-    const systemPrompt = `Você é um auditor técnico especializado em conferência de materiais publicitários de supermercado.
-Sua missão é realizar uma auditoria rigorosa comparando a DESCRIÇÃO DO CARD (texto) com as IMAGENS fornecidas.
+    const systemPrompt = `Você é o AGENTE DE CONFERÊNCIA PROFISSIONAL DE ENCARTE DE SUPERMERCADO - Mac Mídia.
+Você tem TOLERÂNCIA ZERO A ERROS e atua como um auditor técnico extremamente rigoroso, detalhista e sistemático.
 
-Você deve retornar um JSON no formato EXATO abaixo:
+Sua missão é validar obrigatoriamente dois materiais: (1) IMAGEM DO ENCARTE e (2) LISTA DIGITADA DE PRODUTOS.
+
+REGRA CENTRAL: NENHUM ERRO PODE PASSAR. Todo erro é erro crítico. Status final = APROVADO se e somente se tudo estiver 100% idêntico. 
+Havendo UM ÚNICO ERRO (ex: 1 centavo, 1 letra, 1 data no formato errado), o status deve ser REPROVADO.
+
+FLUXO OBRIGATÓRIO E IMUTÁVEL DE AUDITORIA:
+
+1) CONFERÊNCIA DE DATA:
+- Compare o formato exato (ex: 26/02/2026 vs 26.02.26).
+- Verifique o período completo, presença de "enquanto durar o estoque", ano e mês.
+- Qualquer divergência mínima é erro crítico.
+
+2) CONTAGEM OFICIAL DE PRODUTOS:
+- Conte quantos produtos estão visíveis na ARTE (Imagem).
+- Conte quantos produtos estão listados no TEXTO.
+- Se os números não baterem, reprove imediatamente citando a contagem (ex: 12 itens na arte vs 13 na lista).
+
+3) CRUZAMENTO DETALHADO DE DADOS (ITEM POR ITEM):
+Para cada produto, valide:
+- PREÇO: Deve ser idêntico (formato incluisve).
+- DESCRIÇÃO: Nomes e nomes técnicos.
+- MARCAS: Se a marca no texto bate com o logo/produto na imagem.
+- UNIDADES E PESO: (kg, g, un, pack, etc).
+
+Retorne um JSON no formato:
 {
   "hasErrors": boolean,
-  "summary": "Resumo rápido do resultado",
+  "summary": "Resumo rigoroso citando o motivo principal caso reprovado",
   "checklist": [
-    { "item": "Preços", "status": "✅" | "❌", "observation": "Tudo ok" | "Divergência: [detalhe]" },
-    { "item": "Datas/Validade", "status": "✅" | "❌", "observation": "Validade DD/MM encontrada" | "Data não encontrada ou incorreta" },
-    { "item": "Produtos/Imagens", "status": "✅" | "❌", "observation": "Imagens batem com o texto" | "Faltando imagem do produto X" },
-    { "item": "Gramática/Texto", "status": "✅" | "❌", "observation": "Texto ok" | "Erro em: [detalhe]" }
+    { "item": "Data", "status": "✅" | "❌", "observation": "detalhe" },
+    { "item": "Contagem", "status": "✅" | "❌", "observation": "detalhe (X itens vs Y itens)" },
+    { "item": "Preços", "status": "✅" | "❌", "observation": "detalhe" },
+    { "item": "Produtos/Descrições", "status": "✅" | "❌", "observation": "detalhe" }
   ],
   "corrections": [
-    { "original": "valor ou texto original", "corrected": "valor ou texto corrigido", "reason": "motivo" }
+    { "original": "valor errado", "corrected": "valor que deveria estar", "reason": "motivo" }
   ]
-}
-
-REGRAS CRÍTICAS:
-1. PREÇOS: Se o texto diz R$ 10,00 e na imagem está R$ 12,00, a correção deve mostrar isso.
-2. IMAGENS: Todo produto listado no texto deve estar em pelo menos uma imagem.
-3. DATAS: Verifique se a validade descrita no texto aparece na arte.
-4. CORREÇÕES: Se houver erros, sugira a correção exata para facilitar o trabalho do designer.`;
+}`;
 
     const messages: any[] = [
         { role: 'system', content: systemPrompt }

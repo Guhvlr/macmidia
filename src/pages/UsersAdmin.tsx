@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Trash2, ArrowLeft, Loader2, UserCheck, UserMinus, Search } from 'lucide-react';
+import { Shield, Trash2, ArrowLeft, Loader2, UserCheck, UserMinus, Search, Users, User, Eye, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 const UsersAdmin = () => {
-  const { systemUsers, loggedUserRole, loggedUserId, adminUpdateUserRole, adminDeleteUser, loading } = useApp();
+  const { systemUsers, loggedUserRole, loggedUserId, adminUpdateUserRole, adminDeleteUser, loading, calendarClients, employees } = useApp();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [targetUser, setTargetUser] = useState<string | null>(null);
-  const [actionType, setActionType] = useState<'DELETE' | 'PROMOTE' | 'DEMOTE' | null>(null);
+  const [actionType, setActionType] = useState<'DELETE' | 'PROMOTE' | 'DEMOTE' | 'PROMOTE_GUEST' | null>(null);
+  const [clientLink, setClientLink] = useState('');
+  const [kanbanBoard, setKanbanBoard] = useState('');
 
   if (loading) {
     return (
@@ -45,6 +48,12 @@ const UsersAdmin = () => {
       res = await adminUpdateUserRole(targetUser, 'ADMIN');
     } else if (actionType === 'DEMOTE') {
       res = await adminUpdateUserRole(targetUser, 'USER');
+    } else if (actionType === 'PROMOTE_GUEST') {
+      if (!clientLink.trim()) {
+        toast.error('Informe o nome do cliente para este visitante');
+        return;
+      }
+      res = await adminUpdateUserRole(targetUser, 'GUEST', clientLink, kanbanBoard || undefined);
     }
 
     if (res?.success) {
@@ -115,29 +124,65 @@ const UsersAdmin = () => {
                 </div>
               </div>
               
-              <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
-                <div className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider ${user.role === 'ADMIN' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-white/70'}`}>
-                  {user.role === 'ADMIN' ? 'ADMINISTRADOR' : 'MEMBRO'}
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+                  <button 
+                    onClick={() => { setTargetUser(user.id); setActionType('PROMOTE'); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${user.role === 'ADMIN' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    Admin
+                  </button>
+                  <button 
+                    onClick={() => { setTargetUser(user.id); setActionType('DEMOTE'); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${user.role === 'USER' ? 'bg-white/10 text-white border border-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Membro
+                  </button>
+                  <button 
+                    onClick={() => { setTargetUser(user.id); setActionType('PROMOTE_GUEST'); setClientLink(user.clientLink || ''); setKanbanBoard(user.kanbanLink || ''); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${user.role === 'GUEST' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Visitante
+                  </button>
+                </div>
+
+                {user.role === 'GUEST' && (
+                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-orange-500/60 uppercase">Vínculo de Cliente</span>
+                        <span className="text-xs font-bold text-orange-500 truncate max-w-[150px]">{user.clientLink || 'NÃO DEFINIDO'}</span>
+                      </div>
+                      {user.kanbanLink && (
+                        <div className="flex flex-col border-t border-orange-500/10 pt-1">
+                          <span className="text-[9px] font-black text-white/40 uppercase">Quadro Vinculado</span>
+                          <span className="text-[11px] font-bold text-white/70">
+                            {employees.find(e => e.id === user.kanbanLink)?.name || 'Desconhecido'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500 hover:bg-orange-500/10 flex-shrink-0"
+                      onClick={() => { setTargetUser(user.id); setActionType('PROMOTE_GUEST'); setClientLink(user.clientLink || ''); setKanbanBoard(user.kanbanLink || ''); }}>
+                      <Search className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
+                <div className="text-[10px] text-white/30 font-medium">
+                  {user.id === loggedUserId ? 'Seu próprio acesso' : `Cadastrado em: ${new Date(user.createdAt).toLocaleDateString()}`}
                 </div>
                 
                 {user.id !== loggedUserId && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {user.role === 'ADMIN' ? (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-white/5 rounded-lg text-white/50 hover:text-white"
-                        onClick={() => { setTargetUser(user.id); setActionType('DEMOTE'); }} title="Remover cargo de admin">
-                        <UserMinus className="w-4 h-4" />
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-white/5 rounded-lg text-white/50 hover:text-primary"
-                        onClick={() => { setTargetUser(user.id); setActionType('PROMOTE'); }} title="Tornar administrador">
-                        <UserCheck className="w-4 h-4" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10 rounded-lg text-white/50 hover:text-destructive"
-                      onClick={() => { setTargetUser(user.id); setActionType('DELETE'); }} title="Remover usuário">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10 rounded-lg text-white/20 hover:text-destructive group-hover:text-white/40 transition-colors"
+                    onClick={() => { setTargetUser(user.id); setActionType('DELETE'); }} title="Remover usuário permanentemente">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 )}
               </div>
             </div>
@@ -149,13 +194,60 @@ const UsersAdmin = () => {
         <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {actionType === 'DELETE' ? 'Remover Usuário' : actionType === 'PROMOTE' ? 'Promover a Administrador' : 'Remover Privilégios'}
+              {actionType === 'DELETE' ? 'Remover Usuário' : 
+               actionType === 'PROMOTE' ? 'Promover a Administrador' : 
+               actionType === 'PROMOTE_GUEST' ? 'Vincular como Cliente/Visitante' :
+               'Remover Privilégios'}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-white/60">
               {actionType === 'DELETE' && 'Esta ação expulsará o usuário do sistema. Ele não conseguirá mais fazer login.'}
               {actionType === 'PROMOTE' && 'O usuário passará a ter controle total sobre membros e configurações do sistema.'}
               {actionType === 'DEMOTE' && 'O usuário perderá o acesso de administração e se tornará um membro comum.'}
+              {actionType === 'PROMOTE_GUEST' && 'O usuário terá acesso limitado APENAS ao calendário e cards do cliente especificado.'}
             </AlertDialogDescription>
+            {actionType === 'PROMOTE_GUEST' && (
+              <div className="mt-4 space-y-2">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest">Selecione o Cliente</label>
+                <Select value={clientLink} onValueChange={setClientLink}>
+                  <SelectTrigger className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white">
+                    <SelectValue placeholder="Escolha um cliente da lista..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1C1C1E] border-white/10 text-white max-h-[300px]">
+                    {calendarClients.map(client => (
+                      <SelectItem key={client.id} value={client.name}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                    {calendarClients.length === 0 && (
+                      <div className="p-4 text-center text-xs text-white/30 italic">
+                        Nenhum cliente cadastrado no calendário.
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-white/30 italic">O visitante só verá cards vinculados a este nome.</p>
+              </div>
+            )}
+
+            {actionType === 'PROMOTE_GUEST' && (
+              <div className="mt-4 space-y-2 pb-4">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest">Acesso ao Quadro Kanban</label>
+                <Select value={kanbanBoard} onValueChange={setKanbanBoard}>
+                  <SelectTrigger className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white">
+                    <SelectValue placeholder="Selecione um quadro da equipe..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1C1C1E] border-white/10 text-white max-h-[300px]">
+                    <SelectItem value="none">Nenhum (Somente Calendário)</SelectItem>
+                    {employees.map(emp => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        Quadro de {emp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-white/30 italic">Determina qual aba de "Equipe" ficará visível para ele.</p>
+              </div>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-white/5 text-white border-transparent hover:bg-white/10">Cancelar</AlertDialogCancel>

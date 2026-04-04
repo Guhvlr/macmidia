@@ -97,9 +97,9 @@ const Employee = () => {
   }
 
   return (
-    <div className="min-h-screen gradient-bg">
+    <div className="h-screen overflow-hidden flex flex-col gradient-bg">
       {/* Header — clean, without global add buttons */}
-      <header className="page-header">
+      <header className="page-header flex-shrink-0">
         <div className="flex items-center gap-4 px-6 py-3.5">
           <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
             <ArrowLeft className="w-5 h-5" />
@@ -126,15 +126,12 @@ const Employee = () => {
               <p className="text-[11px] text-muted-foreground">{employee.role}</p>
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            {/* Archive button removed - moved to PostingBoard */}
-          </div>
         </div>
       </header>
 
-      <div className="p-5">
+      <div className="flex-1 overflow-hidden flex flex-col p-5 min-h-0">
         {/* Search */}
-        <div className="relative mb-5 max-w-sm">
+        <div className="relative mb-5 max-w-sm flex-shrink-0">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar cards..."
@@ -145,7 +142,7 @@ const Employee = () => {
         </div>
 
         {/* Kanban board */}
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex-1 flex gap-4 overflow-x-auto pb-4 items-start min-h-0">
           {columns.map(col => (
             <KanbanColumn
               key={col.id}

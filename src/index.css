@@ -65,24 +65,38 @@
 
   /* Custom sleek scrollbar */
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 12px; /* Thicker for easier horizontal scrolling */
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 20%);
+    background: hsl(0 80% 52% / 0.4); /* Mac Mídia Red - Translucent */
     border-radius: 100px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.3s;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 0% 30%);
+    background: hsl(0 80% 52% / 0.9) !important; /* Brighter red on hover */
+    background-clip: padding-box;
   }
 
   /* Firefox scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(0 0% 20%) transparent;
+    scrollbar-color: hsl(0 80% 52% / 0.4) transparent;
+  }
+
+  /* Hide main vertical scrollbar everywhere by default on app layout */
+  body {
+    overflow-y: hidden !important;
+  }
+
+  /* Ensure internal columns can still scroll */
+  .custom-scrollbar {
+    scrollbar-width: thin;
   }
 }
 

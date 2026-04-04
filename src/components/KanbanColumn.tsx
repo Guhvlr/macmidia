@@ -39,10 +39,10 @@ const KanbanColumnInner = ({ id, title, color, children, count, employeeId, onEd
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex flex-col min-h-[420px] min-w-[300px] w-[320px] flex-shrink-0"
+      className="flex flex-col h-full min-w-[300px] w-[320px] flex-shrink-0"
     >
       {/* Column header */}
-      <div className="flex items-center gap-2.5 mb-3 px-1 group">
+      <div className="flex items-center gap-2.5 mb-3 px-1 group flex-shrink-0">
         <div className={`w-2.5 h-2.5 rounded-full ${color} shadow-sm`} />
         <h3 className="font-semibold text-[13px] tracking-wide text-foreground uppercase">{title}</h3>
         <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{count}</span>
@@ -61,7 +61,7 @@ const KanbanColumnInner = ({ id, title, color, children, count, employeeId, onEd
       </div>
 
       {/* Cards container */}
-      <div className={`space-y-3 flex-1 p-3 rounded-2xl border transition-all duration-200
+      <div className={`flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 rounded-2xl border transition-all duration-200
         ${dragOver
           ? 'bg-primary/5 border-primary/25 shadow-[inset_0_0_20px_hsl(0_80%_52%/0.05)]'
           : 'bg-secondary/15 border-border/25'

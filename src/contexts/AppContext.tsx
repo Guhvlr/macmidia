@@ -75,7 +75,9 @@ function mapCalendarClient(row: any): CalendarClient {
 function mapSystemUser(row: any): SystemUser {
   return {
     id: row.id, fullName: row.full_name, email: row.email,
-    role: row.role as 'ADMIN' | 'USER', avatarUrl: row.avatar_url || undefined,
+    role: row.role as 'ADMIN' | 'USER' | 'GUEST', avatarUrl: row.avatar_url || undefined,
+    clientLink: row.client_link || undefined,
+    kanbanLink: row.kanban_link || undefined,
     createdAt: row.created_at,
   };
 }
@@ -96,10 +98,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!loggedUserId;
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   
-  const loggedUserRole = useMemo(() => {
+  const loggedUser = useMemo(() => {
     if (!loggedUserId || systemUsers.length === 0) return null;
-    return systemUsers.find(u => u.id === loggedUserId)?.role || 'USER';
+    return systemUsers.find(u => u.id === loggedUserId) || null;
   }, [loggedUserId, systemUsers]);
+
+  const loggedUserRole = loggedUser?.role || 'USER';
+  const loggedUserClientLink = loggedUser?.clientLink || null;
+  const loggedUserKanbanLink = loggedUser?.kanbanLink || null;
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
@@ -328,10 +334,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const adminUpdateUserRole = useCallback(async (id: string, newRole: string) => {
+  const adminUpdateUserRole = useCallback(async (id: string, role: string, clientLink?: string, kanbanLink?: string) => {
     try {
-      const { data, error } = await (supabase as any).rpc('admin_update_user_role', { target_user_id: id, new_role: newRole });
+      const { data, error } = await (supabase as any).rpc('admin_update_user_role', { 
+        target_user_id: id, 
+        new_role: role,
+        new_client_link: clientLink || null,
+        new_kanban_link: kanbanLink || null
+      });
       if (error) throw error;
+      
+      setSystemUsers(prev => prev.map(u => u.id === id ? { ...u, role: role as any, clientLink, kanbanLink } : u));
       return { success: true };
     } catch (err: any) {
       console.error('Erro ao atualizar papel do usuário:', err);
@@ -994,22 +1007,38 @@ Se o modo for ORGANIZAR, use categorias claras em MAIÚSCULO como cabeçalho (ex
   }, []);
 
   // Stable context value to prevent unnecessary re-renders
-  const contextValue = useMemo<AppState>(() => ({
+  const contextValue = useMemo<AppState>(() => {
+    // Filter data for Guest users
+    const filteredCards = loggedUserRole === 'GUEST' && loggedUserClientLink
+      ? kanbanCards.filter(c => c.clientName.toLowerCase() === loggedUserClientLink.toLowerCase())
+      : kanbanCards;
+
+    const filteredTasks = loggedUserRole === 'GUEST' && loggedUserClientLink
+      ? calendarTasks.filter(t => t.clientName.toLowerCase() === loggedUserClientLink.toLowerCase())
+      : calendarTasks;
+
+    return {
+      isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
+      loggedUserClientLink, loggedUserKanbanLink,
+      systemUsers, employees, 
+      kanbanCards: filteredCards, 
+      kanbanColumns,
+      calendarTasks: filteredTasks, 
+      credentials, calendarClients,
+      dashboardBanner, dashboardLogo, loading,
+      login, register, logout, adminDeleteUser, adminUpdateUserRole,
+      addEmployee, updateEmployee, deleteEmployee,
+      addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+      triggerAICorrection, fixDescriptionWithAI,
+      addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
+      addCalendarTask, updateCalendarTask, deleteCalendarTask,
+      addCredential, updateCredential, deleteCredential,
+      addCalendarClient, updateCalendarClient, deleteCalendarClient,
+      setDashboardBanner, setDashboardLogo,
+    };
+  }, [
     isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
-    systemUsers, employees, kanbanCards, kanbanColumns,
-    calendarTasks, credentials, calendarClients,
-    dashboardBanner, dashboardLogo, loading,
-    login, register, logout, adminDeleteUser, adminUpdateUserRole,
-    addEmployee, updateEmployee, deleteEmployee,
-    addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
-    triggerAICorrection, fixDescriptionWithAI,
-    addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
-    addCalendarTask, updateCalendarTask, deleteCalendarTask,
-    addCredential, updateCredential, deleteCredential,
-    addCalendarClient, updateCalendarClient, deleteCalendarClient,
-    setDashboardBanner, setDashboardLogo,
-  }), [
-    isAuthenticated, isAuthLoading, loggedUserId, loggedUserName, loggedUserRole,
+    loggedUserClientLink, loggedUserKanbanLink,
     systemUsers, employees, kanbanCards, kanbanColumns,
     calendarTasks, credentials, calendarClients,
     dashboardBanner, dashboardLogo, loading,

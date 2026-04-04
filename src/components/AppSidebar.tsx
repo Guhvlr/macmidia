@@ -29,7 +29,7 @@ interface Props {
 const AppSidebar = ({ children }: Props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, dashboardLogo, loggedUserRole, employees } = useApp();
+  const { logout, dashboardLogo, loggedUserRole, loggedUserKanbanLink, employees } = useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
 
@@ -65,6 +65,16 @@ const AppSidebar = ({ children }: Props) => {
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1">
           {navItems.map(({ path, icon: Icon, label, isBeta }) => {
+            // Visitors only see Dashboard, Calendar, and restricted Team board
+            const allowedForGuest = ['/', '/calendario'];
+            if (loggedUserKanbanLink && loggedUserKanbanLink !== 'none') {
+              allowedForGuest.push('/equipe');
+            }
+
+            if (loggedUserRole === 'GUEST' && !allowedForGuest.includes(path)) {
+              return null;
+            }
+
             if (path === '/equipe') {
               return (
                 <div key={path} className="space-y-1">
@@ -85,16 +95,18 @@ const AppSidebar = ({ children }: Props) => {
                   </button>
                   {teamOpen && !collapsed && (
                     <div className="pl-10 pr-2 space-y-1 py-1 animate-in slide-in-from-top-2 fade-in duration-200">
-                      {employees.map(emp => (
-                        <button
-                          key={emp.id}
-                          onClick={() => navigate(`/funcionario/${emp.id}`)}
-                          className={`w-full text-left truncate rounded-lg py-1.5 px-2 text-xs font-medium transition-colors hover:bg-secondary hover:text-foreground
-                            ${location.pathname === `/funcionario/${emp.id}` ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
-                        >
-                          {emp.name}
-                        </button>
-                      ))}
+                      {employees
+                        .filter(emp => loggedUserRole !== 'GUEST' || emp.id === loggedUserKanbanLink)
+                        .map(emp => (
+                          <button
+                            key={emp.id}
+                            onClick={() => navigate(`/funcionario/${emp.id}`)}
+                            className={`w-full text-left truncate rounded-lg py-1.5 px-2 text-xs font-medium transition-colors hover:bg-secondary hover:text-foreground
+                              ${location.pathname === `/funcionario/${emp.id}` ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
+                          >
+                            {emp.name}
+                          </button>
+                        ))}
                       {employees.length === 0 && (
                         <span className="text-[10px] text-muted-foreground px-2">Nenhum membro</span>
                       )}

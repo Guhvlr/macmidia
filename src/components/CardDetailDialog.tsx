@@ -280,7 +280,10 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
           {/* Cover Header */}
           {coverImage && (
             <div className="w-full h-48 bg-black/50 relative overflow-hidden group flex-shrink-0">
-              <img src={coverImage} alt="Capa" className="w-full h-full object-cover opacity-80" />
+              {/* Background Blur layer */}
+              <img src={coverImage} alt="" className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-110" />
+              {/* Main image layer */}
+              <img src={coverImage} alt="Capa" className="relative w-full h-full object-contain p-2" />
               <button
                 onClick={() => {
                   const idx = localImages.indexOf(coverImage);

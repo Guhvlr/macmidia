@@ -11,8 +11,10 @@ export interface SystemUser {
   id: string;
   fullName: string;
   email: string;
-  role: 'ADMIN' | 'USER';
+  role: 'ADMIN' | 'USER' | 'GUEST';
   avatarUrl?: string;
+  clientLink?: string; // Links a Guest user to a specific Client Name
+  kanbanLink?: string; // Links a Guest user to a specific Kanban Board (Employee ID)
   createdAt: string;
 }
 
@@ -128,7 +130,9 @@ export interface AppState {
   isAuthLoading: boolean;
   loggedUserId: string | null;
   loggedUserName: string | null;
-  loggedUserRole: 'ADMIN' | 'USER' | null;
+  loggedUserRole: 'ADMIN' | 'USER' | 'GUEST' | null;
+  loggedUserClientLink: string | null;
+  loggedUserKanbanLink: string | null;
   systemUsers: SystemUser[];
   employees: Employee[];
   kanbanCards: KanbanCard[];
@@ -143,7 +147,7 @@ export interface AppState {
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   adminDeleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
-  adminUpdateUserRole: (id: string, role: string) => Promise<{ success: boolean; error?: string }>;
+  adminUpdateUserRole: (id: string, role: string, clientLink?: string, kanbanLink?: string) => Promise<{ success: boolean; error?: string }>;
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string, deleteData?: boolean) => void;

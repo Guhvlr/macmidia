@@ -165,8 +165,20 @@ const KanbanCardInner = ({ card }: Props) => {
         )}
 
         {coverImage && (
-          <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 h-32 bg-black/40">
-            <img src={coverImage} alt="Capa" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 min-h-[120px] max-h-[260px] bg-black/40 group/img flex items-center justify-center">
+            {/* Background Blur Layer */}
+            <img 
+              src={coverImage} 
+              alt="" 
+              className="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 scale-110"
+            />
+            {/* Main Image Layer */}
+            <img 
+              src={coverImage} 
+              alt="Capa" 
+              loading="lazy" 
+              className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5" 
+            />
           </div>
         )}
 
@@ -234,6 +246,13 @@ const KanbanCardInner = ({ card }: Props) => {
               <div className="flex items-center gap-1 text-[11px] font-medium">
                 <ImageIcon className="w-3 h-3" />
                 <span>{images.length}</span>
+              </div>
+            )}
+            {/* New: Display employee name badge in footer */}
+            {employee && safeAssignees.length === 0 && (
+              <div className="bg-white/5 px-1.5 py-0.5 rounded border border-white/5 flex items-center gap-1 ml-1 max-w-[80px] overflow-hidden">
+                <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
+                <span className="text-[9px] font-bold text-white/50 uppercase truncate">{employee.name}</span>
               </div>
             )}
           </div>

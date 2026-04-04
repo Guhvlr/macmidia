@@ -27,9 +27,6 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const [description, setDescription] = useState(card.description);
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   
-  // Image Viewer
-  const [selectedViewerImage, setSelectedViewerImage] = useState<string | null>(null);
-  
   // Custom Fields
   const [labels, setLabels] = useState<string[]>(Array.isArray(card.labels) ? card.labels : []);
   const [checklists, setChecklists] = useState(Array.isArray(card.checklists) ? card.checklists : []);
@@ -277,7 +274,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                 <div className="w-full h-48 bg-black/50 relative overflow-hidden group">
                   <img src={coverImage} alt="Capa" className="w-full h-full object-cover opacity-80" />
                   <button 
-                    onClick={() => setSelectedViewerImage(coverImage)} 
+                    onClick={() => setPreviewImage(coverImage)} 
                     className="absolute inset-0 w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity"
                   >
                     <ZoomIn className="w-8 h-8 text-white/70" />
@@ -538,7 +535,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                           const isCover = coverImage === img;
                           return (
                             <div key={i} className="flex gap-4 p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
-                              <div className="w-24 h-16 rounded overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer shadow-lg active:scale-95 transition-transform" onClick={() => setSelectedViewerImage(img)}>
+                              <div className="w-24 h-16 rounded overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer shadow-lg active:scale-95 transition-transform" onClick={() => setPreviewImage(img)}>
                                 <img src={img} alt="Anexo" className="w-full h-full object-cover" />
                               </div>
                               <div className="flex flex-col justify-center flex-1">

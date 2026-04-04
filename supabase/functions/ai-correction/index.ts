@@ -44,8 +44,8 @@ Analise o texto abaixo e retorne um JSON com:
     {
       "type": "spelling" | "formatting" | "price" | "organization" | "missing_info" | "mismatch",
       "severity": "low" | "medium" | "high",
-      "description": "descrição curta do erro ou divergência",
-      "original": "trecho original ou erro visual"
+      "description": "descrição curta do erro ou divergência citando NOME DO PRODUTO",
+      "original": "erro encontrado"
     }
   ],
   "organizationScore": 1-10,
@@ -53,13 +53,12 @@ Analise o texto abaixo e retorne um JSON com:
 }
 
 REGRAS:
-- FOCO TOTAL NA CONFERÊNCIA: Verifique se o que está escrito no texto bate com o que está na imagem (caso haja imagem).
-- Se houver divergência de preço ou produto entre imagem e texto, marque como "mismatch" com gravidade "high".
-- NÃO sugira um novo texto, apenas aponte onde o atual falha.
-- Verifique ortografia de nomes de produtos.
-- Verifique se os produtos estão organizados de forma lógica.
-- Aponte duplicatas ou produtos inconsistentes.
-- Verifique se há informações mínimas (nome, preço).`;
+- PROIBIDO SER VAGO. Use nomes de produtos em todas as descrições de erro.
+- CONFERÊNCIA IMAGEM x TEXTO: Se achar um produto na imagem que não está no texto, escreva: 'O produto [NOME] aparece na imagem mas não está na descrição'.
+- PREÇOS: Se o preço na imagem for R$ 9,90 e no texto for 10,99, escreva: 'Preço divergente para o produto [NOME]: Imagem diz 9,90 e texto diz 10,99'.
+- Se houver produtos no texto que não estão na imagem, cite-os.
+- Verifique ortografia e formatação de preços (X,XX).
+- Mantenha o tom profissional e direto.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',

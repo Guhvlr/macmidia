@@ -1,16 +1,24 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
-import { LayoutDashboard, Calendar, Shield, Send, LogOut, ChevronLeft, ChevronRight, Users, Wrench } from 'lucide-react';
+import { LayoutDashboard, Calendar, Shield, Send, LogOut, ChevronLeft, ChevronRight, Users, Wrench, MessageSquare, LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
-const navItems = [
+type NavItem = {
+  path: string;
+  icon: LucideIcon;
+  label: string;
+  isBeta?: boolean;
+};
+
+const navItems: NavItem[] = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/equipe', icon: Users, label: 'Equipe' },
   { path: '/correcao', icon: Wrench, label: 'Correções' },
   { path: '/postagem', icon: Send, label: 'Postagens' },
   { path: '/calendario', icon: Calendar, label: 'Calendário' },
   { path: '/cofre', icon: Shield, label: 'Banco de Dados' },
+  { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp', isBeta: true },
 ];
 
 interface Props {
@@ -55,7 +63,7 @@ const AppSidebar = ({ children }: Props) => {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1">
-          {navItems.map(({ path, icon: Icon, label }) => {
+          {navItems.map(({ path, icon: Icon, label, isBeta }) => {
             if (path === '/equipe') {
               return (
                 <div key={path} className="space-y-1">
@@ -111,7 +119,16 @@ const AppSidebar = ({ children }: Props) => {
                   <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-primary rounded-r-full" />
                 )}
                 <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${isActive(path) ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
-                {!collapsed && <span className="animate-fade-in">{label}</span>}
+                {!collapsed && (
+                  <div className="flex items-center w-full animate-fade-in pr-2">
+                    <span>{label}</span>
+                    {isBeta && (
+                      <span className="ml-auto text-[9px] font-black uppercase tracking-widest bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded">
+                        Beta
+                      </span>
+                    )}
+                  </div>
+                )}
               </button>
             );
           })}

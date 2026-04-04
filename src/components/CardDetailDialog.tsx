@@ -407,7 +407,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                         value={description}
                         onChange={e => setDescription(e.target.value)}
                         placeholder="Adicione uma descrição detalhada..."
-                        className="bg-black/20 border border-white/10 min-h-[140px] text-[13px] rounded-lg focus-visible:ring-red-500 shadow-inner"
+                        className="bg-black/20 border border-white/10 min-h-[140px] text-[13px] rounded-lg focus-visible:ring-red-500 shadow-inner resize-y"
+                        rows={Math.max(6, description.split('\n').length + 1)}
                         autoFocus
                       />
                       <div className="flex gap-2">

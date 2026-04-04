@@ -16,6 +16,7 @@ import Vault from "./pages/Vault";
 import PostingBoard from "./pages/PostingBoard";
 import CorrectionBoard from "./pages/CorrectionBoard";
 import UsersAdmin from "./pages/UsersAdmin";
+import WhatsAppInbox from "./pages/WhatsAppInbox";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const AppRoutes = () => (
     <Route path="/postagem" element={<ProtectedRoute><PostingBoard /></ProtectedRoute>} />
     <Route path="/correcao" element={<ProtectedRoute><CorrectionBoard /></ProtectedRoute>} />
     <Route path="/usuarios" element={<ProtectedRoute><UsersAdmin /></ProtectedRoute>} />
+    <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppInbox /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

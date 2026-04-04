@@ -53,7 +53,8 @@ const UsersAdmin = () => {
         toast.error('Informe o nome do cliente para este visitante');
         return;
       }
-      res = await adminUpdateUserRole(targetUser, 'GUEST', clientLink, kanbanBoard || undefined);
+      const linkedBoard = (kanbanBoard === 'none' || !kanbanBoard) ? undefined : kanbanBoard;
+      res = await adminUpdateUserRole(targetUser, 'GUEST', clientLink, linkedBoard);
     }
 
     if (res?.success) {

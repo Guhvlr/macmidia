@@ -1,4 +1,7 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import * as XLSX from 'xlsx';
 import { useApp } from '@/contexts/useApp';
 import { 
   Package, 
@@ -31,12 +34,217 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Products() {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const catalogInputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [bulkInput, setBulkInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [totalProducts, setTotalProducts] = useState(0);
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true });
+      setTotalProducts(count || 0);
+    };
+    fetchCount();
+  }, []);
+
+  const padEan = (ean: string) => {
+    let clean = (ean || '').replace(/[^0-9]/g, '');
+    if (clean.length > 1 && clean.length < 13) return clean.padStart(13, '0');
+    return clean;
+  };
+
+  const getImageUrl = (ean: string) => {
+    if (!ean || ean === 'Não encontrado') return null;
+    // Remove any non-alphanumeric chars just in case
+    const cleanEan = ean.replace(/[^a-zA-Z0-9]/g, '');
+    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png`;
+  };
+
+  const handleCopyLink = (ean: string) => {
+    if (ean === 'Não encontrado') return;
+    const url = getImageUrl(ean);
+    navigator.clipboard.writeText(url);
+    toast.success('Link da imagem copiado!');
+  };
+
+  const [uploadingForEan, setUploadingForEan] = useState<string | null>(null);
+
+  const handleDirectUpload = async (e: React.ChangeEvent<HTMLInputElement>, ean: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !ean) return;
+
+    setIsProcessing(true);
+    setProcessStep('Subindo imagem...');
+    
+    try {
+      const cleanEan = ean.replace(/[^a-zA-Z0-9]/g, '');
+      const filePath = `${cleanEan}.png`;
+
+      // Upload/Replace in Storage
+      const { error: storageErr } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file, { upsert: true });
+
+      if (storageErr) throw storageErr;
+
+      // Update in result list so it shows immediately
+      const newUrl = getImageUrl(cleanEan) + '?t=' + Date.now();
+      setSearchResults(prev => prev.map(item => 
+        item.ean === ean ? { ...item, image: newUrl, found: true } : item
+      ));
+
+      toast.success(`Imagem para ${ean} atualizada!`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro no upload: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+      setProcessStep('');
+    }
+  };
+
+  const handleDownloadAllZip = async () => {
+    const foundItems = searchResults.filter(r => r.found && r.ean !== 'Não encontrado');
+    if (foundItems.length === 0) {
+      toast.error('Nenhum produto encontrado para baixar.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessStep('Gerando ZIP (isso pode demorar)...');
+    const zip = new JSZip();
+    const extensions = ['.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.webp', '.WEBP'];
+
+    try {
+      for (const item of foundItems) {
+        const cleanEan = item.ean.replace(/[^0-9]/g, '');
+        const paddedEan = padEan(cleanEan);
+        let foundAny = false;
+        
+        for (const nameToTry of [cleanEan, paddedEan]) {
+          if (foundAny) break;
+          for (const ext of extensions) {
+            if (foundAny) break;
+            const filename = `${nameToTry}${ext}`;
+            try {
+              const { data: blob, error } = await (supabase.storage as any).from('product-images').download(filename);
+              if (!error && blob) {
+                zip.file(filename, blob);
+                foundAny = true;
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, 'produtos_macmidia.zip');
+      toast.success('ZIP concluído com as imagens encontradas!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao gerar ZIP.');
+    } finally {
+      setIsProcessing(false);
+      setProcessStep('');
+    }
+  };
+
+  const handleImportCatalog = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    setProcessStep('Lendo arquivo de catálogo...');
+    
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      if (jsonData.length === 0) {
+        toast.error('O arquivo está vazio.');
+        return;
+      }
+
+      setProcessStep(`Sincronizando ${jsonData.length} produtos...`);
+      
+      const batchSize = 100;
+      for (let i = 0; i < jsonData.length; i += batchSize) {
+        const batch = jsonData.slice(i, i + batchSize).map(row => ({
+          ean: String(row.EAN || row.ean || row.codigo || row.CODIGO || '').replace(/[^0-9]/g, ''),
+          description: String(row.Descricao || row.descricao || row.nome || row.produto || row.PRODUTO || '').trim()
+        })).filter(row => row.ean && row.description);
+
+        if (batch.length > 0) {
+          const { error } = await supabase
+            .from('products')
+            .upsert(batch, { onConflict: 'ean' });
+          if (error) throw error;
+        }
+        
+        setProcessStep(`Sincronizando: ${Math.min(i + batchSize, jsonData.length)}/${jsonData.length}`);
+      }
+
+      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true });
+      setTotalProducts(count || 0);
+      toast.success('Catálogo atualizado com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro na importação: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+      setProcessStep('');
+    }
+  };
+
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ean = file.name.split('.')[0].replace(/[^0-9]/g, '');
+      
+      if (!ean) {
+        failCount++;
+        continue;
+      }
+
+      setProcessStep(`Subindo ${i + 1}/${files.length}: ${ean}...`);
+      
+      try {
+        const { error } = await supabase.storage
+          .from('product-images')
+          .upload(`${ean}.png`, file, { upsert: true });
+        
+        if (error) throw error;
+        successCount++;
+      } catch (err) {
+        console.error(`Falha no upload de ${file.name}:`, err);
+        failCount++;
+      }
+    }
+
+    setIsProcessing(false);
+    setProcessStep('');
+    toast.success(`Upload concluído! ${successCount} fotos subidas.`);
+    if (failCount > 0) toast.warning(`${failCount} arquivos falharam (nome inválido?).`);
+    
+    // Refresh current view if there is a search list
+    if (searchResults.length > 0) {
+      handleBulkSearch();
+    }
+  };
 
   // Handle bulk search with Edge Function
   const handleBulkSearch = async () => {
@@ -61,34 +269,19 @@ export default function Products() {
         name: res.match?.name || res.original,
         ean: res.match?.ean || 'Não encontrado',
         found: res.found,
-        image: res.found 
-          ? supabase.storage.from('product-images').getPublicUrl(`${res.match.ean}.png`).data.publicUrl
-          : null
+        image: res.found ? getImageUrl(res.match.ean) : null
       }));
 
       setSearchResults(processedResults);
       toast.success('Busca concluída!');
     } catch (err: any) {
-      console.error(err);
-      toast.error('Erro no processamento. Verifique a conexão.');
+      console.error('ERRO DETALHADO:', err);
+      const errorMsg = err.message || err.error_description || JSON.stringify(err);
+      toast.error(`Erro: ${errorMsg}`);
     } finally {
       setIsProcessing(false);
       setProcessStep('');
     }
-  };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    toast.info('Processando arquivo...');
-    
-    // Using simple FileReader + basic parsing since I can't guarantee xlsx library is installed
-    // If xlsx is needed, user might need to install it. I'll assume standard CSV or TSV for now or just tell the user.
-    // For now, I'll use a placeholder and suggest installing xlsx if needed.
-    toast.error('Funcionalidade de importação direta de Excel requer biblioteca extra. Por favor, envie o arquivo que eu processo para você!');
   };
 
   return (
@@ -110,22 +303,35 @@ export default function Products() {
           </div>
 
           <div className="flex items-center gap-3">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleExcelImport} 
-              accept=".csv,.xlsx,.xls" 
-              className="hidden" 
-            />
             <Button 
-              variant="ghost" 
-              onClick={() => fileInputRef.current?.click()}
+              variant="outline" 
+              onClick={() => document.getElementById('bulk-image-upload')?.click()}
               className="bg-white/5 rounded-xl text-xs font-bold border border-white/5"
             >
-              <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-500" /> Importar Catálogo
+              <Upload className="w-4 h-4 mr-2 text-green-500" /> Subir Fotos (Lote)
             </Button>
-            <Button variant="ghost" className="bg-white/5 rounded-xl text-xs font-bold border border-white/5">
-              <Settings className="w-4 h-4 mr-2" /> Gerenciar Base
+            <input 
+              type="file" 
+              id="bulk-image-upload"
+              multiple 
+              className="hidden" 
+              onChange={handleBulkUpload}
+              accept="image/*"
+            />
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                const { data, error } = await supabase.storage.from('product-images').list();
+                if (error) toast.error('Erro ao listar: ' + error.message);
+                else {
+                  console.log('Arquivos no Storage:', data);
+                  const names = data.slice(0, 10).map(f => f.name).join(', ');
+                  toast.info(`Exemplos no servidor: ${names || 'Pasta vazia'}`);
+                }
+              }}
+              className="bg-white/5 rounded-xl text-xs font-bold border border-white/5"
+            >
+              <Search className="w-4 h-4 mr-2 text-yellow-500" /> Diagnosticar Storage
             </Button>
           </div>
         </div>
@@ -170,7 +376,7 @@ export default function Products() {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
               <p className="text-[10px] text-white/30 font-bold uppercase mb-1">Base Interna</p>
-              <p className="text-xl font-black tracking-tighter">0 Itens</p>
+              <p className="text-xl font-black tracking-tighter">{totalProducts} Itens</p>
             </div>
             <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
               <p className="text-[10px] text-white/30 font-bold uppercase mb-1">Sessão Atual</p>
@@ -212,10 +418,22 @@ export default function Products() {
           {searchResults.length > 0 ? (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <Button variant="secondary" className="bg-white/10 text-white rounded-xl h-10 text-xs font-bold px-5">
+                <Button 
+                  variant="secondary" 
+                  onClick={handleDownloadAllZip}
+                  className="bg-white/10 text-white rounded-xl h-10 text-xs font-bold px-5"
+                >
                   <Download className="w-3.5 h-3.5 mr-2" /> Baixar Tudo (ZIP)
                 </Button>
-                <Button variant="ghost" className="bg-white/5 text-white/50 hover:text-white rounded-xl h-10 text-xs font-bold px-5">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    const links = searchResults.filter(r => r.found).map(r => getImageUrl(r.ean)).join('\n');
+                    navigator.clipboard.writeText(links);
+                    toast.success('Todos os links copiados!');
+                  }}
+                  className="bg-white/5 text-white/50 hover:text-white rounded-xl h-10 text-xs font-bold px-5"
+                >
                   <Copy className="w-3.5 h-3.5 mr-2" /> Copiar Links
                 </Button>
               </div>
@@ -224,9 +442,61 @@ export default function Products() {
                 {searchResults.map((item, i) => (
                   <div key={i} className={`group bg-[#121214] border border-white/5 rounded-2xl overflow-hidden hover:border-red-600/30 transition-all ${viewMode === 'list' ? 'flex items-center p-3 gap-4' : ''}`}>
                     <div className={`${viewMode === 'grid' ? 'aspect-square w-full' : 'w-16 h-16'} bg-black/40 relative`}>
-                      <img src={item.image} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform" />
+                      <img 
+                        src={item.image} 
+                        className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          if (target.dataset.triedAll) return;
+                          
+                          const extensions = ['.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.webp', '.WEBP'];
+                          const currentExt = extensions.find(ext => target.src.endsWith(ext));
+                          const currentIndex = currentExt ? extensions.indexOf(currentExt) : -1;
+                          
+                          if (currentIndex < extensions.length - 1) {
+                            const nextExt = extensions[currentIndex + 1];
+                            target.src = target.src.substring(0, target.src.lastIndexOf('.')) + nextExt;
+                          } else {
+                            target.dataset.triedAll = 'true';
+                            target.src = 'https://tl-storage.b-cdn.net/placeholder-image.png';
+                            target.classList.add('opacity-20', 'grayscale');
+                          }
+                        }}
+                      />
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-90">
-                        <Button size="icon" variant="ghost" className="w-7 h-7 bg-black/60 backdrop-blur rounded-lg">
+                        <input 
+                          type="file" 
+                          id={`upload-${item.ean}`}
+                          className="hidden" 
+                          onChange={(e) => handleDirectUpload(e, item.ean)}
+                          accept="image/*"
+                        />
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={(e) => { e.stopPropagation(); document.getElementById(`upload-${item.ean}`)?.click(); }}
+                          className="w-7 h-7 bg-black/60 backdrop-blur rounded-lg"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            const url = getImageUrl(item.ean);
+                            if (url) window.open(url, '_blank');
+                          }}
+                          className="w-7 h-7 bg-black/60 backdrop-blur rounded-lg"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={(e) => { e.stopPropagation(); handleCopyLink(item.ean); }}
+                          className="w-7 h-7 bg-black/60 backdrop-blur rounded-lg"
+                        >
                           <LinkIcon className="w-3.5 h-3.5" />
                         </Button>
                       </div>

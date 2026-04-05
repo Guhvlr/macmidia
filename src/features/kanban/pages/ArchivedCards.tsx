@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Archive, Trash2, Clock, AlertTriangle, User } from 'lucide-react';
+import { ArrowLeft, Archive, Trash2, Clock, AlertTriangle, User, RotateCcw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 interface ArchivedCard {
   id: string;
@@ -25,10 +27,11 @@ const ArchivedCards = () => {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const employee = id ? employees.find(e => e.id === id) : null;
 
-  const fetchArchived = async (pageNum: number) => {
+  const fetchArchived = async (pageNum: number, queryText?: string) => {
     setLoading(true);
     const cutoff15 = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
     
@@ -42,6 +45,10 @@ const ArchivedCards = () => {
 
     if (id) {
       query = query.eq('employee_id', id);
+    }
+
+    if (queryText || searchQuery) {
+      query = query.ilike('client_name', `%${queryText || searchQuery}%`);
     }
 
     const { data } = await query;
@@ -64,10 +71,33 @@ const ArchivedCards = () => {
 
   useEffect(() => { fetchArchived(0); }, [id]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchArchived(0, searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const handleDelete = async (cardId: string) => {
     if (!confirm('Tem certeza que deseja excluir permanentemente este card?')) return;
     await supabase.from('kanban_cards').delete().eq('id', cardId);
     setCards(prev => prev.filter(c => c.id !== cardId));
+    toast.success('Card excluído permanentemente.');
+  };
+
+  const handleRestore = async (cardId: string) => {
+    const { error } = await supabase
+      .from('kanban_cards')
+      .update({ archived_at: null })
+      .eq('id', cardId);
+    
+    if (error) {
+      toast.error('Erro ao restaurar card.');
+      return;
+    }
+
+    setCards(prev => prev.filter(c => c.id !== cardId));
+    toast.success('Card restaurado para o quadro principal!');
   };
 
   const formatTime = (s: number) => {
@@ -103,6 +133,29 @@ const ArchivedCards = () => {
             <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-tight">
               Cards finalizados há mais de 15 dias · Exclusão automática em 60 dias
             </p>
+          </div>
+
+          <div className="ml-auto w-full max-w-sm relative group hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
+            <Input 
+              placeholder="Pesquisar cliente..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-10 rounded-xl bg-background/50 border-white/5 focus:ring-primary/20 transition-all font-medium"
+            />
+          </div>
+        </div>
+        
+        {/* Mobile Search Input */}
+        <div className="px-6 pb-4 md:hidden">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
+            <Input 
+              placeholder="Pesquisar cliente..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-11 rounded-xl bg-background/50 border-white/5 focus:ring-primary/20 transition-all font-medium"
+            />
           </div>
         </div>
       </header>
@@ -145,9 +198,24 @@ const ArchivedCards = () => {
                     </span>
                   </div>
                   
-                  <Button variant="ghost" size="sm" className="w-full text-red-400/70 hover:text-red-400 hover:bg-red-500/10 rounded-lg text-xs h-8 border border-transparent hover:border-red-500/20" onClick={() => handleDelete(card.id)}>
-                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir permanentemente
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 text-primary hover:text-primary hover:bg-primary/10 rounded-lg text-xs h-8 border-primary/20 hover:border-primary/40" 
+                      onClick={() => handleRestore(card.id)}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-2" /> Restaurar
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-transparent hover:border-red-500/20" 
+                      onClick={() => handleDelete(card.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

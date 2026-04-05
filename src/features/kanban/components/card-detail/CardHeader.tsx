@@ -55,8 +55,8 @@ export const CardHeader = memo( ({
       )}
 
       {/* Title & Status */}
-      <div className={`p-6 md:p-8 pb-0 flex items-start gap-4 ${coverImage ? 'pt-6' : ''}`}>
-        <Circle className="w-6 h-6 text-white/40 flex-shrink-0 mt-0.5" />
+      <div className={`px-6 md:px-8 pb-2 flex items-start gap-4 ${coverImage ? 'pt-6' : 'pt-2'}`}>
+        <Circle className="w-6 h-6 text-white/40 flex-shrink-0 mt-1" />
         <div className="flex-1">
           <Input
             value={clientName}

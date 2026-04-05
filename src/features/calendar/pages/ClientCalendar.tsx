@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import type { CalendarTask } from '@/contexts/app-types';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, Copy, ArrowRightLeft, CopyPlus, Edit, CheckCircle2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, Copy, ArrowRightLeft, CopyPlus, Edit, CheckCircle2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { compressImage } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from '@/components/ui/context-menu';
+import { toast } from 'sonner';
 
 const CONTENT_TYPES = ['Estático', 'Vídeo', 'Reels', 'Stories', 'Carrossel', 'Outro'];
 
@@ -70,7 +71,32 @@ const getStatusColorClasses = (status: string | undefined): string => {
 const ClientCalendar = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const { employees, calendarTasks, calendarClients, addCalendarTask, updateCalendarTask, deleteCalendarTask, loading } = useApp();
+  const { 
+    employees, 
+    calendarTasks, 
+    calendarClients, 
+    addCalendarTask, 
+    updateCalendarTask, 
+    deleteCalendarTask, 
+    loading,
+    loggedUserRole,
+    loggedUserClientLink,
+    fetchAll
+  } = useApp();
+  
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchAll();
+      toast.success('Dados atualizados!');
+    } catch (err) {
+      toast.error('Erro ao atualizar dados');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   const [viewMode, setViewMode] = useState<'calendar' | 'feed'>('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -111,6 +137,12 @@ const ClientCalendar = () => {
         <Button variant="outline" onClick={() => navigate('/calendario')} className="rounded-xl">Voltar</Button>
       </div>
     );
+  }
+
+  // Security check for GUEST
+  if (loggedUserRole === 'GUEST' && loggedUserClientLink && clientId !== loggedUserClientLink) {
+    navigate(`/calendario/${loggedUserClientLink}`, { replace: true });
+    return null;
   }
 
   const clientTasks = calendarTasks.filter(t => t.calendarClientId === clientId);
@@ -190,25 +222,25 @@ const ClientCalendar = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addDate || !form.clientName.trim()) return;
-    addCalendarTask({ ...form, date: addDate, imageUrl: form.imageUrl || undefined, calendarClientId: clientId! });
+    await addCalendarTask({ ...form, date: addDate, imageUrl: form.imageUrl || undefined, calendarClientId: clientId! });
     setShowAddDialog(false);
   };
 
-  const handleEditSave = (field: string, value: string) => {
+  const handleEditSave = async (field: string, value: string) => {
     if (!editTask) return;
-    updateCalendarTask(editTask.id, { [field]: value } as any);
+    await updateCalendarTask(editTask.id, { [field]: value } as any);
     setEditTask(prev => prev ? { ...prev, [field]: value } : null);
   };
 
   // Drag and drop actions for entire task card
-  const handleDayDrop = (e: React.DragEvent, dateStr: string) => {
+  const handleDayDrop = async (e: React.DragEvent, dateStr: string) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
     if (taskId) {
-      updateCalendarTask(taskId, { date: dateStr } as any);
+      await updateCalendarTask(taskId, { date: dateStr } as any);
     }
   };
 
@@ -263,10 +295,10 @@ const ClientCalendar = () => {
     });
   };
 
-  const executeAction = () => {
+  const executeAction = async () => {
     if (!actionDialog) return;
     if (actionDialog.type === 'move_date' && actionDate) {
-      updateCalendarTask(actionDialog.taskId, { date: actionDate } as any);
+      await updateCalendarTask(actionDialog.taskId, { date: actionDate } as any);
     } else if (actionDialog.type === 'copy_date' && actionDate) {
       handleDuplicate(actionDialog.taskId, actionDate);
     } else if (actionDialog.type === 'copy_client' && actionClientId) {
@@ -342,6 +374,18 @@ const ClientCalendar = () => {
                 Hoje
               </Button>
             )}
+            <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/10 mr-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={isRefreshing}
+                className="h-7 px-3 text-[10px] uppercase font-bold rounded-lg text-white/50 hover:text-primary hover:bg-white/5"
+                onClick={handleManualRefresh}
+              >
+                <RefreshCw className={`w-3 h-3 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+            </div>
             <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/10">
               <Button
                 size="sm"
@@ -395,7 +439,7 @@ const ClientCalendar = () => {
                     `}>
                       {cell.day}
                     </span>
-                    {cell.isCurrentMonth && (
+                    {cell.isCurrentMonth && loggedUserRole !== 'GUEST' && (
                       <button
                         onClick={() => openAdd(cell.dateStr)}
                         className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 text-white/50 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
@@ -445,7 +489,7 @@ const ClientCalendar = () => {
                               className={`w-full text-left rounded-lg p-2.5 border transition-all cursor-pointer shadow-md group/card flex flex-col gap-2 relative overflow-hidden
                                 ${statusColors[task.status?.toLowerCase()] || 'bg-[#1C1C1E] border-white/5 text-white/70'}
                                 ${dragOverCardId === task.id ? 'ring-2 ring-primary scale-[1.02] z-10' : ''}
-                                hover:brightness-125 transition-all
+                                ${loggedUserRole !== 'GUEST' ? 'hover:brightness-125 transition-all' : 'cursor-default pointer-events-none'}
                               `}
                             >
                               <div className="pr-4">
@@ -465,14 +509,16 @@ const ClientCalendar = () => {
                               </div>
                               
                               {/* Quick actions on hover */}
-                              <div className="absolute right-1 top-1.5 flex flex-col gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
-                                <div className="p-1 rounded bg-white/5 hover:bg-white/20 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setEditTask(task); }}>
-                                  <Edit className="w-[10px] h-[10px]" />
+                              {loggedUserRole !== 'GUEST' && (
+                                <div className="absolute right-1 top-1.5 flex flex-col gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                  <div className="p-1 rounded bg-white/5 hover:bg-white/20 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setEditTask(task); }}>
+                                    <Edit className="w-[10px] h-[10px]" />
+                                  </div>
+                                  <div className="p-1 rounded bg-white/5 hover:bg-red-500/80 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(task.id); }}>
+                                    <Trash2 className="w-[10px] h-[10px]" />
+                                  </div>
                                 </div>
-                                <div className="p-1 rounded bg-white/5 hover:bg-red-500/80 text-white/50 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(task.id); }}>
-                                  <Trash2 className="w-[10px] h-[10px]" />
-                                </div>
-                              </div>
+                              )}
                             </div>
 
                             {/* Hover Preview Tooltip */}
@@ -559,9 +605,11 @@ const ClientCalendar = () => {
                       loading="lazy" 
                       alt=""
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                      <Button variant="secondary" className="font-bold rounded-xl shadow-2xl h-10 px-6"><Edit className="w-4 h-4 mr-2"/> Editar Card</Button>
-                    </div>
+                    {loggedUserRole !== 'GUEST' && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                        <Button variant="secondary" className="font-bold rounded-xl shadow-2xl h-10 px-6"><Edit className="w-4 h-4 mr-2"/> Editar Card</Button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Footer */}
@@ -638,11 +686,8 @@ const ClientCalendar = () => {
 
           {/* Right Form Tabs */}
           <div className="flex-1 flex flex-col bg-[#121214] h-full">
-            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+            <div className="p-6 border-b border-white/5">
               <h2 className="text-lg font-bold">Criar Post — {addDate}</h2>
-              <Button variant="ghost" size="icon" onClick={() => setShowAddDialog(false)} className="rounded-full hover:bg-white/5 text-white/50 hover:text-white">
-                <X className="w-5 h-5" />
-              </Button>
             </div>
 
             <div className="p-6 flex-1 overflow-y-auto tab-scrollbar">
@@ -858,11 +903,9 @@ const ClientCalendar = () => {
 
               {/* Right Form Tabs */}
               <div className="flex-1 flex flex-col bg-[#121214] h-full">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                  <h2 className="text-lg font-bold">Resumo do Card</h2>
-                  <Button variant="ghost" size="icon" onClick={() => setEditTask(null)} className="rounded-full hover:bg-white/5 text-white/50 hover:text-white">
-                    <X className="w-5 h-5" />
-                  </Button>
+                <div className="p-6 pb-2 border-b border-white/5 flex items-center justify-between">
+                  <h2 className="text-lg font-bold uppercase tracking-tight italic">Resumo do Card</h2>
+                  {/* Botão de fechar redundante removido (O DialogContent já possui um) */}
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto tab-scrollbar">

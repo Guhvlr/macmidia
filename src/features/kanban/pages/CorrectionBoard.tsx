@@ -78,10 +78,20 @@ const CorrectionBoard = () => {
               onDrop={e => handleDrop(e, col.key)}
               className="flex flex-col h-full min-w-[340px] w-[360px] flex-shrink-0"
             >
-              <div className="flex items-center gap-2.5 mb-3 px-1 flex-shrink-0">
-                <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
-                <h3 className="font-semibold text-[13px] tracking-wide uppercase text-white/90">{col.title}</h3>
-                <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
+              <div className="flex items-center justify-between mb-3 px-1 flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
+                  <h3 className="font-semibold text-[13px] tracking-wide uppercase text-white/90">{col.title}</h3>
+                  <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
+                </div>
+                {/* Botão Adicionar movido para o topo */}
+                <div className="scale-90 origin-right transition-all hover:scale-100">
+                  <AddCardDialog
+                    employeeId={employees.length > 0 ? employees[0].id : ''}
+                    columnKey={col.key}
+                    showEmployeeSelect={true}
+                  />
+                </div>
               </div>
               
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 rounded-2xl bg-[#0f0f11]/60 border border-white/5 shadow-inner">
@@ -99,14 +109,6 @@ const CorrectionBoard = () => {
                     </div>
                   ))
                 )}
-              </div>
-              
-              <div className="mt-3 flex-shrink-0">
-                <AddCardDialog
-                  employeeId={employees.length > 0 ? employees[0].id : ''}
-                  columnKey={col.key}
-                  showEmployeeSelect={true}
-                />
               </div>
             </div>
           );

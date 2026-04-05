@@ -313,7 +313,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
           <div className="flex flex-1 overflow-hidden">
             {/* Left Column (Main Content) */}
-            <div className={`flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 space-y-8 ${coverImage ? 'pt-6' : ''}`}>
+            <div className={`flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 ${coverImage ? 'pt-4' : 'pt-2'}`}>
               <MembersSection 
                 card={card}
                 labels={labels}
@@ -329,6 +329,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                 employees={employees}
                 systemUsers={systemUsers}
                 saveUpdates={saveUpdates}
+                triggerAICorrection={triggerAICorrection}
+                fixDescriptionWithAI={fixDescriptionWithAI}
+                customAICommand={customAICommand}
               />
 
               <DescriptionSection 

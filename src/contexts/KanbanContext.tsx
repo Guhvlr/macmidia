@@ -382,7 +382,17 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addCalendarClient = useCallback(async (name: string, logoUrl?: string) => {
-    await supabase.from('calendar_clients').insert({ name, logo_url: logoUrl || null }).select();
+    const id = name.toLowerCase().trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
+    
+    const { error } = await supabase.from('calendar_clients').insert({ id, name, logo_url: logoUrl || null }).select();
+    if (error) {
+      console.error('Erro ao adicionar cliente:', error);
+      toast.error('Erro ao criar calendário do cliente.');
+      throw error;
+    }
   }, []);
   const updateCalendarClient = useCallback(async (id: string, updates: Partial<CalendarClient>) => {
     const db: any = {};

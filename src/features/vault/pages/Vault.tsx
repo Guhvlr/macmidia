@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
-import { ArrowLeft, Plus, Eye, EyeOff, Trash2, Copy, Shield, Globe, User, Loader2, ImageIcon, Search, Phone, Mail, MapPin, FileText, ExternalLink, Settings2, Lock, X } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, EyeOff, Trash2, Copy, Shield, Globe, User, Loader2, ImageIcon, Search, Phone, Mail, MapPin, FileText, ExternalLink, Settings2, Lock, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,8 +22,23 @@ const Vault = () => {
     updateCalendarClient,
     addCredential, 
     deleteCredential, 
-    loading
+    loading,
+    fetchAll
   } = useApp();
+  
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchAll();
+      toast.success('Banco de dados sincronizado!');
+    } catch (err) {
+      toast.error('Erro ao sincronizar dados');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClient, setSelectedClient] = useState<CalendarClient | null>(null);
@@ -121,9 +136,12 @@ const Vault = () => {
     toast.success('Acesso adicionado com sucesso!');
   };
 
-  const filteredClients = calendarClients.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredClients = calendarClients.filter(c => {
+    const q = searchQuery.toLowerCase();
+    return c.name.toLowerCase().includes(q) ||
+           (c.email?.toLowerCase().includes(q)) ||
+           (c.phones?.some(p => p.toLowerCase().includes(q)));
+  });
 
   const getClientCredentials = (clientId: string) => {
     return credentials.filter(cred => cred.calendarClientId === clientId);
@@ -157,15 +175,26 @@ const Vault = () => {
             <p className="text-[10px] text-white/30 mt-2 uppercase tracking-[0.2em] font-bold">Gerenciamento estratégico de dossiês e acessos</p>
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/5">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/5">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-primary transition-all border border-white/5 px-3 text-[10px] font-bold uppercase tracking-wider"
+            >
+              <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Sincronizar
+            </Button>
+            <div className="w-px h-4 bg-white/10 mx-1" />
             <Shield className="w-4 h-4 text-primary" />
             <span className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Acesso Restrito</span>
           </div>
         </div>
 
         <div className="w-full max-w-2xl relative group">
-          <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors" />
+          <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors pointer-events-none" />
           <Input 
             placeholder="Encontrar cliente ou marca..." 
             value={searchQuery}
@@ -240,11 +269,6 @@ const Vault = () => {
                     <h2 className="text-2xl font-black tracking-tighter">{selectedClient.name}</h2>
                     <p className="text-xs text-white/40 uppercase tracking-widest font-bold">Perfil do Cliente</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" onClick={() => setSelectedClient(null)} className="rounded-xl h-10 w-10 p-0 hover:bg-white/5 text-white/30 hover:text-white">
-                    <X className="w-6 h-6" />
-                  </Button>
                 </div>
               </div>
 

@@ -55,7 +55,7 @@ const MainLayout = ({ children, title }: Props) => {
       
       {/* Main Content Area with dynamic margin based on sidebar state */}
       <main
-        className={`flex-1 transition-all duration-300 print:ml-0 flex flex-col min-h-screen ${
+        className={`flex-1 transition-all duration-300 print:ml-0 flex flex-col h-screen overflow-hidden ${
           collapsed ? 'ml-[68px]' : 'ml-[220px]'
         }`}
       >

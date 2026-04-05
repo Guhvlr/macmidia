@@ -179,4 +179,5 @@ export interface AppState {
   deleteCalendarClient: (id: string) => void;
   setDashboardBanner: (url: string) => void;
   setDashboardLogo: (url: string) => void;
+  fetchAll: () => Promise<void>;
 }

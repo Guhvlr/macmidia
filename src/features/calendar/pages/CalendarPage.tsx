@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
-import { ArrowLeft, Plus, Trash2, Calendar, ArrowRight, Upload, X, MoreVertical, Edit2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Calendar, ArrowRight, Upload, X, MoreVertical, Edit2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -10,12 +10,28 @@ import { toast } from 'sonner';
 
 const CalendarPage = () => {
   const navigate = useNavigate();
-  const { calendarClients, addCalendarClient, deleteCalendarClient, updateCalendarClient, loggedUserRole } = useApp();
+  const { calendarClients, addCalendarClient, deleteCalendarClient, updateCalendarClient, loggedUserRole, loggedUserClientLink, fetchAll } = useApp();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editingClient, setEditingClient] = useState<{id: string, name: string, logoUrl?: string} | null>(null);
   const [clientName, setClientName] = useState('');
   const [logoUrl, setLogoUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchAll();
+      toast.success('Sincronizando com Banco de Dados...', {
+        icon: <RefreshCw className="w-4 h-4 animate-spin text-primary" />,
+        className: "glass-card border-primary/20 text-white font-bold uppercase tracking-wider text-[10px]"
+      });
+    } catch (err) {
+      toast.error('Erro ao atualizar dados');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -29,15 +45,31 @@ const CalendarPage = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleAdd = (e: React.FormEvent) => {
+  // Logic once to handle GUEST redirection if they have only one client
+  const [hasRedirected, setHasRedirected] = useState(false);
+  
+  const accessibleClients = useMemo(() => {
+    if (loggedUserRole !== 'GUEST') return calendarClients;
+    if (!loggedUserClientLink) return [];
+    return calendarClients.filter(c => c.id === loggedUserClientLink);
+  }, [calendarClients, loggedUserRole, loggedUserClientLink]);
+
+  useEffect(() => {
+    if (loggedUserRole === 'GUEST' && accessibleClients.length === 1 && !hasRedirected) {
+      setHasRedirected(true);
+      navigate(`/calendario/${accessibleClients[0].id}`, { replace: true });
+    }
+  }, [loggedUserRole, accessibleClients, navigate, hasRedirected]);
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName.trim()) return;
     
     if (editingClient) {
-      updateCalendarClient(editingClient.id, { name: clientName.trim(), logoUrl: logoUrl || undefined });
+      await updateCalendarClient(editingClient.id, { name: clientName.trim(), logoUrl: logoUrl || undefined });
       toast.success('Cliente atualizado com sucesso!');
     } else {
-      addCalendarClient(clientName.trim(), logoUrl || undefined);
+      await addCalendarClient(clientName.trim(), logoUrl || undefined);
       toast.success('Calendário criado com sucesso!');
     }
     
@@ -74,16 +106,30 @@ const CalendarPage = () => {
               <p className="text-[11px] text-muted-foreground">Planejamento de conteúdo por cliente</p>
             </div>
           </div>
-          {loggedUserRole !== 'GUEST' && (
-            <Button size="sm" className="ml-auto btn-primary-glow rounded-xl text-xs" onClick={() => setShowAdd(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> Novo Cliente
+
+          <div className="ml-auto flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="rounded-xl text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/70 h-9"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Atualizar
             </Button>
-          )}
+            
+            {loggedUserRole !== 'GUEST' && (
+              <Button size="sm" className="btn-primary-glow rounded-xl text-xs h-9" onClick={() => setShowAdd(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Novo Cliente
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
       <div className="p-6 md:p-8 max-w-6xl mx-auto">
-        {calendarClients.length === 0 && (
+        {accessibleClients.length === 0 && (
           <div className="glass-card p-16 text-center max-w-lg mx-auto animate-fade-in border-dashed border-white/10">
             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
               <Calendar className="w-10 h-10 text-white/20" />
@@ -95,7 +141,7 @@ const CalendarPage = () => {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-          {calendarClients.map((client, i) => (
+          {accessibleClients.map((client, i) => (
             <div
               key={client.id}
               className="glass-card p-0 group flex flex-col transition-all duration-300 hover:border-primary/30 relative overflow-hidden h-[240px] shadow-xl animate-scale-in"

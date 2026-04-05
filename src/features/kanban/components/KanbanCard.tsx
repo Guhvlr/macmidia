@@ -142,7 +142,7 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
 
         {coverImage && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 min-h-[120px] max-h-[260px] bg-black/40 group/img flex items-center justify-center">
-            <img src={coverImage} alt="" className="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 scale-110" />
+            <img src={coverImage} alt="" className="absolute inset-0 w-full h-full object-cover blur-lg opacity-40 scale-110" />
             <img src={coverImage} alt="Capa" loading="lazy" className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5" />
           </div>
         )}

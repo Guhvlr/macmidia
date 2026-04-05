@@ -46,7 +46,7 @@ export default function Products() {
 
   useEffect(() => {
     const fetchCount = async () => {
-      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true });
+      const { count } = await (supabase.from('products') as any).select('*', { count: 'exact', head: true });
       setTotalProducts(count || 0);
     };
     fetchCount();
@@ -182,8 +182,8 @@ export default function Products() {
         })).filter(row => row.ean && row.description);
 
         if (batch.length > 0) {
-          const { error } = await supabase
-            .from('products')
+          const { error } = await (supabase
+            .from('products') as any)
             .upsert(batch, { onConflict: 'ean' });
           if (error) throw error;
         }
@@ -191,7 +191,7 @@ export default function Products() {
         setProcessStep(`Sincronizando: ${Math.min(i + batchSize, jsonData.length)}/${jsonData.length}`);
       }
 
-      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true });
+      const { count } = await (supabase.from('products') as any).select('*', { count: 'exact', head: true });
       setTotalProducts(count || 0);
       toast.success('Catálogo atualizado com sucesso!');
     } catch (err: any) {
@@ -324,9 +324,8 @@ export default function Products() {
                 const { data, error } = await supabase.storage.from('product-images').list();
                 if (error) toast.error('Erro ao listar: ' + error.message);
                 else {
-                  console.log('Arquivos no Storage:', data);
                   const names = data.slice(0, 10).map(f => f.name).join(', ');
-                  toast.info(`Exemplos no servidor: ${names || 'Pasta vazia'}`);
+                  toast.info(`Status do servidor: ${names ? 'Arquivos presentes' : 'Pasta vazia'}`);
                 }
               }}
               className="bg-white/5 rounded-xl text-xs font-bold border border-white/5"

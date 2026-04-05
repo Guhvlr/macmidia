@@ -67,8 +67,8 @@ interface MetricCardProps {
   trendIcon?: any;
 }
 
-const MetricCard = ({ icon: Icon, label, value, subtext, trend, color, trendIcon }: MetricCardProps) => (
-  <div className="glass-card-hover p-4 flex items-center gap-4 animate-slide-up group" style={{ borderLeft: `3px solid ${color.startsWith('var') ? `hsl(${color})` : color}` }}>
+const MetricCard = ({ icon: Icon, label, value, subtext, trend, color, trendIcon, isGuest }: { isGuest?: boolean } & MetricCardProps) => (
+  <div className={`${!isGuest ? 'glass-card-hover cursor-pointer' : 'glass-card'} p-4 flex items-center gap-4 animate-slide-up group`} style={{ borderLeft: `3px solid ${color.startsWith('var') ? `hsl(${color})` : color}` }}>
     <div className="p-2.5 rounded-2xl bg-white/[0.02] border border-white/[0.03] group-hover:bg-primary/10 transition-all glow-red-subtle group-hover:scale-110 duration-500">
       <Icon className="w-5 h-5" style={{ color: color.startsWith('var') ? `hsl(${color})` : color }} />
     </div>
@@ -97,14 +97,17 @@ const Index = () => {
     loading, 
     addEmployee, 
     dashboardLogo,
-    loggedUserRole
+    loggedUserRole,
+    loggedUserClientLink
   } = useApp();
   
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('');
-  const [selectedClientId, setSelectedClientId] = useState<string | 'all'>('all');
+  const [selectedClientId, setSelectedClientId] = useState<string | 'all'>(
+    loggedUserRole === 'GUEST' && loggedUserClientLink ? loggedUserClientLink : 'all'
+  );
   const [viewDate, setViewDate] = useState(new Date());
   
   const logoSrc = dashboardLogo || defaultLogo;
@@ -205,7 +208,7 @@ const Index = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-[#020202] p-6 lg:p-7 space-y-5 overflow-y-auto custom-scrollbar dashboard-main-container" style={{ transform: 'scale(0.96)', transformOrigin: 'top center' }}>
+      <div className="h-screen bg-[#020202] p-6 lg:p-7 space-y-5 overflow-y-auto custom-scrollbar dashboard-main-container" style={{ transform: 'scale(1)', transformOrigin: 'top center' }}>
         {/* Top Header */}
         <div className="flex items-center justify-between animate-fade-in h-12 px-2">
           <div className="flex items-center gap-6">
@@ -215,62 +218,74 @@ const Index = () => {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="glass-card px-4 py-2 flex items-center gap-3 hover:bg-white/5 transition-all outline-none border-white/[0.03] shadow-2xl">
-                  <Users className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em]">{selectedClient?.name || 'Todos Clientes'}</span>
-                  <ChevronDown className="w-3 h-3 text-white/20" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="glass-card border-white/10 bg-[#0a0a0a]/98 w-64 backdrop-blur-3xl p-1.5 shadow-[0_30px_60px_rgba(0,0,0,1)]">
-                <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 px-3 py-2">Filtro de Unidade</DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/5 mx-1" />
-                <DropdownMenuItem onClick={() => setSelectedClientId('all')} className="text-xs font-bold py-3 px-3 cursor-pointer rounded-xl hover:bg-white/5 transition-colors">
-                  Visão Global
-                </DropdownMenuItem>
-                {Array.isArray(calendarClients) && calendarClients.map(client => (
-                  <DropdownMenuItem key={client.id} onClick={() => setSelectedClientId(client.id)} className="text-xs font-bold py-3 px-3 cursor-pointer flex items-center gap-4 rounded-xl hover:bg-white/5 transition-colors">
-                    <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden border border-white/10">
-                      {client.logoUrl ? <img src={client.logoUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] opacity-40">{client.name[0]}</span>}
-                    </div>
-                    <span className="truncate">{client.name}</span>
+            {loggedUserRole !== 'GUEST' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="glass-card px-4 py-2 flex items-center gap-3 hover:bg-white/5 transition-all outline-none border-white/[0.03] shadow-2xl">
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em]">{selectedClient?.name || 'Todos Clientes'}</span>
+                    <ChevronDown className="w-3 h-3 text-white/20" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="glass-card border-white/10 bg-[#0a0a0a]/98 w-64 backdrop-blur-3xl p-1.5 shadow-[0_30px_60px_rgba(0,0,0,1)]">
+                  <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 px-3 py-2">Filtro de Unidade</DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-white/5 mx-1" />
+                  <DropdownMenuItem onClick={() => setSelectedClientId('all')} className="text-xs font-bold py-3 px-3 cursor-pointer rounded-xl hover:bg-white/5 transition-colors">
+                    Visão Global
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {Array.isArray(calendarClients) && calendarClients.map(client => (
+                    <DropdownMenuItem key={client.id} onClick={() => setSelectedClientId(client.id)} className="text-xs font-bold py-3 px-3 cursor-pointer flex items-center gap-4 rounded-xl hover:bg-white/5 transition-colors">
+                      <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden border border-white/10">
+                        {client.logoUrl ? <img src={client.logoUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] opacity-40">{client.name[0]}</span>}
+                      </div>
+                      <span className="truncate">{client.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {loggedUserRole === 'GUEST' && selectedClient && (
+              <div className="glass-card px-4 py-2 flex items-center gap-3 border-white/[0.03] shadow-2xl opacity-60">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                <span className="text-[9px] font-black uppercase tracking-[0.2em]">{selectedClient.name}</span>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
-              <button className="glass-card px-4 py-2 flex items-center gap-3 hover:bg-white/5 transition-all border-white/[0.03] shadow-2xl">
+              <div className="glass-card px-4 py-2 flex items-center gap-3 border-white/[0.03] shadow-2xl">
                 <CalendarIcon className="w-4 h-4 text-primary" />
                 <span className="text-[9px] font-black uppercase tracking-[0.2em]">{format(viewDate, "MMMM yyyy", { locale: ptBR })}</span>
-              </button>
-              <div className="flex gap-1">
-                <button 
-                  onClick={handlePrevMonth}
-                  className="h-9 w-9 flex items-center justify-center glass-card hover:bg-white/10 hover:text-white transition-all text-white/30"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={handleNextMonth}
-                  className="h-9 w-9 flex items-center justify-center glass-card hover:bg-white/10 hover:text-white transition-all text-white/30"
-                >
-                  <ChevronRightIcon className="w-4 h-4" />
-                </button>
               </div>
+              {loggedUserRole !== 'GUEST' && (
+                <div className="flex gap-1">
+                  <button 
+                    onClick={handlePrevMonth}
+                    className="h-9 w-9 flex items-center justify-center glass-card hover:bg-white/10 hover:text-white transition-all text-white/30"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={handleNextMonth}
+                    className="h-9 w-9 flex items-center justify-center glass-card hover:bg-white/10 hover:text-white transition-all text-white/30"
+                  >
+                    <ChevronRightIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard 
             icon={Send} 
             label="Volume Mensal" 
             value={metrics.currMonthTasks.length} 
             subtext={`Produção em ${format(viewDate, 'MMMM', { locale: ptBR })}`} 
             color="var(--primary)"
+            isGuest={loggedUserRole === 'GUEST'}
           />
           <MetricCard 
             icon={Clock} 
@@ -278,6 +293,7 @@ const Index = () => {
             value={metrics.inProductionCount} 
             subtext="Processamento ativo" 
             color="var(--warning)"
+            isGuest={loggedUserRole === 'GUEST'}
           />
           <MetricCard 
             icon={Activity} 
@@ -285,105 +301,15 @@ const Index = () => {
             value={metrics.changesCount} 
             subtext="Refações solicitadas" 
             color="var(--destructive)"
-          />
-          <MetricCard 
-            icon={TrendingUpIcon} 
-            label="Evolução" 
-            value={`${productionGrowth > 0 ? '+' : ''}${productionGrowth}%`} 
-            subtext="Crescimento produtivo" 
-            trend={productionGrowth}
-            color="var(--primary)"
+            isGuest={loggedUserRole === 'GUEST'}
           />
         </div>
 
         {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           <div className="lg:col-span-8 space-y-5">
-            {/* Chart Widget */}
-            <div className="glass-card p-7 flex flex-col gap-6 relative overflow-hidden group shadow-2xl">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-primary/[0.02] to-transparent pointer-events-none" />
-              <div className="flex items-center justify-between relative z-10 px-1">
-                <div>
-                  <h2 className="text-xl font-black flex items-center gap-3 uppercase tracking-tighter italic">
-                    <Activity className="w-5 h-5 text-primary glow-red-subtle" /> 
-                    Resultados: <span className="text-white/40 not-italic font-bold">{selectedClient?.name || 'Unidade Global'}</span>
-                  </h2>
-                  <p className="text-[10px] text-white/20 uppercase tracking-[0.3em] font-black mt-1">Analytics de Performance - {format(viewDate, 'MMMM yyyy', { locale: ptBR })}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                   {loggedUserRole === 'ADMIN' && (
-                     <button onClick={() => handleExport('Resultados')} className="text-[9px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl bg-primary text-white shadow-[0_10px_25px_hsl(var(--primary)/0.35)] glow-red-subtle transition-all hover:scale-105 active:scale-95">Relatórios</button>
-                   )}
-                   <button onClick={() => handleExport('Histórico')} className="text-[9px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl bg-white/[0.03] text-white/30 border border-white/[0.05] hover:text-white hover:bg-white/5 transition-all">Ver Histórico</button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-10 items-center relative z-10 px-1">
-                <div className="md:col-span-4 space-y-7">
-                  {[
-                    { icon: CheckCircle2, label: 'Entregues', value: metrics.currMonthTasks.length, trend: productionGrowth, color: 'text-primary' },
-                    { icon: Clock, label: 'No Fluxo', value: metrics.inProductionCount, trend: 0, color: 'text-warning' },
-                    { icon: History, label: 'Mês Passado', value: metrics.lastMonthTasks.length, trend: -productionGrowth, color: 'text-emerald-500' },
-                  ].map(item => (
-                    <div key={item.label} className="group/item cursor-pointer">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <item.icon className={`w-4 h-4 ${item.color} drop-shadow-[0_0_10px_hsl(var(--primary)/0.4)]`} />
-                          <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">{item.label}</span>
-                        </div>
-                        {item.trend !== 0 && (
-                          <span className={`text-[9px] font-black flex items-center gap-1 ${item.trend > 0 ? 'text-emerald-400' : 'text-primary'}`}>
-                            <TrendingUp className={`w-3.5 h-3.5 ${item.trend < 0 ? 'rotate-180' : ''}`} /> {Math.abs(item.trend)}%
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-3xl font-black border-b border-white/[0.03] pb-2.5 group-hover/item:border-primary/40 transition-all flex items-baseline gap-2">
-                        {item.value} <span className="text-[10px] text-white/10 font-black uppercase tracking-[0.2em] leading-none">Artes</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="md:col-span-8 h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35}/>
-                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.015)" vertical={false} />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.2)", fontSize: 10 }} dy={12} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#050505', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', backdropFilter: 'blur(30px)', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }} 
-                        itemStyle={{ fontSize: '11px', fontWeight: '900', color: '#fff' }}
-                        labelStyle={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'black', marginBottom: '6px', fontSize: '10px' }}
-                      />
-                      <Area type="monotone" dataKey="pos" stroke="hsl(var(--primary))" strokeWidth={4} fill="url(#colorPos)" />
-                      <Area type="monotone" dataKey="prod" stroke="#fbbf24" strokeWidth={2} strokeDasharray="6 6" fill="transparent" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-6 border-t border-white/[0.03] relative z-10">
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-3"><div className="w-2.5 h-2.5 rounded-full bg-primary glow-primary" /><span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Postagens</span></div>
-                  <div className="flex items-center gap-3"><div className="w-2.5 h-2.5 rounded-full border border-warning/50 bg-white/5" /><span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Fluxo</span></div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  {loggedUserRole === 'ADMIN' && (
-                    <>
-                      <Button onClick={() => handleExport('PDF')} size="sm" variant="ghost" className="h-9 px-5 text-[10px] font-black uppercase tracking-widest border border-white/5 rounded-xl bg-white/[0.02] hover:bg-white/5 text-white/40 hover:text-white transition-all"><Download className="w-4 h-4 mr-2" /> Gerar PDF</Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
             {/* Mini Calendar Widget */}
-            <div className="glass-card p-6 border-white/5 shadow-2xl">
+            <div className="glass-card p-6 border-white/5 shadow-2xl h-full">
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-xl font-black flex items-center gap-4 tracking-tighter uppercase italic">
                   <CalendarIcon className="w-6 h-6 text-primary glow-red-subtle" /> 
@@ -392,18 +318,22 @@ const Index = () => {
                   <span className="text-primary/60 text-base font-bold tracking-normal italic lowercase">{selectedClient?.name || 'geral'}</span>
                 </h2>
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={handlePrevMonth}
-                    className="h-10 w-10 flex items-center justify-center hover:bg-white/5 rounded-2xl border border-white/5 transition-all text-white/30 hover:text-white"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button 
-                  onClick={handleNextMonth}
-                    className="h-10 w-10 flex items-center justify-center hover:bg-white/5 rounded-2xl border border-white/5 transition-all text-white/30 hover:text-white"
-                  >
-                    <ChevronRightIcon className="w-4 h-4" />
-                  </button>
+                  {loggedUserRole !== 'GUEST' && (
+                    <>
+                      <button 
+                        onClick={handlePrevMonth}
+                        className="h-10 w-10 flex items-center justify-center hover:bg-white/5 rounded-2xl border border-white/5 transition-all text-white/30 hover:text-white"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={handleNextMonth}
+                        className="h-10 w-10 flex items-center justify-center hover:bg-white/5 rounded-2xl border border-white/5 transition-all text-white/30 hover:text-white"
+                      >
+                        <ChevronRightIcon className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-1.5">
@@ -421,7 +351,17 @@ const Index = () => {
                       <span className={`text-[13px] font-black ${isToday(day) ? 'text-primary' : 'text-white/20'}`}>{format(day, 'd')}</span>
                       <div className="mt-2 space-y-1.5 overflow-hidden">
                         {dayTasks.slice(0, 2).map((t, i) => (
-                          <div key={i} className="text-[8.5px] font-black bg-white/[0.04] text-primary/80 px-2.5 py-1.5 rounded-xl border-l-2 border-primary truncate shadow-sm transition-all group-hover:translate-x-1 group-hover:bg-primary/10 group-hover:text-white">
+                          <div 
+                            key={i} 
+                            onClick={(e) => {
+                              if (loggedUserRole === 'GUEST') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/calendario/${t.calendarClientId}`);
+                              }
+                            }}
+                            className="text-[8.5px] font-black bg-white/[0.04] text-primary/80 px-2.5 py-1.5 rounded-xl border-l-2 border-primary truncate shadow-sm transition-all group-hover:translate-x-1 group-hover:bg-primary/10 group-hover:text-white"
+                          >
                             {t.clientName}
                           </div>
                         ))}
@@ -434,59 +374,69 @@ const Index = () => {
           </div>
 
           {/* Right Column (4/12) */}
-          <div className="lg:col-span-4 space-y-5">
-            <div className="grid grid-cols-1 gap-4">
-              {[
-                { icon: CalendarIcon, label: 'Calendário', sub: `${metrics.currMonthTasks.length} artes geradas`, path: '/calendario' },
-                { icon: FileEdit, label: 'Alterações', sub: `${metrics.changesCount} tarefas`, path: '/correcao', urgent: metrics.changesCount > 0 },
-                { icon: Folder, label: 'Banco de Dados', sub: 'Hub Operacional', path: '/cofre' },
-                { icon: MessageSquare, label: 'WhatsApp', sub: 'Mensagens diretas', path: '/whatsapp' },
-              ].map(item => (
-                <button key={item.label} onClick={() => navigate(item.path)} className="glass-card-hover p-5 flex items-center justify-between group border-white/5 shadow-2xl hover:translate-x-1">
-                  <div className="flex items-center gap-5">
-                    <div className={`p-3.5 rounded-[1.2rem] bg-white/[0.03] border border-white/10 group-hover:bg-primary group-hover:text-white transition-all duration-500 shadow-lg glow-red-subtle`}>
-                      <item.icon className="w-5 h-5 shadow-sm" />
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-sm font-black text-white/90 tracking-tight">{item.label}</h3>
-                      <p className={`text-[9.5px] uppercase font-black tracking-[0.2em] mt-1 ${item.urgent ? 'text-primary animate-pulse' : 'text-white/20'}`}>{item.sub}</p>
-                    </div>
+          <div className="lg:col-span-4 flex flex-col gap-4">
+            {[
+              { icon: CalendarIcon, label: 'Calendário', sub: `${metrics.currMonthTasks.length} artes geradas`, path: selectedClientId !== 'all' ? `/calendario/${selectedClientId}` : '/calendario' },
+              { icon: FileEdit, label: 'Alterações', sub: `${metrics.changesCount} tarefas`, path: '/correcao', urgent: metrics.changesCount > 0, hideForGuest: true },
+              { icon: Folder, label: 'Banco de Dados', sub: 'Hub Operacional', path: '/cofre', hideForGuest: true },
+              { icon: MessageSquare, label: 'WhatsApp', sub: 'Mensagens diretas', path: '/whatsapp', hideForGuest: true },
+              { icon: Briefcase, label: 'Produtos', sub: 'E-commerce Mac', path: '/produtos', hideForGuest: true },
+              { icon: Send, label: 'Postagem', sub: 'Hub de Midia', path: '/postagem', hideForGuest: true },
+            ].filter(item => loggedUserRole !== 'GUEST' || !item.hideForGuest).map(item => (
+              <button key={item.label} onClick={() => navigate(item.path)} className="glass-card-hover p-5 flex items-center justify-between group border-white/5 shadow-2xl hover:translate-x-1 flex-1">
+                <div className="flex items-center gap-5">
+                  <div className={`p-3.5 rounded-[1.2rem] bg-white/[0.03] border border-white/10 group-hover:bg-primary group-hover:text-white transition-all duration-500 shadow-lg glow-red-subtle`}>
+                    <item.icon className="w-5 h-5 shadow-sm" />
                   </div>
-                  <ChevronRightIcon className="w-4 h-4 text-white/5 group-hover:text-primary transition-all translate-x-4 group-hover:translate-x-0 opacity-0 group-hover:opacity-100" />
-                </button>
-              ))}
-            </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-black text-white/90 tracking-tight">{item.label}</h3>
+                    <p className={`text-[9.5px] uppercase font-black tracking-[0.2em] mt-1 ${item.urgent ? 'text-primary animate-pulse' : 'text-white/20'}`}>{item.sub}</p>
+                  </div>
+                </div>
+                <ChevronRightIcon className="w-4 h-4 text-white/5 group-hover:text-primary transition-all translate-x-4 group-hover:translate-x-0 opacity-0 group-hover:opacity-100" />
+              </button>
+            ))}
+          </div>
+        </div>
 
-            <div className="glass-card flex flex-col border-white/5 shadow-2xl">
-              <div className="p-6 border-b border-white/[0.03] flex items-center justify-between bg-white/[0.01]">
-                <h2 className="text-[11px] font-black tracking-[0.25em] text-white/20 uppercase flex items-center gap-3 italic">
-                  <Users className="w-4.5 h-4.5 text-primary glow-red-subtle" /> Equipe Mac Mídia
-                </h2>
-                {loggedUserRole === 'ADMIN' && (
-                  <button onClick={() => setShowAdd(true)} className="h-9 w-9 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all border border-white/10 text-white/40 shadow-lg hover:text-white hover:border-primary/40"><UserPlus className="w-4 h-4" /></button>
-                )}
-              </div>
-              <div className="p-3 space-y-2 max-h-[420px] overflow-y-auto custom-scrollbar">
-                {employees.slice(0, 10).map((emp, idx) => (
-                  <div key={emp.id} onClick={() => navigate(`/funcionario/${emp.id}`)} className="flex items-center gap-4.5 p-4 rounded-3xl hover:bg-white/5 transition-all cursor-pointer group/emp">
-                    <div className="relative">
-                      <div className="w-11 h-11 rounded-[1.1rem] bg-white/5 overflow-hidden border border-white/10 group-hover/emp:border-primary/60 transition-all shadow-xl">
-                        {emp.photoUrl ? <img src={emp.photoUrl} className="w-full h-full object-cover group-hover/emp:scale-110 transition-transform duration-700" /> : <span className="text-2xl flex items-center justify-center h-full opacity-20">{emp.avatar}</span>}
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-[3px] border-[#020202] bg-emerald-500 shadow-2xl" />
+        {/* Horizontal Team Section at the Bottom */}
+        <div className="bg-[#0A0A0B] flex flex-col border border-white/5 rounded-[1.8rem] shadow-2xl animate-fade-in group/team-section overflow-hidden mt-2">
+          <div className="p-5 border-b border-white/[0.03] flex items-center justify-between bg-white/[0.01]">
+            <h2 className="text-[11px] font-black tracking-[0.25em] text-white/30 uppercase flex items-center gap-3 italic">
+              <Users className="w-4.5 h-4.5 text-primary" /> Equipe Mac Mídia
+            </h2>
+            {loggedUserRole === 'ADMIN' && (
+              <button onClick={() => setShowAdd(true)} className="h-9 w-9 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all border border-white/10 text-white/40 shadow-lg hover:text-white hover:border-primary/40"><UserPlus className="w-4 h-4" /></button>
+            )}
+          </div>
+          <div className="p-6 overflow-x-auto custom-scrollbar">
+            <div className="flex items-center gap-8 min-w-max pb-2 px-1">
+              {employees.slice(0, 15).map((emp, idx) => (
+                <div 
+                  key={emp.id} 
+                  onClick={() => {
+                    if (loggedUserRole !== 'GUEST') {
+                      navigate(`/funcionario/${emp.id}`);
+                    }
+                  }} 
+                  className={`flex flex-col items-center gap-3 transition-all ${loggedUserRole !== 'GUEST' ? 'hover:scale-110 cursor-pointer group/emp' : 'bg-transparent cursor-default'}`}
+                >
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-2xl bg-white/5 overflow-hidden border border-white/10 group-hover/emp:border-primary/60 transition-all">
+                      {emp.photoUrl ? (
+                        <img src={emp.photoUrl} className="w-full h-full object-cover grayscale-[0.3] group-hover/emp:grayscale-0 transition-all duration-500" />
+                      ) : (
+                        <span className="text-2xl flex items-center justify-center h-full opacity-40">{emp.avatar}</span>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0 pr-2">
-                      <h4 className="text-[14px] font-black text-white/90 truncate group-hover/emp:text-white transition-colors leading-tight mb-0.5">{emp.name}</h4>
-                      <div className="flex items-center gap-2">
-                        <p className="text-[10px] text-white/25 uppercase font-black tracking-widest truncate leading-none">{emp.role}</p>
-                        {/* Live Status Indicator */}
-                        <span className={`flex h-1.5 w-1.5 rounded-full ${idx < 3 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-white/10'}`} />
-                      </div>
-                    </div>
-                    <ChevronRightIcon className="w-4 h-4 text-white/5 group-hover/emp:text-primary transition-all translate-x-4 group-hover/emp:translate-x-0 opacity-0 group-hover/emp:opacity-100" />
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-[3px] border-[#0A0A0B] bg-emerald-500" />
                   </div>
-                ))}
-              </div>
+                  <div className="text-center">
+                    <h4 className="text-[10px] font-black text-white px-1 truncate max-w-[85px] group-hover/emp:text-primary transition-colors uppercase tracking-tight">{emp.name.split(' ')[0]}</h4>
+                    <p className="text-[8px] text-white/50 uppercase font-black tracking-widest leading-none mt-1">{emp.role.split(' ')[0]}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

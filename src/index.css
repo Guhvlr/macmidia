@@ -56,30 +56,32 @@
     @apply border-border;
   }
 
+  /* Force hide global scroll for better internal control */
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
   }
 
   /* Custom sleek scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
-    height: 12px; /* Thicker for easier horizontal scrolling */
+    height: 12px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(0 80% 52% / 0.4); /* Mac Mídia Red - Translucent */
+    background: hsl(0 80% 52% / 0.4);
     border-radius: 100px;
     border: 3px solid transparent;
     background-clip: padding-box;
     transition: background 0.3s;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 80% 52% / 0.9) !important; /* Brighter red on hover */
+    background: hsl(0 80% 52% / 0.9) !important;
     background-clip: padding-box;
   }
 
@@ -87,11 +89,6 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: hsl(0 80% 52% / 0.4) transparent;
-  }
-
-  /* Allow main vertical scrollbar */
-  body {
-    overflow-y: auto !important;
   }
 
   /* Ensure internal columns can still scroll */
@@ -104,7 +101,7 @@
 
   /* ── Glass card system ── */
   .glass-card {
-    @apply bg-[#0D0E10]/80 backdrop-blur-3xl border border-white/5 rounded-[1.8rem] overflow-hidden isolate;
+    @apply bg-[#0D0E10]/80 backdrop-blur-xl border border-white/5 rounded-[1.8rem] overflow-hidden isolate;
     box-shadow:
       0 30px 60px -12px rgba(0, 0, 0, 0.9),
       0 0 40px -10px rgba(255, 255, 255, 0.02),

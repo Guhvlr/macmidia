@@ -142,7 +142,7 @@ const Employee = () => {
         </div>
 
         {/* Kanban board */}
-        <div className="flex-1 flex gap-4 overflow-x-auto pb-4 items-start min-h-0">
+        <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start min-h-0 custom-scrollbar">
           {columns.map(col => (
             <KanbanColumn
               key={col.id}

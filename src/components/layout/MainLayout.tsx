@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import AppSidebar from './AppSidebar';
-import Breadcrumbs from './Breadcrumbs';
 import { useApp } from '@/contexts/useApp';
 
 interface Props {
@@ -59,13 +58,8 @@ const MainLayout = ({ children, title }: Props) => {
           collapsed ? 'ml-[68px]' : 'ml-[220px]'
         }`}
       >
-        {/* Centralized Breadcrumb Area */}
-        <div className="p-6 pb-0 flex-shrink-0 print:hidden sticky top-0 z-30 bg-gradient-to-b from-[#020202] via-[#020202]/90 to-transparent">
-          <Breadcrumbs />
-        </div>
-        
         {/* Main Content Page Container */}
-        <div className="flex-1 animate-fade-in">
+        <div className="flex-1 animate-fade-in flex flex-col min-h-0">
           {children}
         </div>
       </main>

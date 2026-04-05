@@ -140,9 +140,12 @@ const ClientCalendar = () => {
   }
 
   // Security check for GUEST
-  if (loggedUserRole === 'GUEST' && loggedUserClientLink && clientId !== loggedUserClientLink) {
-    navigate(`/calendario/${loggedUserClientLink}`, { replace: true });
-    return null;
+  if (loggedUserRole === 'GUEST' && loggedUserClientLink) {
+    const allowedIds = loggedUserClientLink.split(',');
+    if (!allowedIds.includes(clientId || '')) {
+      navigate(`/calendario/${allowedIds[0]}`, { replace: true });
+      return null;
+    }
   }
 
   const clientTasks = calendarTasks.filter(t => t.calendarClientId === clientId);

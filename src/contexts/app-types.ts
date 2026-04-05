@@ -120,7 +120,7 @@ export const DEFAULT_COLUMNS = [
   { columnKey: 'em-producao', title: 'Em Produção', color: 'bg-warning', position: 1 },
   { columnKey: 'alteracao', title: 'Alteração', color: 'bg-primary', position: 2 },
   { columnKey: 'para-correcao', title: 'Para Correção', color: 'bg-destructive', position: 3 },
-  { columnKey: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive', position: 4 },
+  { columnKey: 'correcao-cliente', title: 'Para Aprovação do Cliente', color: 'bg-destructive', position: 4 },
   { columnKey: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-success', position: 5 },
   { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 6 },
 ] as const;

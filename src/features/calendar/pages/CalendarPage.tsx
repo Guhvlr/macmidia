@@ -51,7 +51,8 @@ const CalendarPage = () => {
   const accessibleClients = useMemo(() => {
     if (loggedUserRole !== 'GUEST') return calendarClients;
     if (!loggedUserClientLink) return [];
-    return calendarClients.filter(c => c.id === loggedUserClientLink);
+    const allowedIds = loggedUserClientLink.split(',');
+    return calendarClients.filter(c => allowedIds.includes(c.id));
   }, [calendarClients, loggedUserRole, loggedUserClientLink]);
 
   useEffect(() => {

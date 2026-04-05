@@ -105,9 +105,12 @@ const Index = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('');
-  const [selectedClientId, setSelectedClientId] = useState<string | 'all'>(
-    loggedUserRole === 'GUEST' && loggedUserClientLink ? loggedUserClientLink : 'all'
-  );
+  const [selectedClientId, setSelectedClientId] = useState<string | 'all'>(() => {
+    if (loggedUserRole === 'GUEST' && loggedUserClientLink) {
+      return loggedUserClientLink.split(',')[0];
+    }
+    return 'all';
+  });
   const [viewDate, setViewDate] = useState(new Date());
   
   const logoSrc = dashboardLogo || defaultLogo;
@@ -208,7 +211,7 @@ const Index = () => {
 
   return (
     <>
-      <div className="h-screen bg-[#020202] p-6 lg:p-7 space-y-5 overflow-y-auto custom-scrollbar dashboard-main-container" style={{ transform: 'scale(1)', transformOrigin: 'top center' }}>
+      <div className="flex-1 min-h-0 bg-[#020202] p-6 lg:p-7 space-y-5 overflow-y-auto custom-scrollbar dashboard-main-container" style={{ transform: 'scale(1)', transformOrigin: 'top center' }}>
         {/* Top Header */}
         <div className="flex items-center justify-between animate-fade-in h-12 px-2">
           <div className="flex items-center gap-6">
@@ -218,7 +221,7 @@ const Index = () => {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            {loggedUserRole !== 'GUEST' && (
+            {(loggedUserRole !== 'GUEST' || (loggedUserRole === 'GUEST' && loggedUserClientLink && loggedUserClientLink.split(',').length > 1)) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="glass-card px-4 py-2 flex items-center gap-3 hover:bg-white/5 transition-all outline-none border-white/[0.03] shadow-2xl">
@@ -230,22 +233,31 @@ const Index = () => {
                 <DropdownMenuContent className="glass-card border-white/10 bg-[#0a0a0a]/98 w-64 backdrop-blur-3xl p-1.5 shadow-[0_30px_60px_rgba(0,0,0,1)]">
                   <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 px-3 py-2">Filtro de Unidade</DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-white/5 mx-1" />
-                  <DropdownMenuItem onClick={() => setSelectedClientId('all')} className="text-xs font-bold py-3 px-3 cursor-pointer rounded-xl hover:bg-white/5 transition-colors">
-                    Visão Global
-                  </DropdownMenuItem>
-                  {Array.isArray(calendarClients) && calendarClients.map(client => (
-                    <DropdownMenuItem key={client.id} onClick={() => setSelectedClientId(client.id)} className="text-xs font-bold py-3 px-3 cursor-pointer flex items-center gap-4 rounded-xl hover:bg-white/5 transition-colors">
-                      <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden border border-white/10">
-                        {client.logoUrl ? <img src={client.logoUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] opacity-40">{client.name[0]}</span>}
-                      </div>
-                      <span className="truncate">{client.name}</span>
+                  
+                  {loggedUserRole !== 'GUEST' && (
+                    <DropdownMenuItem onClick={() => setSelectedClientId('all')} className="text-xs font-bold py-3 px-3 cursor-pointer rounded-xl hover:bg-white/5 transition-colors">
+                      Visão Global
                     </DropdownMenuItem>
-                  ))}
+                  )}
+                  
+                  {Array.isArray(calendarClients) && calendarClients
+                    .filter(client => {
+                      if (loggedUserRole !== 'GUEST') return true;
+                      return (loggedUserClientLink || '').split(',').includes(client.id);
+                    })
+                    .map(client => (
+                      <DropdownMenuItem key={client.id} onClick={() => setSelectedClientId(client.id)} className="text-xs font-bold py-3 px-3 cursor-pointer flex items-center gap-4 rounded-xl hover:bg-white/5 transition-colors">
+                        <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden border border-white/10">
+                          {client.logoUrl ? <img src={client.logoUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] opacity-40">{client.name[0]}</span>}
+                        </div>
+                        <span className="truncate">{client.name}</span>
+                      </DropdownMenuItem>
+                    ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
-            {loggedUserRole === 'GUEST' && selectedClient && (
+            {loggedUserRole === 'GUEST' && selectedClient && (!loggedUserClientLink || loggedUserClientLink.split(',').length <= 1) && (
               <div className="glass-card px-4 py-2 flex items-center gap-3 border-white/[0.03] shadow-2xl opacity-60">
                 <Users className="w-3.5 h-3.5 text-primary" />
                 <span className="text-[9px] font-black uppercase tracking-[0.2em]">{selectedClient.name}</span>
@@ -409,8 +421,8 @@ const Index = () => {
               <button onClick={() => setShowAdd(true)} className="h-9 w-9 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all border border-white/10 text-white/40 shadow-lg hover:text-white hover:border-primary/40"><UserPlus className="w-4 h-4" /></button>
             )}
           </div>
-          <div className="p-6 overflow-x-auto custom-scrollbar">
-            <div className="flex items-center gap-8 min-w-max pb-2 px-1">
+          <div className="p-6 pb-2 overflow-x-auto trello-scrollbar w-full">
+            <div className="flex flex-nowrap items-center gap-8 min-w-max pb-4 px-1">
               {employees.slice(0, 15).map((emp, idx) => (
                 <div 
                   key={emp.id} 

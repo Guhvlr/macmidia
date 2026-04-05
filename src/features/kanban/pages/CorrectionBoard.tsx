@@ -68,7 +68,7 @@ const CorrectionBoard = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-x-auto min-h-0 p-6 flex gap-5 items-start">
+      <main className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar">
         {CORRECTION_COLUMNS.map(col => {
           const colCards = cardsByColumn[col.key] || [];
           return (
@@ -76,7 +76,7 @@ const CorrectionBoard = () => {
               key={col.key}
               onDragOver={handleDragOver}
               onDrop={e => handleDrop(e, col.key)}
-              className="flex flex-col h-full min-w-[340px] w-[360px] flex-shrink-0"
+              className="flex flex-col h-fit max-h-full min-w-[340px] w-[360px] flex-shrink-0 mb-10"
             >
               <div className="flex items-center justify-between mb-3 px-1 flex-shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -94,7 +94,7 @@ const CorrectionBoard = () => {
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 rounded-2xl bg-[#0f0f11]/60 border border-white/5 shadow-inner">
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-24 rounded-2xl bg-[#0f0f11]/60 border border-white/5 shadow-inner max-h-[calc(100vh-200px)]">
                 {colCards.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center p-8 opacity-40">
                     <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3">

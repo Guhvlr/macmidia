@@ -21,7 +21,7 @@ async function importProducts() {
       const workbook = XLSX.readFile(file.path);
       const sheetName = workbook.SheetNames[0];
       const raw = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-      
+
       console.log(`📊 Linhas encontradas: ${raw.length}`);
 
       if (file.type === 'brasil') {

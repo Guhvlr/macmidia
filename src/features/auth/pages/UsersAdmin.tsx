@@ -154,8 +154,19 @@ const UsersAdmin = () => {
                   <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-orange-500/60 uppercase">Vínculo de Cliente</span>
-                        <span className="text-xs font-bold text-orange-500 truncate max-w-[150px]">{user.clientLink || 'NÃO DEFINIDO'}</span>
+                        <span className="text-[9px] font-black text-orange-500/60 uppercase">Vínculo de Clientes</span>
+                        <span className="text-xs font-bold text-orange-500 truncate max-w-[150px]" title={
+                          Array.from(new Set((user.clientLink || '').split(',').filter(Boolean)))
+                            .map(id => calendarClients.find(c => c.id === id)?.name || id)
+                            .join(', ')
+                        }>
+                          {user.clientLink ? 
+                            Array.from(new Set(user.clientLink.split(',').filter(Boolean)))
+                              .map(id => calendarClients.find(c => c.id === id)?.name || id)
+                              .join(', ') : 
+                            'NÃO DEFINIDO'
+                          }
+                        </span>
                       </div>
                       {user.kanbanLink && (
                         <div className="flex flex-col border-t border-orange-500/10 pt-1">
@@ -207,26 +218,44 @@ const UsersAdmin = () => {
               {actionType === 'PROMOTE_GUEST' && 'O usuário terá acesso limitado APENAS ao calendário e cards do cliente especificado.'}
             </AlertDialogDescription>
             {actionType === 'PROMOTE_GUEST' && (
-              <div className="mt-4 space-y-2">
-                <label className="text-xs font-bold text-white/40 uppercase tracking-widest">Selecione o Cliente</label>
-                <Select value={clientLink} onValueChange={setClientLink}>
-                  <SelectTrigger className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white">
-                    <SelectValue placeholder="Escolha um cliente da lista..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1C1C1E] border-white/10 text-white max-h-[300px]">
-                    {calendarClients.map(client => (
-                      <SelectItem key={client.id} value={client.name}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                    {calendarClients.length === 0 && (
-                      <div className="p-4 text-center text-xs text-white/30 italic">
-                        Nenhum cliente cadastrado no calendário.
+              <div className="mt-4 space-y-3">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest block">Vinculo de Clientes</label>
+                <div className="bg-[#121214] border border-white/10 rounded-xl max-h-48 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                  {calendarClients.map(client => {
+                    const isSelected = clientLink.split(',').includes(client.id);
+                    return (
+                      <div key={client.id} className="flex items-center gap-3 group/item">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = clientLink ? Array.from(new Set(clientLink.split(',').filter(Boolean))) : [];
+                            let next;
+                            if (current.includes(client.id)) {
+                              next = current.filter(id => id !== client.id);
+                            } else {
+                              next = [...current, client.id];
+                            }
+                            setClientLink(next.join(','));
+                          }}
+                          className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${
+                            clientLink.split(',').includes(client.id) ? 'bg-primary border-primary' : 'border-white/20 group-hover/item:border-primary/50'
+                          }`}
+                        >
+                          {clientLink.split(',').includes(client.id) && <Check className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                        <span className={`text-xs font-medium transition-colors ${isSelected ? 'text-white' : 'text-white/40 group-hover/item:text-white/70'}`}>
+                          {client.name}
+                        </span>
                       </div>
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-[10px] text-white/30 italic">O visitante só verá cards vinculados a este nome.</p>
+                    );
+                  })}
+                  {calendarClients.length === 0 && (
+                    <div className="text-center py-4">
+                      <p className="text-[10px] text-white/20 uppercase tracking-widest italic font-bold">Nenhum cliente cadastrado no calendário</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-white/30 italic">O visitante verá calendários e métricas apenas dos clientes selecionados.</p>
               </div>
             )}
 

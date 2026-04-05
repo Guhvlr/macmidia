@@ -3,7 +3,7 @@ import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Send, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import KanbanCard from '@/components/KanbanCard';
+import KanbanCard from '@/features/kanban/components/KanbanCard';
 
 const POSTING_COLUMNS = [
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },

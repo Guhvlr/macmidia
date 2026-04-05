@@ -3,8 +3,8 @@ import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import KanbanCard from '@/components/KanbanCard';
-import AddCardDialog from '@/components/AddCardDialog';
+import KanbanCard from '@/features/kanban/components/KanbanCard';
+import AddCardDialog from '@/features/kanban/components/AddCardDialog';
 
 const CORRECTION_COLUMNS = [
   { key: 'para-producao', title: 'Para Produção', color: 'bg-info' },

@@ -185,11 +185,11 @@ Deno.serve(async (req) => {
     const detected = findMediaDeep(message);
     const mData = detected?.data || {};
 
-    let messageType = detected?.type || (messageData.messageType === 'document' ? 'document' : 'text');
-    let mediaUrl = mData.url || messageData.mediaUrl || payload.mediaUrl || null;
-    let mediaMimeType = mData.mimetype || messageData.mimeType || null;
+    const messageType = detected?.type || (messageData.messageType === 'document' ? 'document' : 'text');
+    const mediaUrl = mData.url || messageData.mediaUrl || payload.mediaUrl || null;
+    const mediaMimeType = mData.mimetype || messageData.mimeType || null;
     
-    let messageText = message.conversation || 
+    const messageText = message.conversation || 
                       message.extendedTextMessage?.text || 
                       messageData.body || 
                       mData.caption || 

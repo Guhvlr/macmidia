@@ -1,8 +1,18 @@
-import { useContext } from 'react';
-import { AppContext } from './app-context';
+import { useAuth } from './AuthContext';
+import { useKanban } from './KanbanContext';
+import { useUI } from './UIContext';
+import { useAutomation } from './AutomationContext';
 
 export function useApp() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
-  return ctx;
+  const auth = useAuth();
+  const kanban = useKanban();
+  const ui = useUI();
+  const automation = useAutomation();
+
+  return {
+    ...auth,
+    ...kanban,
+    ...ui,
+    ...automation
+  };
 }

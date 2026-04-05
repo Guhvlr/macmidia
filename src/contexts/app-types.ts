@@ -7,6 +7,12 @@ export interface CardAction {
   createdAt: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface SystemUser {
   id: string;
   fullName: string;
@@ -157,6 +163,7 @@ export interface AppState {
   moveKanbanCard: (id: string, column: string) => void;
   triggerAICorrection: (cardId: string) => void;
   fixDescriptionWithAI: (cardId: string, mode?: 'keep_sequence' | 'organize') => Promise<void>;
+  customAICommand: (cardId: string, userPrompt: string) => Promise<void>;
   addKanbanColumn: (employeeId: string, title: string, color: string) => void;
   updateKanbanColumn: (id: string, updates: Partial<KanbanColumnDef>) => void;
   deleteKanbanColumn: (id: string) => void;

@@ -16,19 +16,34 @@ export type Database = {
     Tables: {
       calendar_clients: {
         Row: {
+          address: string | null
           created_at: string
+          email: string | null
           id: string
+          logo_url: string | null
           name: string
+          notes: string | null
+          phones: string[] | null
         }
         Insert: {
+          address?: string | null
           created_at?: string
+          email?: string | null
           id: string
+          logo_url?: string | null
           name: string
+          notes?: string | null
+          phones?: string[] | null
         }
         Update: {
+          address?: string | null
           created_at?: string
+          email?: string | null
           id?: string
+          logo_url?: string | null
           name?: string
+          notes?: string | null
+          phones?: string[] | null
         }
         Relationships: []
       }

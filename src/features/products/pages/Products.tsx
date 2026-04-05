@@ -53,7 +53,7 @@ export default function Products() {
   }, []);
 
   const padEan = (ean: string) => {
-    let clean = (ean || '').replace(/[^0-9]/g, '');
+    const clean = (ean || '').replace(/[^0-9]/g, '');
     if (clean.length > 1 && clean.length < 13) return clean.padStart(13, '0');
     return clean;
   };

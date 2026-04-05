@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Upload, X, ZoomIn, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -273,6 +273,10 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          <div className="sr-only">
+            <DialogTitle>Detalhes do Card: {clientName || 'Sem nome'}</DialogTitle>
+            <DialogDescription>Visualize e gerencie as informações e histórico deste card de produção.</DialogDescription>
+          </div>
           {isDragging && !isUploading && (
             <div className="absolute inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center backdrop-blur-md border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none">
               <Upload className="w-16 h-16 text-primary mb-4" />
@@ -389,6 +393,10 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
       <Dialog open={previewIndex !== null} onOpenChange={(open) => !open && setPreviewIndex(null)}>
         <DialogContent className="bg-black/95 max-w-[85vw] p-0 border-none shadow-2xl flex items-center justify-center">
+          <div className="sr-only">
+            <DialogTitle>Pré-visualização de Imagem</DialogTitle>
+            <DialogDescription>Visualização em tela cheia do anexo selecionado.</DialogDescription>
+          </div>
           {previewIndex !== null && (
             <div className="relative w-full h-full flex items-center justify-center">
               {/* Navegação */}

@@ -1,20 +1,23 @@
-import { ReactNode, useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { Pencil, Trash2 } from 'lucide-react';
 import AddCardDialog from './AddCardDialog';
+import KanbanCard from './KanbanCard';
+
+import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 
 interface Props {
   id: string;
   title: string;
   color: string;
-  children: ReactNode;
+  cards: KanbanCardType[];
   count: number;
   employeeId: string;
   onEdit?: () => void;
   onDelete?: () => void;
 }
 
-const KanbanColumnInner = ({ id, title, color, children, count, employeeId, onEdit, onDelete }: Props) => {
+const KanbanColumnInner = ({ id, title, color, cards, count, employeeId, onEdit, onDelete }: Props) => {
   const { moveKanbanCard } = useApp();
   const [dragOver, setDragOver] = useState(false);
 
@@ -67,7 +70,9 @@ const KanbanColumnInner = ({ id, title, color, children, count, employeeId, onEd
           : 'bg-secondary/15 border-border/25'
         }`}
       >
-        {children}
+        {cards.map(card => (
+          <KanbanCard key={card.id} card={card} />
+        ))}
 
         {/* Add card button at the bottom of the column */}
         <AddCardDialog

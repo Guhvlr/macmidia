@@ -6,7 +6,7 @@ import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Spark
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
@@ -363,7 +363,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
   }
 
   return (
-    <div className="min-h-screen gradient-bg">
+    <div className="h-screen flex flex-col gradient-bg overflow-hidden">
       {/* Header */}
       <header className="px-6 md:px-12 py-8 flex flex-col gap-6 bg-[#0a0a0c]/80 backdrop-blur-xl border-b border-white/5 relative">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500/40 via-transparent to-green-500/40" />
@@ -421,7 +421,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
         </div>
       </header>
 
-      <main className="p-6 md:p-12 max-w-5xl mx-auto">
+      <main className="flex-1 overflow-y-auto p-6 md:p-12 max-w-5xl mx-auto w-full custom-scrollbar">
         {/* Empty state */}
         {messages.length === 0 && (
           <div className="glass-card p-16 text-center max-w-lg mx-auto border-dashed border-white/10 mt-10">
@@ -499,8 +499,8 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
 
       {/* Send to Kanban Dialog */}
       <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
-        <DialogContent className="bg-[#121214] border-white/10 text-white max-w-4xl p-0 rounded-2xl overflow-hidden shadow-2xl">
-          <div className="flex h-[80vh] min-h-[500px]">
+        <DialogContent className="bg-[#121214] border-white/10 text-white max-w-4xl p-0 rounded-2xl overflow-hidden shadow-2xl h-[90vh] sm:h-[80vh]">
+          <div className="flex h-full min-h-0">
             {/* Left side: Form */}
             <div className="flex-1 flex flex-col min-w-0">
               <DialogHeader className="p-6 pb-0">
@@ -510,6 +510,9 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                   </div>
                   Enviar para o Kanban
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Formulário para transformar uma mensagem do WhatsApp em um card de produção no Kanban.
+                </DialogDescription>
               </DialogHeader>
 
               {selectedMessage && (

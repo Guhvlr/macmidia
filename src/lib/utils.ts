@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const compressImage = (file: File): Promise<string> => {
+export const compressImage = (file: File, maxWidth = 1600, quality = 0.8): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -14,30 +14,59 @@ export const compressImage = (file: File): Promise<string> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 2048;
-        const MAX_HEIGHT = 2048;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
           }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
+          if (height > maxWidth) {
+            width *= maxWidth / height;
+            height = maxWidth;
           }
         }
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.95));
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
       img.onerror = (error) => reject(error);
     };
     reader.onerror = (error) => reject(error);
+  });
+};
+
+export const createThumbnail = (base64: string): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const size = 300;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > size) {
+          height *= size / width;
+          width = size;
+        }
+      } else {
+        if (height > size) {
+          width *= size / height;
+          height = size;
+        }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.6));
+    };
+    img.onerror = () => resolve(base64); // Fallback to original
   });
 };

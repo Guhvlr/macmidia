@@ -76,13 +76,16 @@ export interface CalendarTask {
   id: string;
   date: string;
   clientName: string;
-  contentType: string;
-  description: string;
-  time: string;
+  contentType?: string;
+  description?: string;
+  time?: string;
   imageUrl?: string;
   status: string;
-  employeeId: string;
+  employeeId?: string;
   calendarClientId: string;
+  reference_links?: string[];
+  content?: string;
+  images?: string[];
 }
 
 export interface Credential {

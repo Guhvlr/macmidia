@@ -149,15 +149,12 @@ const Employee = () => {
               id={col.columnKey}
               title={col.title}
               color={col.color}
+              cards={cardsByColumn[col.columnKey] || []}
               count={(cardsByColumn[col.columnKey] || []).length}
               employeeId={employee.id}
               onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
               onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
-            >
-              {(cardsByColumn[col.columnKey] || []).map(card => (
-                <KanbanCard key={card.id} card={card} />
-              ))}
-            </KanbanColumn>
+            />
           ))}
 
           {/* "+ Nova Coluna" button — fixed at the end of all columns */}

@@ -40,7 +40,7 @@ const UsersAdmin = () => {
 
   const handleAction = async () => {
     if (!targetUser || !actionType) return;
-    
+
     let res;
     if (actionType === 'DELETE') {
       res = await adminDeleteUser(targetUser);
@@ -62,13 +62,13 @@ const UsersAdmin = () => {
     } else {
       toast.error(res?.error || 'Erro ao processar a ação');
     }
-    
+
     setTargetUser(null);
     setActionType(null);
   };
 
-  const filteredUsers = systemUsers.filter(u => 
-    u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredUsers = systemUsers.filter(u =>
+    u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -82,7 +82,7 @@ const UsersAdmin = () => {
             </Button>
             <div>
               <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" /> 
+                <Shield className="w-5 h-5 text-primary" />
                 Acessos da Equipe
               </h1>
               <p className="text-xs text-white/50 mt-1">
@@ -90,7 +90,7 @@ const UsersAdmin = () => {
               </p>
             </div>
           </div>
-          
+
           <div className="relative w-full md:max-w-[300px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <Input
@@ -107,7 +107,7 @@ const UsersAdmin = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map(user => (
             <div key={user.id} className="bg-[#1C1C1E] border border-white/5 hover:border-white/10 p-5 rounded-2xl flex flex-col transition-all group overflow-hidden relative">
-              
+
               {/* If it's the current user, add a badge */}
               {user.id === loggedUserId && (
                 <div className="absolute top-0 right-0 py-1 px-3 text-[10px] bg-primary/20 text-primary font-bold rounded-bl-xl border-b border-l border-primary/20">
@@ -124,24 +124,24 @@ const UsersAdmin = () => {
                   <p className="text-xs text-white/50 truncate" title={user.email}>{user.email}</p>
                 </div>
               </div>
-              
+
               <div className="mt-4 flex flex-col gap-3">
                 <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
-                  <button 
+                  <button
                     onClick={() => { setTargetUser(user.id); setActionType('PROMOTE'); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${user.role === 'ADMIN' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                   >
                     <Shield className="w-3.5 h-3.5" />
                     Admin
                   </button>
-                  <button 
+                  <button
                     onClick={() => { setTargetUser(user.id); setActionType('DEMOTE'); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${user.role === 'USER' ? 'bg-white/10 text-white border border-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                   >
                     <Users className="w-3.5 h-3.5" />
                     Membro
                   </button>
-                  <button 
+                  <button
                     onClick={() => { setTargetUser(user.id); setActionType('PROMOTE_GUEST'); setClientLink(user.clientLink || ''); setKanbanBoard(user.kanbanLink || ''); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${user.role === 'GUEST' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                   >
@@ -160,10 +160,10 @@ const UsersAdmin = () => {
                             .map(id => calendarClients.find(c => c.id === id)?.name || id)
                             .join(', ')
                         }>
-                          {user.clientLink ? 
+                          {user.clientLink ?
                             Array.from(new Set(user.clientLink.split(',').filter(Boolean)))
                               .map(id => calendarClients.find(c => c.id === id)?.name || id)
-                              .join(', ') : 
+                              .join(', ') :
                             'NÃO DEFINIDO'
                           }
                         </span>
@@ -184,12 +184,12 @@ const UsersAdmin = () => {
                   </div>
                 )}
               </div>
-              
+
               <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
                 <div className="text-[10px] text-white/30 font-medium">
                   {user.id === loggedUserId ? 'Seu próprio acesso' : `Cadastrado em: ${new Date(user.createdAt).toLocaleDateString()}`}
                 </div>
-                
+
                 {user.id !== loggedUserId && (
                   <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10 rounded-lg text-white/20 hover:text-destructive group-hover:text-white/40 transition-colors"
                     onClick={() => { setTargetUser(user.id); setActionType('DELETE'); }} title="Remover usuário permanentemente">
@@ -206,10 +206,10 @@ const UsersAdmin = () => {
         <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {actionType === 'DELETE' ? 'Remover Usuário' : 
-               actionType === 'PROMOTE' ? 'Promover a Administrador' : 
-               actionType === 'PROMOTE_GUEST' ? 'Vincular como Cliente/Visitante' :
-               'Remover Privilégios'}
+              {actionType === 'DELETE' ? 'Remover Usuário' :
+                actionType === 'PROMOTE' ? 'Promover a Administrador' :
+                  actionType === 'PROMOTE_GUEST' ? 'Vincular como Cliente/Visitante' :
+                    'Remover Privilégios'}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-white/60">
               {actionType === 'DELETE' && 'Esta ação expulsará o usuário do sistema. Ele não conseguirá mais fazer login.'}
@@ -237,9 +237,8 @@ const UsersAdmin = () => {
                             }
                             setClientLink(next.join(','));
                           }}
-                          className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${
-                            clientLink.split(',').includes(client.id) ? 'bg-primary border-primary' : 'border-white/20 group-hover/item:border-primary/50'
-                          }`}
+                          className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${clientLink.split(',').includes(client.id) ? 'bg-primary border-primary' : 'border-white/20 group-hover/item:border-primary/50'
+                            }`}
                         >
                           {clientLink.split(',').includes(client.id) && <Check className="w-3.5 h-3.5 text-white" />}
                         </button>
@@ -281,8 +280,8 @@ const UsersAdmin = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-white/5 text-white border-transparent hover:bg-white/10">Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleAction} 
+            <AlertDialogAction
+              onClick={handleAction}
               className={actionType === 'DELETE' ? 'bg-destructive/90 text-white hover:bg-destructive focus:ring-destructive' : 'bg-primary text-white hover:bg-primary/90'}
             >
               Confirmar

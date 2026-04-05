@@ -2,7 +2,7 @@ import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import type { KanbanCard as KanbanCardType, Employee, SystemUser } from '@/contexts/app-types';
 import Timer from './Timer';
 import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles } from 'lucide-react';
-import { compressImage } from '@/lib/utils';
+import { compressImage, createThumbnail } from '@/lib/utils';
 
 // Lazy load the heavy dialog component — only mount when user clicks a card
 const CardDetailDialog = lazy(() => import('./CardDetailDialog'));
@@ -17,10 +17,11 @@ interface KanbanCardProps {
 const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrection }: KanbanCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [previewInitial, setPreviewInitial] = useState<string | null>(null);
+  const { activeTasks, uploadKanbanAsset } = useApp();
+  
+  const cardTasks = activeTasks.filter(t => t.cardId === card.id);
+  const isProcessing = cardTasks.length > 0;
+  const mainTask = cardTasks[0];
 
   const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
   const coverImage = card.coverImage || (images.length > 0 ? images[0] : null);
@@ -59,41 +60,12 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       if (files.length === 0) return;
 
-      setIsUploading(true);
-      setUploadProgress(10);
-      const tempUrl = URL.createObjectURL(files[0]);
-      setPreviewInitial(tempUrl);
-
-      try {
-        const compressPromises = files.map(file => compressImage(file));
-        const newBase64Images = await Promise.all(compressPromises);
-        setUploadProgress(80);
-
-        const currentImages = card.images || (card.imageUrl ? [card.imageUrl] : []);
-        const updatedImages = [...currentImages, ...newBase64Images];
-
-        const updates: Partial<KanbanCardType> = { images: updatedImages };
-        if (!card.coverImage && updatedImages.length > 0) {
-          updates.coverImage = updatedImages[0];
-        }
-
-        updateKanbanCard(card.id, updates, `Anexou ${files.length} imagem(ns) pelo painel`);
-        setUploadProgress(100);
-        setUploadSuccess(true);
-        setTimeout(() => {
-          setIsUploading(false);
-          setUploadSuccess(false);
-          setPreviewInitial(null);
-          setUploadProgress(0);
-          URL.revokeObjectURL(tempUrl);
-        }, 2000);
-      } catch (err) {
-        setIsUploading(false);
-        setPreviewInitial(null);
-        URL.revokeObjectURL(tempUrl);
+      // Usar a nova fila de background para não travar o board
+      for (const file of files) {
+        uploadKanbanAsset(card.id, file);
       }
     }
-  }, [card.id, card.images, card.imageUrl, card.coverImage, updateKanbanCard]);
+  }, [card.id, uploadKanbanAsset]);
 
   const handleOpenDetail = useCallback(() => setDetailOpen(true), []);
   const handleDragStart = useCallback((e: React.DragEvent) => e.dataTransfer.setData('cardId', card.id), [card.id]);
@@ -107,26 +79,33 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleOpenDetail}
-        className={`bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:cursor-grabbing active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
+        className={`bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:cursor-grabbing active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
       >
-        {isDragOver && !isUploading && (
+        {isDragOver && !isProcessing && (
           <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none rounded-xl">
             <UploadCloud className="w-8 h-8 text-primary mb-2" />
             <p className="text-white text-xs font-bold tracking-wider uppercase">Solte para anexar</p>
           </div>
         )}
 
-        {isUploading && (
+        {mainTask && (
           <div className="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in rounded-xl">
-            {uploadSuccess ? (
+            {mainTask.status === 'completed' ? (
               <>
                 <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-2 animate-in zoom-in duration-300" />
                 <p className="text-white text-[11px] font-bold tracking-wider uppercase mb-2">Concluído!</p>
               </>
+            ) : mainTask.status === 'failed' ? (
+              <>
+                <AlertTriangle className="w-8 h-8 text-red-500 mb-2" />
+                <p className="text-white text-[10px] font-bold tracking-wider uppercase">Erro ao Enviar</p>
+              </>
             ) : (
               <>
                 <Loader2 className="w-7 h-7 text-primary animate-spin mb-2" />
-                <p className="text-white text-[10px] font-bold tracking-wider uppercase">Carregando {uploadProgress}%</p>
+                <p className="text-white text-[10px] font-bold tracking-wider uppercase">
+                  {mainTask.type === 'UPLOAD_IMAGE' ? 'Enviando...' : 'Processando...'} {mainTask.progress}%
+                </p>
               </>
             )}
           </div>

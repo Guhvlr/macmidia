@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/contexts/useApp';
 import type { KanbanColumnDef } from '@/contexts/app-types';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -129,6 +129,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
       <DialogContent className="glass-card border-border/50">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Novo Card</DialogTitle>
+          <DialogDescription className="sr-only">Preencha as informações para criar um novo card de produção no Kanban.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input

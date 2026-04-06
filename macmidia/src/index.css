@@ -1,0 +1,313 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 1%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 95% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 7%;
+    --secondary-foreground: 0 0% 90%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 95% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 95% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 0 95% 55%;
+
+    --radius: 1.25rem;
+
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 0 0% 65%;
+    --sidebar-primary: 0 84% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 9%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 9%;
+    --sidebar-ring: 0 84% 50%;
+
+    --success: 142 70% 45%;
+    --warning: 38 92% 50%;
+    --info: 210 84% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* Force hide global scroll for better internal control */
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  /* Custom sleek scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(0 80% 52% / 0.4);
+    border-radius: 100px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.3s;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 80% 52% / 0.9) !important;
+    background-clip: padding-box;
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 80% 52% / 0.4) transparent;
+  }
+
+  /* Ensure internal columns can still scroll */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+  }
+}
+
+@layer utilities {
+
+  /* ── Glass card system ── */
+  .glass-card {
+    @apply bg-[#0D0E10]/80 backdrop-blur-xl border border-white/5 rounded-[1.8rem] overflow-hidden isolate;
+    box-shadow:
+      0 30px 60px -12px rgba(0, 0, 0, 0.9),
+      0 0 40px -10px rgba(255, 255, 255, 0.02),
+      0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    background: linear-gradient(135deg, rgba(25,25,25,0.7) 0%, rgba(10,10,10,0.8) 100%);
+    transform: translateZ(0); /* Fix for squared corners with backdrop-filter + scale */
+    backface-visibility: hidden;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-500 ease-in-out;
+  }
+  .glass-card-hover:hover {
+    @apply border-white/10 shadow-[0_40px_80px_-12px_rgba(0,0,0,0.8),0_0_25px_hsl(var(--primary)/0.2)];
+    transform: translateY(-2px);
+  }
+
+  /* ── Glow effects ── */
+  .glow-primary {
+    box-shadow:
+      0 0 35px hsl(var(--primary) / 0.25),
+      0 0 100px hsl(var(--primary) / 0.1),
+      0 15px 45px -10px rgba(0, 0, 0, 0.6);
+  }
+
+  .glow-red-subtle {
+    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.3);
+  }
+
+  /* ── Gradient text ── */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(0 90% 65%), hsl(0 60% 42%));
+  }
+
+  /* ── Background gradients ── */
+  .gradient-bg {
+    background: 
+      radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 100% 100%, hsl(var(--primary) / 0.04) 0%, transparent 40%),
+      #020202;
+    min-height: 100vh;
+  }
+
+  .gradient-bg-subtle {
+    background: linear-gradient(135deg, hsl(0 0% 6%) 0%, hsl(0 2% 8%) 100%);
+  }
+
+  /* ── Primary button ── */
+  .btn-primary-glow {
+    @apply bg-primary text-primary-foreground font-semibold;
+    box-shadow:
+      0 4px 20px hsl(0 80% 52% / 0.3),
+      0 2px 6px rgba(0,0,0,0.3),
+      0 1px 0 hsl(0 80% 62% / 0.3) inset;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-primary-glow:hover {
+    box-shadow:
+      0 8px 30px hsl(0 80% 52% / 0.4),
+      0 4px 12px rgba(0,0,0,0.4),
+      0 1px 0 hsl(0 80% 62% / 0.4) inset;
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+  }
+  .btn-primary-glow:active {
+    transform: translateY(0);
+    filter: brightness(0.95);
+  }
+
+  /* ── Animations ── */
+  .animate-fade-in {
+    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* ── Sidebar and Layout stability fixes ── */
+  .dashboard-main-container {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* ── Column drop zone highlight ── */
+  .kanban-drop-active {
+    background: hsl(0 80% 52% / 0.04);
+    border-color: hsl(0 80% 52% / 0.25);
+  }
+
+  /* ── Sidebar styles ── */
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200;
+    color: hsl(var(--sidebar-foreground));
+  }
+  .sidebar-nav-item:hover {
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+  }
+  .sidebar-nav-item.active {
+    background: hsl(0 80% 52% / 0.12);
+    color: hsl(var(--sidebar-primary));
+    box-shadow: 0 0 20px hsl(0 80% 52% / 0.06);
+  }
+  .sidebar-nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: hsl(var(--sidebar-primary));
+    border-radius: 0 100px 100px 0;
+  }
+
+  /* ── Page header ── */
+  .page-header {
+    @apply border-b border-border/40 backdrop-blur-xl sticky top-0 z-20;
+    background: hsl(0 0% 3.5% / 0.8);
+  }
+
+  /* ── Kanban column ── */
+  .kanban-column-bg {
+    @apply rounded-2xl border transition-all duration-200;
+    background: hsl(0 0% 6% / 0.6);
+    border-color: hsl(0 0% 12% / 0.5);
+  }
+
+  /* ── Input focus ring ── */
+  .input-focus-ring:focus-within {
+    border-color: hsl(0 80% 52% / 0.4);
+    box-shadow: 0 0 0 3px hsl(0 80% 52% / 0.08), 0 0 16px hsl(0 80% 52% / 0.06);
+  }
+
+  @keyframes progressLoader {
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(0%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .animate-progress-loader {
+    animation: progressLoader 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes pulseSlow {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+  }
+
+  .animate-pulse-slow {
+    animation: pulseSlow 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  /* ── Noise texture overlay ── */
+  .noise-overlay::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%    %3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    z-index: 9999;
+  }
+  /* ── Performance & Scalability Utilities ── */
+  .performance-virtual {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 150px; /* Estimated height for smoother scroll */
+  }
+}

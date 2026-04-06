@@ -1,0 +1,4 @@
+/* App-level resets — no max-width constraint on root */
+#root {
+  min-height: 100vh;
+}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Trash2, ArrowLeft, Loader2, UserCheck, UserMinus, Search, Users, User, Eye, Check, Key } from 'lucide-react';
+import { Shield, Trash2, ArrowLeft, Loader2, UserCheck, UserMinus, Search, Users, User, Eye, EyeOff, Check, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -17,6 +17,8 @@ const UsersAdmin = () => {
   const [clientLink, setClientLink] = useState('');
   const [kanbanBoard, setKanbanBoard] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   if (loading) {
     return (
@@ -41,6 +43,7 @@ const UsersAdmin = () => {
 
   const handleAction = async () => {
     if (!targetUser || !actionType) return;
+    setIsActionLoading(true);
 
     let res;
     if (actionType === 'DELETE') {
@@ -77,6 +80,8 @@ const UsersAdmin = () => {
     setTargetUser(null);
     setActionType(null);
     setNewPassword('');
+    setShowPassword(false);
+    setIsActionLoading(false);
   };
 
   const filteredUsers = systemUsers.filter(u =>
@@ -242,14 +247,23 @@ const UsersAdmin = () => {
             {actionType === 'RESET_PASSWORD' && (
               <div className="mt-4 space-y-3">
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest block">Nova Senha</label>
-                <Input
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white"
-                  autoFocus
-                />
+                <div className="relative group">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Mínimo 6 caracteres"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white pr-12 focus-visible:ring-primary/50"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -315,12 +329,16 @@ const UsersAdmin = () => {
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/5 text-white border-transparent hover:bg-white/10">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="bg-white/5 text-white border-transparent hover:bg-white/10" disabled={isActionLoading}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAction}
-              className={actionType === 'DELETE' ? 'bg-destructive/90 text-white hover:bg-destructive focus:ring-destructive' : 'bg-primary text-white hover:bg-primary/90'}
+              disabled={isActionLoading}
+              className={actionType === 'DELETE' ? 'bg-destructive/90 text-white hover:bg-destructive focus:ring-destructive flex items-center gap-2' : 'bg-primary text-white hover:bg-primary/90 flex items-center gap-2'}
             >
-              Confirmar
+              {isActionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isActionLoading ? 'Processando...' : 'Confirmar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Trash2, ArrowLeft, Loader2, UserCheck, UserMinus, Search, Users, User, Eye, Check } from 'lucide-react';
+import { Shield, Trash2, ArrowLeft, Loader2, UserCheck, UserMinus, Search, Users, User, Eye, Check, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 
 const UsersAdmin = () => {
-  const { systemUsers, loggedUserRole, loggedUserId, adminUpdateUserRole, adminDeleteUser, loading, calendarClients, employees } = useApp();
+  const { systemUsers, loggedUserRole, loggedUserId, adminUpdateUserRole, adminDeleteUser, adminResetPassword, loading, calendarClients, employees } = useApp();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [targetUser, setTargetUser] = useState<string | null>(null);
-  const [actionType, setActionType] = useState<'DELETE' | 'PROMOTE' | 'DEMOTE' | 'PROMOTE_GUEST' | null>(null);
+  const [actionType, setActionType] = useState<'DELETE' | 'PROMOTE' | 'DEMOTE' | 'PROMOTE_GUEST' | 'RESET_PASSWORD' | null>(null);
   const [clientLink, setClientLink] = useState('');
   const [kanbanBoard, setKanbanBoard] = useState('');
+  const [newPassword, setNewPassword] = useState('');
 
   if (loading) {
     return (
@@ -55,16 +56,27 @@ const UsersAdmin = () => {
       }
       const linkedBoard = (kanbanBoard === 'none' || !kanbanBoard) ? undefined : kanbanBoard;
       res = await adminUpdateUserRole(targetUser, 'GUEST', clientLink, linkedBoard);
+    } else if (actionType === 'RESET_PASSWORD') {
+      if (!newPassword.trim() || newPassword.length < 6) {
+        toast.error('A senha deve ter pelo menos 6 caracteres');
+        return;
+      }
+      res = await adminResetPassword(targetUser, newPassword);
     }
 
     if (res?.success) {
-      toast.success(actionType === 'DELETE' ? 'Usuário removido com sucesso' : 'Papel do usuário atualizado');
+      toast.success(
+        actionType === 'DELETE' ? 'Usuário removido com sucesso' : 
+        actionType === 'RESET_PASSWORD' ? 'Senha redefinida com sucesso' : 
+        'Papel do usuário atualizado'
+      );
     } else {
       toast.error(res?.error || 'Erro ao processar a ação');
     }
 
     setTargetUser(null);
     setActionType(null);
+    setNewPassword('');
   };
 
   const filteredUsers = systemUsers.filter(u =>
@@ -191,10 +203,17 @@ const UsersAdmin = () => {
                 </div>
 
                 {user.id !== loggedUserId && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10 rounded-lg text-white/20 hover:text-destructive group-hover:text-white/40 transition-colors"
-                    onClick={() => { setTargetUser(user.id); setActionType('DELETE'); }} title="Remover usuário permanentemente">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 rounded-lg text-white/20 hover:text-primary transition-colors"
+                      onClick={() => { setTargetUser(user.id); setActionType('RESET_PASSWORD'); }} title="Redefinir senha do usuário">
+                      <Key className="w-4 h-4" />
+                    </Button>
+
+                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10 rounded-lg text-white/20 hover:text-destructive group-hover:text-white/40 transition-colors"
+                      onClick={() => { setTargetUser(user.id); setActionType('DELETE'); }} title="Remover usuário permanentemente">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
@@ -209,14 +228,31 @@ const UsersAdmin = () => {
               {actionType === 'DELETE' ? 'Remover Usuário' :
                 actionType === 'PROMOTE' ? 'Promover a Administrador' :
                   actionType === 'PROMOTE_GUEST' ? 'Vincular como Cliente/Visitante' :
-                    'Remover Privilégios'}
+                    actionType === 'RESET_PASSWORD' ? 'Redefinir Senha de Acesso' :
+                      'Remover Privilégios'}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-white/60">
               {actionType === 'DELETE' && 'Esta ação expulsará o usuário do sistema. Ele não conseguirá mais fazer login.'}
               {actionType === 'PROMOTE' && 'O usuário passará a ter controle total sobre membros e configurações do sistema.'}
               {actionType === 'DEMOTE' && 'O usuário perderá o acesso de administração e se tornará um membro comum.'}
               {actionType === 'PROMOTE_GUEST' && 'O usuário terá acesso limitado APENAS ao calendário e cards do cliente especificado.'}
+              {actionType === 'RESET_PASSWORD' && 'Defina uma nova senha para este usuário. Ele precisará usar esta nova senha no próximo login.'}
             </AlertDialogDescription>
+
+            {actionType === 'RESET_PASSWORD' && (
+              <div className="mt-4 space-y-3">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest block">Nova Senha</label>
+                <Input
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white"
+                  autoFocus
+                />
+              </div>
+            )}
+
             {actionType === 'PROMOTE_GUEST' && (
               <div className="mt-4 space-y-3">
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest block">Vinculo de Clientes</label>

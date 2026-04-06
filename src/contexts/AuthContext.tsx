@@ -15,6 +15,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   adminDeleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
+  adminResetPassword: (id: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   adminUpdateUserRole: (id: string, role: string, clientLink?: string, kanbanLink?: string) => Promise<{ success: boolean; error?: string }>;
   setSystemUsers: React.Dispatch<React.SetStateAction<SystemUser[]>>;
 }
@@ -122,6 +123,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const adminResetPassword = useCallback(async (id: string, newPassword: string) => {
+    try {
+      const { error } = await (supabase as any).rpc('admin_reset_password', { 
+        target_user_id: id, 
+        new_password: newPassword 
+      });
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }, []);
+
   const adminUpdateUserRole = useCallback(async (id: string, role: string, clientLink?: string, kanbanLink?: string) => {
     try {
       const { error } = await (supabase as any).rpc('admin_update_user_role', { 
@@ -150,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     adminDeleteUser,
+    adminResetPassword,
     adminUpdateUserRole,
     setSystemUsers
   }), [
@@ -165,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     adminDeleteUser,
+    adminResetPassword,
     adminUpdateUserRole
   ]);
 

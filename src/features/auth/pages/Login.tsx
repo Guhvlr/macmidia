@@ -11,6 +11,7 @@ const Login = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { login, register, dashboardLogo } = useApp();
@@ -27,6 +28,11 @@ const Login = () => {
     if (isLogin) {
       res = await login(email, password);
     } else {
+      if (password !== confirmPassword) {
+        setError('As senhas não coincidem');
+        setLoading(false);
+        return;
+      }
       res = await register(name, email, password);
     }
     
@@ -110,9 +116,27 @@ const Login = () => {
               className="pl-11 h-12 bg-secondary/40 border-border/50 focus:border-primary/50 text-base rounded-xl placeholder:text-muted-foreground/60 transition-all"
             />
           </div>
+          {!isLogin && (
+            <div className="relative group animate-fade-in" style={{ animationDelay: '150ms' }}>
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+              <Input
+                type="password"
+                placeholder="Confirme sua senha"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+                minLength={6}
+                className="pl-11 h-12 bg-secondary/40 border-border/50 focus:border-primary/50 text-base rounded-xl placeholder:text-muted-foreground/60 transition-all"
+              />
+            </div>
+          )}
           {error && (
             <p className="text-destructive text-sm text-center animate-fade-in font-medium mt-1">
-              {error === 'Invalid login credentials' ? 'Email ou senha incorretos' : error}
+              {error === 'Invalid login credentials' ? 'Email ou senha incorretos' : 
+               error.includes('Password should be at least 6 characters') ? 'A senha deve ter pelo menos 6 caracteres' :
+               error === 'User already registered' ? 'Este email já está cadastrado' :
+               error}
             </p>
           )}
           <Button type="submit" disabled={loading} className="w-full h-12 text-base font-semibold btn-primary-glow rounded-xl group mt-2">

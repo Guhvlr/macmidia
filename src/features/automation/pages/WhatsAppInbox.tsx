@@ -331,24 +331,27 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
     if (!filterActive) return messages;
     
     return messages.filter(msg => {
-      // 1. Sempre manter mensagens com anexo (imagem/doc/áudio), pois agora extraímos o texto deles
-      if (msg.media_url || msg.message_type !== 'text') return true;
+      // 1. DOCUMENTOS: Sempre manter (pois agora extraímos o texto deles)
+      if (msg.message_type === 'document') return true;
       
+      // 2. IMAGENS: Ocultar no modo Inteligente (Pedido: "imagem não precisa")
+      if (msg.message_type === 'image') return false;
+
+      // 3. ÁUDIOS/VÍDEOS: Ocultar no modo inteligente por padrão
+      if (msg.message_type === 'audio' || msg.message_type === 'video') return false;
+
+      // 4. TEXTOS: Aplicar critérios rigorosos (Preço + Oferta + Descrição)
       const text = (msg.message_text || '').toLowerCase();
       if (!text) return false;
 
-      // 2. Detecção de Padrão de Preço (ex: 10,99 ou R$ 10,99)
       const priceRegex = /\d+[,.]\d{2}/i;
       const hasPrices = priceRegex.test(text);
 
-      // 3. Palavras-chave de Oferta
       const offerKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama', 'preço', 'valor'];
       const hasOfferContext = offerKeywords.some(k => text.includes(k));
 
-      // 4. Descrição Mínima (para evitar mensagens curtas irrelevantes)
       const hasDescription = text.trim().length > 15;
 
-      // O filtro "Inteligente" agora exige: Preço + Contexto de Oferta + Descrição
       return hasPrices && hasOfferContext && hasDescription;
     });
   };

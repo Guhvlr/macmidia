@@ -148,7 +148,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
           <div className="space-y-1 relative">
             <div className="flex items-center justify-between mb-1 px-1">
                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Descrição</label>
-               <Button 
+              {/* <Button 
                 type="button"
                 variant="ghost" 
                 onClick={handleProcessWithAI}
@@ -157,7 +157,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
               >
                 {aiLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
                 {aiLoading ? 'Processando...' : 'Corrigir com IA'}
-              </Button>
+              </Button> */}
             </div>
             <Textarea
               placeholder="Adicione o briefing ou lista de produtos aqui..."

@@ -61,35 +61,36 @@ Deno.serve(async (req) => {
 
     // 🏆 LÓGICA DE NOME (FOCADA NO GRUPO) 🏆
     let finalSenderName = messageData?.pushName || sender;
-    
+
     if (remoteJid.endsWith('@g.us')) {
+      finalSenderName = 'Grupo sem Nome';
       try {
         if (evoServer && evoApiKey && evoInstance) {
           const groupUrl = `${evoServer.replace(/\/$/, '')}/group/findGroupInfos/${evoInstance}?groupJid=${remoteJid}`;
-          console.log(`[JSON-FIX] Buscando informações do grupo: ${groupUrl}`);
-          
-          const groupResp = await fetch(groupUrl, { headers: { 'apikey': evoApiKey } });
-          const groupData = groupResp.ok ? await groupResp.json() : null;
-          
-          if (groupData?.subject) {
-            finalSenderName = groupData.subject;
-            console.log(`[JSON-FIX] Sucesso: Nome definido como ${finalSenderName}`);
-          } else {
-             // Fallback por Memória Interna do Banco
-             const { data: prevMsg } = await supabase
-               .from('whatsapp_inbox')
-               .select('sender_name')
-               .eq('remote_jid', remoteJid)
-               .not('sender_name', 'eq', messageData?.pushName)
-               .order('created_at', { ascending: false })
-               .limit(1)
-               .maybeSingle();
-
-             if (prevMsg?.sender_name) finalSenderName = prevMsg.sender_name;
+          const groupResp = await fetch(groupUrl, { 
+            headers: { 'apikey': evoApiKey },
+            signal: AbortSignal.timeout(5000)
+          });
+          if (groupResp.ok) {
+            const groupData = await groupResp.json();
+            if (groupData?.subject) {
+              finalSenderName = groupData.subject;
+            }
           }
         }
+        if (finalSenderName === 'Grupo sem Nome') {
+          const { data: prevMsg } = await supabase
+            .from('whatsapp_inbox')
+            .select('sender_name')
+            .eq('remote_jid', remoteJid)
+            .neq('sender_name', 'Grupo sem Nome')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (prevMsg?.sender_name) finalSenderName = prevMsg.sender_name;
+        }
       } catch (e) {
-        console.error('[JSON-FIX ERROR]:', e.message);
+        console.error('[GROUP-FIX ERROR]:', e.message);
       }
     }
 

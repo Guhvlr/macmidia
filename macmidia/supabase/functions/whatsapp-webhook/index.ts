@@ -100,15 +100,6 @@ Deno.serve(async (req) => {
        }
     }
 
-    const { data: savedMsg, error: saveError } = await supabase
-      .from('whatsapp_inbox')
-      .insert({
-        remote_jid: remoteJid,
-        sender: sender,
-        sender_name: finalSenderName,
-        message_text: messageText,
-        message_type: messageType,
-        media_url: mediaUrl,
         media_mime_type: mediaMimeType,
         raw_payload: payload,
         status: 'pending',

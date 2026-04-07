@@ -1,11 +1,10 @@
 // =====================================================
 // Supabase Edge Function: Process WhatsApp Message with AI
 // =====================================================
-// Called manually from the frontend when the user clicks
-// "Melhorar com IA" on a WhatsApp inbox message.
+// RESTORED FROM GITHUB (macmidia-main)
 // Uses OpenAI to enhance text, create CTA, and organize.
 //
-// Deploy: supabase functions deploy process-whatsapp-message
+// Deploy: supabase functions deploy process-whatsapp-message --no-verify-jwt
 // =====================================================
 
 const corsHeaders = {

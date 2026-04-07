@@ -9,6 +9,7 @@ import { Plus, Upload, X, Sparkles, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { cn, compressImage } from '@/lib/utils';
 
 interface Props {
   employeeId?: string;
@@ -24,13 +25,13 @@ interface Props {
 }
 
 const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKey, trigger, open, onOpenChange, showEmployeeSelect }: Props) => {
-  const { addKanbanCard, employees } = useApp();
+  const { addKanbanCard, uploadKanbanAsset, employees } = useApp();
   const [internalOpen, setInternalOpen] = useState(false);
   const [clientName, setClientName] = useState('');
   const [description, setDescription] = useState('');
-  const [images, setImages] = useState<string[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployeeId || '');
   const [aiLoading, setAiLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isControlled = open !== undefined && onOpenChange !== undefined;
@@ -43,15 +44,7 @@ const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKe
     }
   }, [dialogOpen, initialEmployeeId]);
 
-  const handleFiles = (files: FileList | null) => {
-    if (!files) return;
-    Array.from(files).forEach(file => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = () => setImages(prev => [...prev, reader.result as string]);
-      reader.readAsDataURL(file);
-    });
-  };
+  // Removido upload no modal conforme solicitado
 
   const handleProcessWithAI = async () => {
     if (!description.trim()) {
@@ -103,15 +96,28 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientName.trim()) return;
-    addKanbanCard({
-      clientName, description, images,
-      column: fixedColumnKey || columnKey || 'para-producao',
-      timeSpent: 0, timerRunning: false, employeeId: selectedEmployeeId || initialEmployeeId || '',
-    });
-    setClientName(''); setDescription(''); setImages([]); setDialogOpen(false);
+    if (!clientName.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await addKanbanCard({
+        clientName, description, images: [],
+        column: fixedColumnKey || columnKey || 'para-producao',
+        timeSpent: 0, timerRunning: false, employeeId: selectedEmployeeId || initialEmployeeId || '',
+      });
+
+      toast.success(`Card de ${clientName} criado!`);
+      setClientName(''); 
+      setDescription(''); 
+      setDialogOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao criar card.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -126,9 +132,9 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
           )}
         </DialogTrigger>
       )}
-      <DialogContent className="glass-card border-border/50">
+      <DialogContent className="glass-card border-border/50 fixed left-1/2 top-1/2 !translate-x-[-50%] !translate-y-[-50%] shadow-[0_0_100px_rgba(0,0,0,0.8)]">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">Novo Card</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Novo Card Mac Mídia</DialogTitle>
           <DialogDescription className="sr-only">Preencha as informações para criar um novo card de produção no Kanban.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -142,7 +148,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
           <div className="space-y-1 relative">
             <div className="flex items-center justify-between mb-1 px-1">
                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Descrição</label>
-               <Button 
+              {/* <Button 
                 type="button"
                 variant="ghost" 
                 onClick={handleProcessWithAI}
@@ -151,7 +157,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
               >
                 {aiLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
                 {aiLoading ? 'Processando...' : 'Corrigir com IA'}
-              </Button>
+              </Button> */}
             </div>
             <Textarea
               placeholder="Adicione o briefing ou lista de produtos aqui..."
@@ -161,27 +167,6 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
             />
           </div>
 
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-border/40 rounded-xl p-3 text-center cursor-pointer hover:border-primary/40 transition-colors"
-          >
-            <Upload className="w-5 h-5 mx-auto text-muted-foreground mb-1" />
-            <p className="text-xs text-muted-foreground">Clique ou arraste imagens</p>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleFiles(e.target.files)} />
-          </div>
-
-          {images.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {images.map((img, i) => (
-                <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-border/30">
-                  <img src={img} alt="" className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-destructive rounded-bl-lg p-0.5">
-                    <X className="w-3 h-3 text-destructive-foreground" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
 
           {showEmployeeSelect && employees.length > 0 && (
             <div className="space-y-2">
@@ -199,7 +184,20 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
             </div>
           )}
 
-          <Button type="submit" className="w-full h-11 btn-primary-glow font-semibold rounded-xl" disabled={!clientName.trim() || (showEmployeeSelect && !selectedEmployeeId)}>Adicionar</Button>
+          <Button 
+            type="submit" 
+            className="w-full h-11 btn-primary-glow font-semibold rounded-xl" 
+            disabled={!clientName.trim() || (showEmployeeSelect && !selectedEmployeeId) || isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Criando e enviando artes...
+              </>
+            ) : (
+              'Adicionar'
+            )}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

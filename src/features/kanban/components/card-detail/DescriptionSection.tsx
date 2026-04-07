@@ -24,24 +24,47 @@ export const DescriptionSection = memo( ({
   return (
     <div className="pl-10 space-y-10">
       {/* AI REPORT */}
-      {(card.aiStatus === 'analyzing' || card.aiStatus === 'issues_found' || card.aiStatus === 'approved') && (
-        <div className={`rounded-2xl border p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500 ${card.aiStatus === 'analyzing' ? 'bg-blue-500/5 border-blue-500/20' : card.aiStatus === 'approved' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+      {(card.aiStatus === 'analyzing' || card.aiStatus === 'issues_found' || card.aiStatus === 'approved' || card.aiStatus === 'price_mismatch' || card.aiStatus === 'error') && (
+        <div className={`rounded-2xl border p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500 ${
+          card.aiStatus === 'analyzing' ? 'bg-blue-500/5 border-blue-500/20' : 
+          card.aiStatus === 'approved' ? 'bg-emerald-500/5 border-emerald-500/20' : 
+          card.aiStatus === 'error' ? 'bg-zinc-800/20 border-white/10' :
+          card.aiStatus === 'price_mismatch' ? 'bg-red-500/5 border-red-500/20' :
+          'bg-amber-500/5 border-amber-500/20'
+        }`}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold flex items-center gap-2 text-white/90">
               <Bot className={`w-5 h-5 ${card.aiStatus === 'analyzing' ? 'text-blue-400 animate-pulse' : card.aiStatus === 'approved' ? 'text-emerald-400' : 'text-amber-400'}`} />
               Relatório da IA Auditora
             </h3>
             <div className="flex items-center gap-2">
-              {card.aiStatus === 'issues_found' && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/20 border border-red-500/20 text-red-400 text-[9px] font-black uppercase tracking-widest animate-pulse">
-                  <AlertTriangle className="w-3 h-3" /> PRECISA DE ALTERAÇÃO
+              {card.aiStatus === 'price_mismatch' && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/20 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-widest animate-pulse">
+                  <AlertTriangle className="w-3 h-3" /> ERRO DE PREÇO
                 </div>
               )}
-              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${card.aiStatus === 'analyzing' ? 'bg-blue-500/20 text-blue-400' : card.aiStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                {card.aiStatus === 'analyzing' ? 'Analisando...' : card.aiStatus === 'approved' ? 'Aprovado' : 'Pendências'}
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                card.aiStatus === 'analyzing' ? 'bg-blue-500/20 text-blue-400' : 
+                card.aiStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 
+                card.aiStatus === 'error' ? 'bg-white/10 text-white/40' :
+                card.aiStatus === 'price_mismatch' ? 'bg-red-500/20 text-red-400' :
+                'bg-amber-500/20 text-amber-400'
+              }`}>
+                {card.aiStatus === 'analyzing' ? 'Analisando...' : card.aiStatus === 'approved' ? 'Aprovado' : card.aiStatus === 'error' ? 'Erro na IA' : card.aiStatus === 'price_mismatch' ? 'Bloqueado' : 'Pendências'}
               </span>
             </div>
           </div>
+
+          {card.aiStatus === 'price_mismatch' && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl space-y-2">
+              <p className="text-[11px] text-red-400 font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" /> CRÍTICO: Divergência de Preços Detectada!
+              </p>
+              <p className="text-[10px] text-red-300/80 leading-relaxed">
+                A IA pode ter alterado os valores originais durante a formatação. Compare a <b>Descrição</b> com a <b>Mensagem Original</b> abaixo para garantir a integridade dos dados.
+              </p>
+            </div>
+          )}
 
           {card.aiStatus === 'issues_found' && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
@@ -55,6 +78,14 @@ export const DescriptionSection = memo( ({
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <p className="text-[11px] text-emerald-400 font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Tudo certo! A IA conferiu os dados e as imagens estão batendo com o texto.
+              </p>
+            </div>
+          )}
+
+          {card.aiStatus === 'error' && (
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <p className="text-[11px] text-white/50 font-bold flex items-center gap-2 italic">
+                <AlertTriangle className="w-3.5 h-3.5 text-zinc-500" /> A IA Auditora não conseguiu concluir a análise técnica.
               </p>
             </div>
           )}
@@ -131,6 +162,22 @@ export const DescriptionSection = memo( ({
           </div>
         )}
       </div>
+
+      {/* ORIGINAL MESSAGE SECTION */}
+      {card.originalMessage && (
+        <div className="space-y-4 pt-4 border-t border-white/5 opacity-80 hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[12px] font-bold flex items-center gap-2 text-emerald-500/80">
+              <Bot className="w-4 h-4" /> Mensagem Original do WhatsApp
+            </h3>
+            <span className="text-[8px] bg-emerald-500/10 text-emerald-500/60 px-1.5 py-0.5 rounded border border-emerald-500/10 font-black tracking-widest uppercase">Consulta</span>
+          </div>
+          <div className="text-[11px] font-mono leading-relaxed bg-black/30 rounded-xl p-4 border border-white/5 text-white/40 whitespace-pre-wrap max-h-[300px] overflow-y-auto custom-scrollbar italic">
+            {card.originalMessage}
+          </div>
+          <p className="text-[9px] text-white/20 text-center italic">Este é o conteúdo bruto recebido via WhatsApp antes do processamento pela IA.</p>
+        </div>
+      )}
     </div>
   );
 });

@@ -13,7 +13,7 @@ import type {
   KanbanColumnDef,
   CardAction,
 } from './app-types';
-import { DEFAULT_COLUMNS } from './app-types';
+import { DEFAULT_COLUMNS, slugify } from './app-types';
 
 export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export interface QueuedTask {
@@ -39,7 +39,7 @@ interface KanbanActions {
   addEmployee: (emp: Omit<Employee, 'id'>) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
-  addKanbanCard: (card: Omit<KanbanCard, 'id'>) => Promise<void>;
+  addKanbanCard: (card: Omit<KanbanCard, 'id'>) => Promise<string | undefined>;
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => Promise<void>;
   deleteKanbanCard: (id: string) => Promise<void>;
   moveKanbanCard: (id: string, column: string) => Promise<void>;
@@ -221,11 +221,23 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
           if (pendingOpsRef.current.has(row.id)) return;
           const updatedCard = mapKanbanCard(row);
           setKanbanCards(prev => {
-            const index = prev.findIndex(c => c.id === updatedCard.id);
-            if (index === -1) return [...prev, updatedCard];
-            if (JSON.stringify(prev[index]) === JSON.stringify(updatedCard)) return prev;
+            const index = prev.findIndex(c => c.id === row.id);
+            if (index === -1) return [...prev, mapKanbanCard(row)];
+            const existing = prev[index];
+            const merged = { ...existing };
+            
+            if (row.client_name !== undefined) merged.clientName = row.client_name;
+            if (row.description !== undefined) merged.description = row.description;
+            if (row.images !== undefined) merged.images = row.images || [];
+            if (row.column !== undefined) merged.column = row.column;
+            if (row.ai_status !== undefined) merged.aiStatus = row.ai_status;
+            if (row.ai_report !== undefined) merged.aiReport = typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report;
+            if (row.comments !== undefined) merged.comments = row.comments || [];
+            if (row.history !== undefined) merged.history = typeof row.history === 'string' ? JSON.parse(row.history) : (row.history || []);
+
+            if (JSON.stringify(existing) === JSON.stringify(merged)) return prev;
             const next = [...prev];
-            next[index] = updatedCard;
+            next[index] = merged;
             return next;
           });
         } else if (payload.eventType === 'INSERT' && payload.new) {
@@ -331,20 +343,20 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     await supabase.from('employees').delete().eq('id', id);
   }, []);
 
-  const addKanbanCard = useCallback(async (card: Omit<KanbanCard, 'id'>) => {
+  const addKanbanCard = useCallback(async (card: Omit<KanbanCard, 'id'>): Promise<string | undefined> => {
     const tempId = crypto.randomUUID();
     const history = [createHistoryAction('create', `Criou o card na coluna`)];
     const opCard: KanbanCard = { ...card, id: tempId, history };
     setKanbanCards(prev => [...prev, opCard]);
     pendingOpsRef.current.add(tempId);
 
-    await monitoring.trackPerformance('ADD_KANBAN_CARD', async () => {
+    return await monitoring.trackPerformance('ADD_KANBAN_CARD', async () => {
       const { data, error } = await supabase.from('kanban_cards').insert({
         employee_id: card.employeeId, client_name: card.clientName, description: card.description || '',
-        images: card.images || [], image_url: card.imageUrl || null, cover_image: card.cover_image || null,
+        images: card.images || [], image_url: card.imageUrl || null, cover_image: card.coverImage || null,
         labels: card.labels || [], checklists: card.checklists || [], comments: card.comments || [],
-        assigned_users: card.assigned_users || [], column: card.column, time_spent: card.timeSpent ?? 0,
-        timer_running: card.timer_running ?? false, timer_start: card.timer_start || null, history
+        assigned_users: card.assignedUsers || [], column: card.column, time_spent: card.timeSpent ?? 0,
+        timer_running: card.timerRunning ?? false, timer_start: card.timerStart || null, history
       }).select();
 
       if (data?.[0]) {
@@ -353,8 +365,12 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         pendingOpsRef.current.delete(tempId);
         pendingOpsRef.current.add(realId);
         setTimeout(() => pendingOpsRef.current.delete(realId), 3000);
-      } else pendingOpsRef.current.delete(tempId);
+        return realId;
+      } else {
+        pendingOpsRef.current.delete(tempId);
+      }
       if (error) throw error;
+      return undefined;
     }, { clientName: card.clientName });
   }, [createHistoryAction]);
 
@@ -563,21 +579,24 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     updateTask(taskId, { status: 'processing', progress: 10 });
 
     try {
-      const { compressImage } = await import('@/lib/utils');
-      const compressedBase64 = await compressImage(file, 1600, 0.8);
+      const { compressImageToBlob, sanitizeFileName } = await import('@/lib/utils');
+      const blob = await compressImageToBlob(file, 1600, 0.8);
       
-      const res = await fetch(compressedBase64);
-      const blob = await res.blob();
-      const fileName = `${cardId}/${Date.now()}-${file.name.replace(/[^\x00-\x7F]/g, "")}`;
+      const card = kanbanCards.find(c => c.id === cardId);
+      const clientSlug = card ? slugify(card.clientName) : 'geral';
+      const safeName = sanitizeFileName(file.name);
+      const fileName = `${clientSlug}/${cardId}/${Date.now()}-${safeName}`;
       
       updateTask(taskId, { progress: 50 });
-      const { data, error } = await supabase.storage.from('kanban_assets').upload(fileName, blob, { contentType: 'image/jpeg', cacheControl: '3600' });
+      const { data, error } = await supabase.storage.from('kanban_assets').upload(fileName, blob, { 
+        contentType: 'image/jpeg', 
+        cacheControl: '3600' 
+      });
       if (error) throw error;
       
       const { data: { publicUrl } } = supabase.storage.from('kanban_assets').getPublicUrl(fileName);
       updateTask(taskId, { progress: 90 });
 
-      const card = kanbanCards.find(c => c.id === cardId);
       if (card) {
         const currentImages = card.images || [];
         const updatedImages = [...currentImages, publicUrl];
@@ -586,10 +605,15 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
       updateTask(taskId, { status: 'completed', progress: 100 });
       resolveTask(taskId);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Upload complete error object:', err);
+      const errorMessage = err.message || 'Erro desconhecido ao enviar';
       updateTask(taskId, { status: 'failed' });
-      toast.error('Erro ao enviar imagem.');
+      toast.error(`Falha no Upload: ${errorMessage}`);
+      
+      if (errorMessage.includes('bucket')) {
+        toast.info('Dica: Verifique se o balde kanban_assets foi criado no Supabase.');
+      }
     }
   }, [enqueueTask, updateTask, resolveTask, kanbanCards, updateKanbanCard]);
 

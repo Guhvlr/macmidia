@@ -44,7 +44,7 @@ export interface KanbanCard {
   archivedAt?: string;
   history?: CardAction[];
   // AI fields
-  aiStatus?: 'analyzing' | 'approved' | 'issues_found' | null;
+  aiStatus?: 'analyzing' | 'approved' | 'issues_found' | 'price_mismatch' | 'error' | null;
   aiReport?: any;
   source?: 'manual' | 'whatsapp';
   originalMessage?: string;
@@ -160,7 +160,7 @@ export interface AppState {
   addEmployee: (emp: Omit<Employee, 'id'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string, deleteData?: boolean) => void;
-  addKanbanCard: (card: Omit<KanbanCard, 'id'>) => void;
+  addKanbanCard: (card: Omit<KanbanCard, 'id'>) => Promise<string | undefined>;
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => void;
   deleteKanbanCard: (id: string) => void;
   moveKanbanCard: (id: string, column: string) => void;

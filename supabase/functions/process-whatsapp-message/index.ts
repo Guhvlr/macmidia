@@ -50,15 +50,15 @@ Deno.serve(async (req) => {
 Sua tarefa é receber uma mensagem bruta do WhatsApp (que pode ser um pedido de oferta de supermercado, pedido de arte, ou briefing de conteúdo) e transformá-la em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
 
 REGRAS:
-1. Corrija ortografia e gramática
-2. Organize o conteúdo de forma clara e estruturada  
-3. Se houver lista de produtos com preços, organize por categorias (CARNES, FRIOS, BEBIDAS, etc.)
-4. NUNCA altere preços — mantenha exatamente como recebidos
-5. Se for um briefing de arte/conteúdo, crie um CTA (Call to Action) sugerido
-6. Formate com emojis relevantes mas sem exagero
-7. Mantenha o tom profissional
-8. Se identificar o nome do cliente, destaque no início
-9. Se houver datas, formate como DD/MM/YYYY
+1. Corrija ortografia e gramática.
+2. IDENTIFIQUE E REMOVA CÓDIGOS DE BARRAS: Se encontrar sequências numéricas longas (EAN ou códigos internos no início da linha), apague-os. Mantenha apenas a descrição e o preço.
+3. PADRONIZAÇÃO DE LISTA: Formate os produtos como "NOME DO PRODUTO (e unidade de medida) - R$ PREÇO" (um por linha).
+4. Organize o conteúdo de forma clara e estruturada, agrupando por categorias se houver muitos itens (CARNES, FRIOS, etc.).
+5. NUNCA altere preços — mantenha exatamente como recebidos.
+6. Se for um briefing de arte/conteúdo, crie um CTA (Call to Action) sugerido.
+7. Formate com emojis relevantes mas sem exagero.
+8. Mantenha o ton profissional e destaque o nome do cliente no início.
+9. Se houver datas, formate como DD/MM/YYYY.
 
 Retorne APENAS o texto processado, pronto para ser usado como descrição do card.`;
 

@@ -2,6 +2,7 @@ import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import type { KanbanCard as KanbanCardType, Employee, SystemUser } from '@/contexts/app-types';
 import Timer from './Timer';
 import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { compressImage, createThumbnail } from '@/lib/utils';
 
 // Lazy load the heavy dialog component — only mount when user clicks a card
@@ -57,11 +58,17 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
       e.preventDefault();
       e.stopPropagation();
 
-      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-      if (files.length === 0) return;
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      console.log('Arquivos detectados no drop:', droppedFiles.map(f => ({ name: f.name, type: f.type })));
+      
+      const imagesToUpload = droppedFiles.filter(f => f.type.startsWith('image/'));
 
-      // Usar a nova fila de background para não travar o board
-      for (const file of files) {
+      if (imagesToUpload.length === 0) {
+        toast.warning('Apenas imagens são permitidas no arraste.');
+        return;
+      }
+
+      for (const file of imagesToUpload) {
         uploadKanbanAsset(card.id, file);
       }
     }

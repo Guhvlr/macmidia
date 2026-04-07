@@ -24,10 +24,11 @@ export const DescriptionSection = memo( ({
   return (
     <div className="pl-10 space-y-10">
       {/* AI REPORT */}
-      {(card.aiStatus === 'analyzing' || card.aiStatus === 'issues_found' || card.aiStatus === 'approved' || card.aiStatus === 'price_mismatch') && (
+      {(card.aiStatus === 'analyzing' || card.aiStatus === 'issues_found' || card.aiStatus === 'approved' || card.aiStatus === 'price_mismatch' || card.aiStatus === 'error') && (
         <div className={`rounded-2xl border p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500 ${
           card.aiStatus === 'analyzing' ? 'bg-blue-500/5 border-blue-500/20' : 
           card.aiStatus === 'approved' ? 'bg-emerald-500/5 border-emerald-500/20' : 
+          card.aiStatus === 'error' ? 'bg-zinc-800/20 border-white/10' :
           card.aiStatus === 'price_mismatch' ? 'bg-red-500/5 border-red-500/20' :
           'bg-amber-500/5 border-amber-500/20'
         }`}>
@@ -45,10 +46,11 @@ export const DescriptionSection = memo( ({
               <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
                 card.aiStatus === 'analyzing' ? 'bg-blue-500/20 text-blue-400' : 
                 card.aiStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 
+                card.aiStatus === 'error' ? 'bg-white/10 text-white/40' :
                 card.aiStatus === 'price_mismatch' ? 'bg-red-500/20 text-red-400' :
                 'bg-amber-500/20 text-amber-400'
               }`}>
-                {card.aiStatus === 'analyzing' ? 'Analisando...' : card.aiStatus === 'approved' ? 'Aprovado' : card.aiStatus === 'price_mismatch' ? 'Bloqueado' : 'Pendências'}
+                {card.aiStatus === 'analyzing' ? 'Analisando...' : card.aiStatus === 'approved' ? 'Aprovado' : card.aiStatus === 'error' ? 'Erro na IA' : card.aiStatus === 'price_mismatch' ? 'Bloqueado' : 'Pendências'}
               </span>
             </div>
           </div>
@@ -76,6 +78,14 @@ export const DescriptionSection = memo( ({
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <p className="text-[11px] text-emerald-400 font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Tudo certo! A IA conferiu os dados e as imagens estão batendo com o texto.
+              </p>
+            </div>
+          )}
+
+          {card.aiStatus === 'error' && (
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <p className="text-[11px] text-white/50 font-bold flex items-center gap-2 italic">
+                <AlertTriangle className="w-3.5 h-3.5 text-zinc-500" /> A IA Auditora não conseguiu concluir a análise técnica.
               </p>
             </div>
           )}

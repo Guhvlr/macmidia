@@ -21,6 +21,7 @@ interface InboxMessage {
   media_mime_type: string | null;
   status: string;
   created_at: string;
+  raw_payload: any;
 }
 
 const WhatsAppInbox = () => {
@@ -130,32 +131,112 @@ const WhatsAppInbox = () => {
     setAiLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('process-whatsapp-message', {
-        body: { 
-          messageText: selectedMessage.message_text,
-          senderName: selectedMessage.sender_name || 'Desconhecido',
-          mode
+      // Get OpenAI key from settings
+      const { data: settingsData } = await (supabase as any)
+        .from('settings')
+        .select('value')
+        .eq('key', 'openai_api_key')
+        .single();
+
+      const apiKey = settingsData?.value;
+      
+      if (!apiKey) {
+        toast.error('Chave da OpenAI não configurada. Vá em Configurações para adicionar.');
+        setAiResult(selectedMessage.message_text);
+        setAiLoading(false);
+        return;
+      }
+
+      const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA. 
+Sua tarefa é receber uma mensagem bruta do WhatsApp e transformá-la em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
+
+REGRAS:
+1. Corrija ortografia e gramática
+2. Organize o conteúdo de forma clara e estruturada  
+3. Se houver lista de produtos com preços, organize por categorias (CARNES, FRIOS, BEBIDAS, etc.)
+4. NUNCA altere preços — mantenha exatamente como recebidos
+5. Se for um briefing de arte/conteúdo, crie um CTA (Call to Action) sugerido
+6. Formate com emojis relevantes mas sem exagero
+7. Mantenha o tom profissional
+8. Se identificar o nome do cliente ou supermercado, NÃO COLOQUE no texto da descrição. Extraia-o para o campo apropriado.
+9. NUNCA USE formatação markdown. É ESTRITAMENTE PROIBIDO usar asteriscos (**), negrito ou itálico. Retorne o texto puramente plano.
+
+Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
+{
+  "clientName": "Nome do Cliente/Grupo (ex: Laranjeiras)",
+  "description": "Texto processado da mensagem..."
+}
+`;
+
+      const creativePrompt = `Você é um REDATOR CRIATIVO E DIRETOR DE ARTE ESPECIALISTA EM VAREJO (SUPERMERCADOS) da Agência MAC MIDIA.
+Sua tarefa é transformar um briefing simples (ex: "faz um post de carne") em uma DESCRIÇÃO DE CARD detalhada, focada em gerar vendas para o supermercado.
+
+🧠 MEMÓRIA DE VAREJO (OBRIGATÓRIO):
+- Você trabalha com SUPERMERCADOS. Toda sugestão criativa deve ser voltada para produtos de consumo, alimentação, bebidas e utilidades domésticas.
+- Foque em datas específicas do varejo: "Terça-feira do Hortifruti", "Quinta-feira da Carne", "Final de Semana de Ofertas".
+- Pense na jornada do cliente: do café da manhã ao churrasco de domingo.
+
+REGRAS DE OURO:
+1. FOCO EM SUPERMERCADO: Pense em categorias como Açougue (Carnes), Hortifruti, Limpeza, Padaria e Mercearia.
+2. STORYTELLING DE VAREJO: Crie chamadas agressivas para ofertas ou textos afetivos para datas comemorativas.
+3. ROTEIRO DE VÍDEO/REELS: Se for vídeo, sugira cenas dinâmicas (ex: close na carne suculenta, close no preço).
+4. LEGENDAS DE IMPACTO: Escreva legendas que usem gatilhos de escassez (ex: "Só hoje!", "Enquanto durar o estoque").
+5. CALL TO ACTION (CTA): Sempre direcione para o WhatsApp da loja, link da bio ou para a loja física.
+6. DESIGN SUGERIDO: Sugira cores vibrantes (amarelo, vermelho, verde) que estimulem o apetite e a compra.
+7. NUNCA USE formatação markdown (asteriscos, negrito, etc.). Retorne o texto puramente plano.
+
+ESTRUTURA SUGERIDA:
+- TÍTULO CHAMATIVO
+- BRIEFING DA ARTE (O que o designer deve criar)
+- LEGENDA PARA SOCIAL MEDIA
+- ROTEIRO RÁPIDO (Se aplicável)
+- CTA FINAL
+
+Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
+{
+  "clientName": "Nome do Cliente/Grupo (ex: Laranjeiras)",
+  "description": "Texto processado e criativo focado em supermercado..."
+}
+`;
+
+      const systemPrompt = mode === 'creative' ? creativePrompt : standardPrompt;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Remetente: ${selectedMessage.sender_name || 'Desconhecido'}\n\nMensagem:\n${selectedMessage.message_text}` },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: mode === 'creative' ? 0.8 : 0.3,
+          max_tokens: 2000,
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`OpenAI error: ${response.status}`);
+      }
 
-      const { processedText, clientName, priceMismatch, originalOrder } = data;
+      const data = await response.json();
+      const contentString = data.choices?.[0]?.message?.content || '{}';
+      const parsedData = JSON.parse(contentString);
       
-      setAiResult(processedText);
-      setIsSequencia(originalOrder || false);
+      const processedText = parsedData.description || selectedMessage.message_text;
+      const strippedText = processedText.replace(/\*/g, ''); // Remove all asterisks
       
-      if (clientName && clientName !== 'Desconhecido') {
-        setEditClientName(clientName.toUpperCase());
+      setAiResult(strippedText);
+      if (parsedData.clientName && parsedData.clientName !== 'Desconhecido') {
+        const cleanedName = parsedData.clientName.replace(/["']/g, '');
+        setEditClientName(cleanedName.toUpperCase());
       }
       
-      if (priceMismatch) {
-        toast.error('⚠️ ATENÇÃO: Divergência de preços detectada pela IA! Por favor, confira os valores com a mensagem original.', {
-          duration: 6000,
-        });
-      } else {
-        toast.success(mode === 'creative' ? '✨ CriATIVIDADE em ação!' : '✨ Ofertas organizadas!');
-      }
+      toast.success(mode === 'creative' ? '✨ CriATIVIDADE em ação!' : '✨ Ofertas organizadas!');
     } catch (err: any) {
       console.error('Erro na IA:', err);
       setAiResult(selectedMessage.message_text);
@@ -235,11 +316,14 @@ const WhatsAppInbox = () => {
     if (msg.message_type === 'image') return <Image className="w-3.5 h-3.5" />;
     if (msg.message_type === 'document') {
       const mime = (msg.media_mime_type || '').toLowerCase();
-      if (mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet')) return <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />;
-      if (mime.includes('word') || mime.includes('officedocument.wordprocessingml')) return <FileCode className="w-3.5 h-3.5 text-blue-500" />;
-      return <FileText className="w-3.5 h-3.5" />;
+      const text = (msg.message_text || '').toLowerCase();
+      if (mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || text.includes('.xlsx') || text.includes('.xls')) 
+        return <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />;
+      if (mime.includes('word') || mime.includes('officedocument.wordprocessingml') || text.includes('.docx') || text.includes('.doc')) 
+        return <FileCode className="w-3.5 h-3.5 text-blue-500" />;
+      return <FileText className="w-3.5 h-3.5 text-amber-500" />;
     }
-    if (msg.message_type === 'audio') return <Clock className="w-3.5 h-3.5" />; // Placeholder or specific icon
+    if (msg.message_type === 'audio') return <Clock className="w-3.5 h-3.5" />;
     return <MessageSquare className="w-3.5 h-3.5" />;
   };
 
@@ -247,33 +331,22 @@ const WhatsAppInbox = () => {
     if (!filterActive) return messages;
     
     return messages.filter(msg => {
-      // Sempre manter mensagens com anexo (imagem/doc/áudio), pois costumam ser ofertas ou briefings
+      // 1. Sempre manter mensagens com anexo (imagem/doc/áudio), pois costumam ser ofertas ou briefings
       if (msg.media_url || msg.message_type !== 'text') return true;
       
       const text = (msg.message_text || '').trim();
       if (!text) return false;
 
-      // Quebrar em linhas e remover linhas vazias
-      const lines = text.split('\n').filter(l => l.trim().length > 0);
-      
-      // 1. Requisito básico: Pelo menos 3 linhas (padrão de lista de ofertas)
-      const hasManyLines = lines.length >= 3;
-      
-      // 2. Detecção de Padrão de Preço (ex: 10,99 ou R$ 10,99)
-      const priceRegex = /(\d+[,.]\d{2})|R\$/i;
+      // 2. Detecção de Padrão de Preço (ex: 10,99 ou R$ 10,99) - ESSENCIAL PARA "OFERTA"
+      const priceRegex = /\d+[,.]\d{2}/i;
       const hasPrices = priceRegex.test(text);
 
-      // 3. Palavras-chave de varejo/supermercado
-      const supermarketKeywords = [
-        'arroz', 'feijao', 'feijão', 'carne', 'leite', 'pão', 'pao', 'cafe', 'café', 
-        'açucar', 'açúcar', 'oleo', 'óleo', 'frango', 'cerveja', 'refri', 'limpeza', 
-        'oferta', 'promo', 'kg', 'un', 'unidade', 'litro', 'grama', 'frios', 'horti',
-        'fruta', 'maçã', 'verdura'
-      ];
-      const hasKeywords = supermarketKeywords.some(k => text.toLowerCase().includes(k));
+      // 3. Palavras-chave FORTES de varejo/supermercado
+      const forceKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama'];
+      const hasForceKeywords = forceKeywords.some(k => text.toLowerCase().includes(k));
 
-      // Se tiver muitas linhas E (contiver preços OU palavras-chave de produto), consideramos uma oferta
-      return hasManyLines && (hasPrices || hasKeywords);
+      // 4. Se tiver preço OU palavras de força de venda, consideramos oferta
+      return hasPrices || hasForceKeywords;
     });
   };
 
@@ -386,7 +459,7 @@ const WhatsAppInbox = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-sm font-bold text-white truncate">
-                      {msg.sender_name || msg.sender.replace(/@.*/, '')}
+                      {msg.sender_name || 'Desconhecido'}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/30 font-bold uppercase flex items-center gap-1">
                       {getTypeIcon(msg)} {getTypeLabel(msg.message_type)}

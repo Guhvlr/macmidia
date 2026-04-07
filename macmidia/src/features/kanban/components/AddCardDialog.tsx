@@ -134,7 +134,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
       )}
       <DialogContent className="glass-card border-border/50 fixed left-1/2 top-1/2 !translate-x-[-50%] !translate-y-[-50%] shadow-[0_0_100px_rgba(0,0,0,0.8)]">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">Novo Card</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Novo Card Mac Mídia</DialogTitle>
           <DialogDescription className="sr-only">Preencha as informações para criar um novo card de produção no Kanban.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

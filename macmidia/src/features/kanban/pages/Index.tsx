@@ -217,7 +217,7 @@ const Index = () => {
           <div className="flex items-center gap-6">
             <img src={logoSrc} alt="Logo" className="h-14 w-auto object-contain transition-all hover:scale-110 drop-shadow-[0_0_25px_hsl(var(--primary)/0.35)]" />
             <h1 className="text-2xl font-black tracking-tighter flex items-center text-white italic">
-              MAC MÍDIA <span className="text-white/10 font-thin mx-3 not-italic">/</span> <span className="opacity-30 text-base font-bold tracking-normal not-italic">Gestão Operacional</span>
+              MAC V2 FINAL <span className="text-white/10 font-thin mx-3 not-italic">/</span> <span className="opacity-30 text-base font-bold tracking-normal not-italic">Gestão Operacional</span>
             </h1>
           </div>
           <div className="flex items-center gap-3">

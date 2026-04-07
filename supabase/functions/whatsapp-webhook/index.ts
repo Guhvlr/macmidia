@@ -102,60 +102,57 @@ Deno.serve(async (req) => {
        }
     }
 
-    // --- 🏆 EXTRAÇÃO DE CONTEÚDO DE DOCUMENTOS (EXCEL/WORD) 🏆 ---
-    if (messageType === 'document' && mediaUrl) {
-      console.log(`[DOC-EXTRACT] Identificado documento: ${mediaUrl}`);
-      try {
-        const fileName = (mData.fileName || mData.caption || '').toLowerCase();
-        const mime = (mediaMimeType || '').toLowerCase();
-        
-        const isExcel = mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-        const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml') || fileName.endsWith('.docx') || fileName.endsWith('.doc');
+    // --- 🏆 SUPER EXTRAÇÃO DE DOCUMENTOS (DIAGNÓSTICO INTEGRADO) 🏆 ---
+    if (messageType === 'document') {
+      const fileName = (mData.fileName || mData.caption || mData.directPath || mData.url || '').toLowerCase();
+      const mime = (mediaMimeType || '').toLowerCase();
+      
+      const isExcel = mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || fileName.includes('.xlsx') || fileName.includes('.xls');
+      const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml') || fileName.includes('.docx') || fileName.includes('.doc');
 
-        if (isExcel || isWord) {
-          messageText = `${messageText}\n🔄 [SISTEMA]: Lendo arquivo ${isExcel ? 'Excel' : 'Word'}... Aguarde.`;
-          
+      // Se identificado, tenta extrair. Se não, mostra diagnóstico.
+      if (mediaUrl && (isExcel || isWord)) {
+        messageText = `${messageText}\n🔄 [SISTEMA]: Lendo arquivo ${isExcel ? 'Excel' : 'Word'}... Aguarde.`;
+        try {
           const fileResp = await fetch(mediaUrl, { 
             headers: { 'apikey': evoApiKey || '' },
-            signal: AbortSignal.timeout(15000) // 15 segundos de timeout
+            signal: AbortSignal.timeout(15000)
           });
 
           if (fileResp.ok) {
             const arrayBuffer = await fileResp.arrayBuffer();
-            console.log(`[DOC-EXTRACT] Arquivo baixado: ${arrayBuffer.byteLength} bytes.`);
-            
             if (isExcel) {
               const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
               let extractedText = '';
               workbook.SheetNames.forEach(sheetName => {
                 const worksheet = workbook.Sheets[sheetName];
                 const text = XLSX.utils.sheet_to_txt(worksheet);
-                if (text.trim()) {
-                  extractedText += `--- Planilha: ${sheetName} ---\n${text}\n\n`;
-                }
+                if (text.trim()) extractedText += `--- Planilha: ${sheetName} ---\n${text}\n\n`;
               });
-              
-              if (extractedText.trim()) {
-                messageText = `✅ [CONTEÚDO EXTRAÍDO DO EXCEL]:\n${extractedText.trim()}`;
-              } else {
-                messageText = `⚠️ [SISTEMA]: O Excel foi lido, mas parece estar vazio ou sem texto.`;
-              }
-            } else if (isWord) {
+              if (extractedText.trim()) messageText = `✅ [CONTEÚDO EXTRAÍDO DO EXCEL]:\n${extractedText.trim()}`;
+              else messageText = `⚠️ [SISTEMA]: O Excel foi lido, mas parece não ter texto.`;
+            } else {
               const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-              if (result.value.trim()) {
-                messageText = `✅ [CONTEÚDO EXTRAÍDO DO WORD]:\n${result.value.trim()}`;
-              } else {
-                messageText = `⚠️ [SISTEMA]: O Word foi lido, mas não encontramos texto dentro dele.`;
-              }
+              if (result.value.trim()) messageText = `✅ [CONTEÚDO EXTRAÍDO DO WORD]:\n${result.value.trim()}`;
+              else messageText = `⚠️ [SISTEMA]: O Word foi lido, mas não encontramos texto.`;
             }
           } else {
-            messageText = `❌ [ERRO SISTEMA]: Não consegui baixar o arquivo (Status: ${fileResp.status}).`;
-            console.error(`[DOC-EXTRACT] Erro no fetch: ${fileResp.status}`);
+            messageText = `❌ [ERRO SISTEMA]: Link de download falhou (Status: ${fileResp.status}).\n🌐 URL: ${mediaUrl}`;
           }
+        } catch (err) {
+          messageText = `❌ [ERRO EXTRAÇÃO]: ${err.message}.\n📍 URL Tentada: ${mediaUrl}`;
         }
-      } catch (docErr) {
-        messageText = `❌ [ERRO SISTEMA]: Falha no processamento. ${docErr.message}`;
-        console.error('[DOC-EXTRACT ERROR]:', docErr.message);
+      } else {
+        // DIAGNÓSTICO: Se caiu aqui, é porque não reconhecemos como Excel/Word ou não tem URL
+        const debugInfo = JSON.stringify({ 
+          type: messageType, 
+          mime: mediaMimeType, 
+          hasUrl: !!mediaUrl,
+          fileNameInsideMData: mData.fileName || 'NÃO ENCONTRADO',
+          keysInMData: Object.keys(mData)
+        }, null, 2);
+        
+        messageText = `🔎 [DIAGNÓSTICO DE ARQUIVO]:\nO sistema não reconheceu este documento como Excel/Word automático.\n\nMETADADOS RECEBIDOS:\n${debugInfo}\n\nSe isso for um Excel, copie o texto acima e envie para o suporte.`;
       }
     }
 

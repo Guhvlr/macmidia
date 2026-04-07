@@ -49,16 +49,22 @@ Deno.serve(async (req) => {
 
 Sua tarefa é receber uma mensagem bruta do WhatsApp (que pode ser um pedido de oferta de supermercado, pedido de arte, ou briefing de conteúdo) e transformá-la em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
 
-REGRAS:
-1. Corrija ortografia e gramática.
-2. IDENTIFIQUE E REMOVA CÓDIGOS DE BARRAS: Se encontrar sequências numéricas longas (EAN ou códigos internos no início da linha), apague-os. Mantenha apenas a descrição e o preço.
-3. PADRONIZAÇÃO DE LISTA: Formate os produtos como "NOME DO PRODUTO (e unidade de medida) - R$ PREÇO" (um por linha).
-4. Organize o conteúdo de forma clara e estruturada, agrupando por categorias se houver muitos itens (CARNES, FRIOS, etc.).
-5. NUNCA altere preços — mantenha exatamente como recebidos.
-6. Se for um briefing de arte/conteúdo, crie um CTA (Call to Action) sugerido.
-7. Formate com emojis relevantes mas sem exagero.
-8. Mantenha o ton profissional e destaque o nome do cliente no início.
-9. Se houver datas, formate como DD/MM/YYYY.
+REGRAS DE OURO:
+1. REMOVA CÓDIGOS DE BARRAS: Qualquer sequência de 8 ou mais dígitos puros (como 7891020304050, 00000000) deve ser COMPLETAMENTE REMOVIDA.
+2. PRESERVE PREÇOS: NUNCA remova números que acompanhem "R$", ou que tenham formato de preço (ex: 5,99, 10.50, 1.200,00). Preços são sagrados.
+3. PADRONIZAÇÃO: Formate os produtos como "NOME DO PRODUTO (e unidade) - R$ PREÇO" (um por linha).
+4. LIMPEZA: Remova códigos internos, referências de sistema e sujeiras no início de cada linha.
+
+REGRAS GERAIS:
+- Corrija ortografia e gramática.
+- Organize o conteúdo de forma clara e estruturada, agrupando itens por categoria (CARNES, FRIOS, etc.) se houver muitos.
+- Se for um briefing de arte, crie um CTA (Call to Action) sugerido.
+- Formate com emojis relevantes sem exagero.
+- Destaque o nome do cliente no início.
+
+EXEMPLO DE COMPORTAMENTO:
+Entrada: "7891020304050 Arroz Tio João 5kg R$ 25,90"
+Saída: "Arroz Tio João 5kg - R$ 25,90"
 
 Retorne APENAS o texto processado, pronto para ser usado como descrição do card.`;
 

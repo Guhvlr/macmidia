@@ -84,9 +84,11 @@ Deno.serve(async (req) => {
     // --- 🏆 EXTRAÇÃO DE CONTEÚDO DE DOCUMENTOS (EXCEL/WORD) 🏆 ---
     if (messageType === 'document' && mediaUrl) {
       try {
+        const fileName = (mData.fileName || mData.caption || '').toLowerCase();
         const mime = (mediaMimeType || '').toLowerCase();
-        const isExcel = mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || remoteJid.includes('.xlsx') || remoteJid.includes('.xls');
-        const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml');
+        
+        const isExcel = mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+        const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml') || fileName.endsWith('.docx') || fileName.endsWith('.doc');
 
         if (isExcel || isWord) {
           console.log(`[DOC-EXTRACT] Iniciando extração de: ${mediaUrl}`);

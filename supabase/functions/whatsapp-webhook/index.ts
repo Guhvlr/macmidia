@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
 
         if (isExcel || isWord) {
           console.log(`[DOC-EXTRACT] Iniciando extração de: ${mediaUrl}`);
-          const fileResp = await fetch(mediaUrl);
+          const fileResp = await fetch(mediaUrl, { headers: { 'apikey': evoApiKey || '' } });
           if (fileResp.ok) {
             const arrayBuffer = await fileResp.arrayBuffer();
             

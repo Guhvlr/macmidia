@@ -331,22 +331,25 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
     if (!filterActive) return messages;
     
     return messages.filter(msg => {
-      // 1. Sempre manter mensagens com anexo (imagem/doc/áudio), pois costumam ser ofertas ou briefings
+      // 1. Sempre manter mensagens com anexo (imagem/doc/áudio), pois agora extraímos o texto deles
       if (msg.media_url || msg.message_type !== 'text') return true;
       
-      const text = (msg.message_text || '').trim();
+      const text = (msg.message_text || '').toLowerCase();
       if (!text) return false;
 
-      // 2. Detecção de Padrão de Preço (ex: 10,99 ou R$ 10,99) - ESSENCIAL PARA "OFERTA"
+      // 2. Detecção de Padrão de Preço (ex: 10,99 ou R$ 10,99)
       const priceRegex = /\d+[,.]\d{2}/i;
       const hasPrices = priceRegex.test(text);
 
-      // 3. Palavras-chave FORTES de varejo/supermercado
-      const forceKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama'];
-      const hasForceKeywords = forceKeywords.some(k => text.toLowerCase().includes(k));
+      // 3. Palavras-chave de Oferta
+      const offerKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama', 'preço', 'valor'];
+      const hasOfferContext = offerKeywords.some(k => text.includes(k));
 
-      // 4. Se tiver preço OU palavras de força de venda, consideramos oferta
-      return hasPrices || hasForceKeywords;
+      // 4. Descrição Mínima (para evitar mensagens curtas irrelevantes)
+      const hasDescription = text.trim().length > 15;
+
+      // O filtro "Inteligente" agora exige: Preço + Contexto de Oferta + Descrição
+      return hasPrices && hasOfferContext && hasDescription;
     });
   };
 

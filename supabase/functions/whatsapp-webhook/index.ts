@@ -7,6 +7,8 @@
 // =====================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import * as XLSX from 'https://esm.sh/xlsx';
+import mammoth from 'https://esm.sh/mammoth';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,6 +100,47 @@ Deno.serve(async (req) => {
        if (possibleName.length >= 3 && possibleName.length < 25) {
          finalSenderName = possibleName;
        }
+    }
+
+    // --- 🏆 EXTRAÇÃO DE CONTEÚDO DE DOCUMENTOS (EXCEL/WORD) 🏆 ---
+    if (messageType === 'document' && mediaUrl) {
+      try {
+        const mime = (mediaMimeType || '').toLowerCase();
+        const isExcel = mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || remoteJid.includes('.xlsx') || remoteJid.includes('.xls');
+        const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml');
+
+        if (isExcel || isWord) {
+          console.log(`[DOC-EXTRACT] Iniciando extração de: ${mediaUrl}`);
+          const fileResp = await fetch(mediaUrl);
+          if (fileResp.ok) {
+            const arrayBuffer = await fileResp.arrayBuffer();
+            
+            if (isExcel) {
+              const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+              let extractedText = '';
+              workbook.SheetNames.forEach(sheetName => {
+                const worksheet = workbook.Sheets[sheetName];
+                const text = XLSX.utils.sheet_to_txt(worksheet);
+                if (text.trim()) {
+                  extractedText += `--- Planilha: ${sheetName} ---\n${text}\n\n`;
+                }
+              });
+              if (extractedText.trim()) {
+                messageText = `${messageText}\n\n[CONTEÚDO EXTRAÍDO DO EXCEL]:\n${extractedText.trim()}`;
+                console.log(`[DOC-EXTRACT] Sucesso na extração do Excel.`);
+              }
+            } else if (isWord) {
+              const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+              if (result.value.trim()) {
+                messageText = `${messageText}\n\n[CONTEÚDO EXTRAÍDO DO WORD]:\n${result.value.trim()}`;
+                console.log(`[DOC-EXTRACT] Sucesso na extração do Word.`);
+              }
+            }
+          }
+        }
+      } catch (docErr) {
+        console.error('[DOC-EXTRACT ERROR]:', docErr.message);
+      }
     }
 
     const { data: savedMsg, error: saveError } = await supabase

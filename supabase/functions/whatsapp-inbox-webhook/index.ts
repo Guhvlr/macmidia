@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
 
     // --- 🏆 EXTRAÇÃO DE CONTEÚDO DE DOCUMENTOS (EXCEL/WORD) 🏆 ---
     if (messageType === 'document' && mediaUrl) {
+      console.log(`[DOC-EXTRACT] Identificado documento: ${mediaUrl}`);
       try {
         const fileName = (mData.fileName || mData.caption || '').toLowerCase();
         const mime = (mediaMimeType || '').toLowerCase();
@@ -91,10 +92,16 @@ Deno.serve(async (req) => {
         const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml') || fileName.endsWith('.docx') || fileName.endsWith('.doc');
 
         if (isExcel || isWord) {
-          console.log(`[DOC-EXTRACT] Iniciando extração de: ${mediaUrl}`);
-          const fileResp = await fetch(mediaUrl, { headers: { 'apikey': evoApiKey || '' } });
+          messageText = `${messageText}\n🔄 [SISTEMA]: Lendo arquivo ${isExcel ? 'Excel' : 'Word'}... Aguarde.`;
+          
+          const fileResp = await fetch(mediaUrl, { 
+            headers: { 'apikey': evoApiKey || '' },
+            signal: AbortSignal.timeout(15000) // 15 segundos de timeout
+          });
+
           if (fileResp.ok) {
             const arrayBuffer = await fileResp.arrayBuffer();
+            console.log(`[DOC-EXTRACT] Arquivo baixado: ${arrayBuffer.byteLength} bytes.`);
             
             if (isExcel) {
               const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
@@ -106,20 +113,27 @@ Deno.serve(async (req) => {
                   extractedText += `--- Planilha: ${sheetName} ---\n${text}\n\n`;
                 }
               });
+              
               if (extractedText.trim()) {
-                messageText = `${messageText}\n\n[CONTEÚDO EXTRAÍDO DO EXCEL]:\n${extractedText.trim()}`;
-                console.log(`[DOC-EXTRACT] Sucesso na extração do Excel.`);
+                messageText = `✅ [CONTEÚDO EXTRAÍDO DO EXCEL]:\n${extractedText.trim()}`;
+              } else {
+                messageText = `⚠️ [SISTEMA]: O Excel foi lido, mas parece estar vazio ou sem texto.`;
               }
             } else if (isWord) {
               const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
               if (result.value.trim()) {
-                messageText = `${messageText}\n\n[CONTEÚDO EXTRAÍDO DO WORD]:\n${result.value.trim()}`;
-                console.log(`[DOC-EXTRACT] Sucesso na extração do Word.`);
+                messageText = `✅ [CONTEÚDO EXTRAÍDO DO WORD]:\n${result.value.trim()}`;
+              } else {
+                messageText = `⚠️ [SISTEMA]: O Word foi lido, mas não encontramos texto dentro dele.`;
               }
             }
+          } else {
+            messageText = `❌ [ERRO SISTEMA]: Não consegui baixar o arquivo (Status: ${fileResp.status}).`;
+            console.error(`[DOC-EXTRACT] Erro no fetch: ${fileResp.status}`);
           }
         }
       } catch (docErr) {
+        messageText = `❌ [ERRO SISTEMA]: Falha no processamento. ${docErr.message}`;
         console.error('[DOC-EXTRACT ERROR]:', docErr.message);
       }
     }

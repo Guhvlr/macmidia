@@ -23,7 +23,8 @@ import {
   Link as LinkIcon,
   Copy,
   ChevronLeft,
-  Settings
+  Settings,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 export default function Products() {
   const navigate = useNavigate();
@@ -43,6 +53,18 @@ export default function Products() {
   const [processStep, setProcessStep] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualEan, setManualEan] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualBrand, setManualBrand] = useState('');
+  const [manualLine, setManualLine] = useState('');
+  const [manualCategory, setManualCategory] = useState('');
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [showVariationsFor, setShowVariationsFor] = useState<string | null>(null);
+  const [variations, setVariations] = useState<any[]>([]);
+  const [manualSearch, setManualSearch] = useState('');
+  const [manualResults, setManualResults] = useState<any[]>([]);
+  const [isSearchingManual, setIsSearchingManual] = useState(false);
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -95,7 +117,7 @@ export default function Products() {
       // Update in result list so it shows immediately
       const newUrl = getImageUrl(cleanEan) + '?t=' + Date.now();
       setSearchResults(prev => prev.map(item => 
-        item.ean === ean ? { ...item, image: newUrl, found: true } : item
+        item.ean === ean ? { ...item, images: [newUrl], found: true } : item
       ));
 
       toast.success(`Imagem para ${ean} atualizada!`);
@@ -178,8 +200,11 @@ export default function Products() {
       for (let i = 0; i < jsonData.length; i += batchSize) {
         const batch = jsonData.slice(i, i + batchSize).map(row => ({
           ean: String(row.EAN || row.ean || row.codigo || row.CODIGO || '').replace(/[^0-9]/g, ''),
-          description: String(row.Descricao || row.descricao || row.nome || row.produto || row.PRODUTO || '').trim()
-        })).filter(row => row.ean && row.description);
+          name: String(row.Descricao || row.descricao || row.nome || row.produto || row.PRODUTO || '').trim(),
+          brand: String(row.Marca || row.marca || row.MARCA || '').trim(),
+          line: String(row.Linha || row.linha || row.LINHA || '').trim(),
+          category: String(row.Categoria || row.categoria || row.CATEGORIA || '').trim()
+        })).filter(row => row.ean && row.name);
 
         if (batch.length > 0) {
           const { error } = await (supabase
@@ -264,13 +289,19 @@ export default function Products() {
       if (error) throw error;
 
       setProcessStep('Organizando resultados...');
-      const processedResults = (data.results || []).map((res: any) => ({
-        id: res.match?.id || Math.random(),
-        name: res.match?.name || res.original,
-        ean: res.match?.ean || 'Não encontrado',
-        found: res.found,
-        image: res.found ? getImageUrl(res.match.ean) : null
-      }));
+      const processedResults = (data.results || []).map((res: any) => {
+        const found = !!(res.found && res.match);
+        return {
+          id: res.match?.id || Math.random(),
+          name: res.match?.name || res.original,
+          ean: res.match?.ean || 'Não encontrado',
+          found: res.found,
+          images: found ? [getImageUrl(res.match.ean)] : [],
+          brand: res.match?.brand,
+          line: res.match?.line,
+          category: res.match?.category
+        };
+      });
 
       setSearchResults(processedResults);
       toast.success('Busca concluída!');
@@ -281,6 +312,153 @@ export default function Products() {
     } finally {
       setIsProcessing(false);
       setProcessStep('');
+    }
+  };
+
+  const loadVariations = async (product: any) => {
+    setIsProcessing(true);
+    try {
+      let query = (supabase.from('products') as any).select('*');
+      
+      if (product.brand && product.line) {
+        query = query.eq('brand', product.brand).eq('line', product.line);
+      } else {
+        const firstWord = product.name.split(' ')[0];
+        if (firstWord.length < 3) {
+           toast.error('Nome muito curto para busca automática.');
+           setIsProcessing(false);
+           return;
+        }
+        query = query.ilike('name', `%${firstWord}%`);
+      }
+
+      const { data, error } = await query.neq('ean', product.ean).limit(10);
+      
+      if (error) throw error;
+      setVariations(data || []);
+      setShowVariationsFor(product.ean);
+    } catch (e: any) {
+      toast.error('Erro ao buscar variações: ' + e.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const swapProduct = (oldEan: string, newProd: any) => {
+    setSearchResults(prev => prev.map(item => 
+      item.ean === oldEan ? { 
+        ...item, 
+        name: newProd.name, 
+        ean: newProd.ean, 
+        found: true, 
+        images: [getImageUrl(newProd.ean)],
+        brand: newProd.brand,
+        line: newProd.line 
+      } : item
+    ));
+    setShowVariationsFor(null);
+    toast.success('Produto substituído!');
+  };
+
+  const addToStack = (ean: string, imageUrl: string) => {
+    setSearchResults(prev => prev.map(item => {
+      if (item.ean === ean) {
+        if (item.images.includes(imageUrl)) return item;
+        return { ...item, images: [...item.images, imageUrl] };
+      }
+      return item;
+    }));
+    toast.success('Adicionado à pilha!');
+  };
+
+  const removeFromStack = (ean: string, index: number) => {
+    setSearchResults(prev => prev.map(item => {
+      if (item.ean === ean) {
+        return { ...item, images: item.images.filter((_: any, i: number) => i !== index) };
+      }
+      return item;
+    }));
+  };
+
+  const handleManualSearch = async (term: string, currentItem: any) => {
+    setManualSearch(term);
+    if (term.length < 3) {
+      setManualResults([]);
+      return;
+    }
+
+    setIsSearchingManual(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .or(`name.ilike.%${term}%,ean.ilike.%${term}%`)
+        .limit(10);
+
+      if (error) throw error;
+      setManualResults(data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSearchingManual(false);
+    }
+  };
+
+  const handleManualSave = async () => {
+    if (!manualEan || !manualName) {
+      toast.error('Preencha o nome e o código de barras.');
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      const ean = manualEan.replace(/[^0-9]/g, '');
+      const cleanEan = ean.padStart(13, '0'); // Pad if necessary
+
+      // 1. Upload file if selected
+      if (manualFile) {
+        const { error: storageErr } = await supabase.storage
+          .from('product-images')
+          .upload(`${ean}.png`, manualFile, { upsert: true });
+        if (storageErr) throw storageErr;
+      }
+
+      // 2. Upsert text data
+      const { error } = await (supabase.from('products') as any).upsert([
+        { 
+          ean, 
+          name: manualName.trim(),
+          brand: manualBrand.trim(),
+          line: manualLine.trim(),
+          category: manualCategory.trim()
+        }
+      ], { onConflict: 'ean' });
+
+      if (error) throw error;
+      
+      toast.success('Produto cadastrado/atualizado!');
+      setManualEan('');
+      setManualName('');
+      setManualBrand('');
+      setManualLine('');
+      setManualCategory('');
+      setManualFile(null);
+      setIsManualModalOpen(false);
+      
+      // Refresh count
+      const { count } = await (supabase.from('products') as any).select('*', { count: 'exact', head: true });
+      setTotalProducts(count || 0);
+
+      // If there's an active search, update it
+      if (searchResults.length > 0) {
+        setSearchResults(prev => prev.map(item => 
+          item.ean === ean ? { ...item, name: manualName, found: true, images: [getImageUrl(ean)] } : item
+        ));
+      }
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + err.message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -303,6 +481,13 @@ export default function Products() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsManualModalOpen(true)}
+              className="bg-red-600/10 hover:bg-red-600/20 rounded-xl text-xs font-bold border border-red-600/20 text-red-500"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Novo Produto
+            </Button>
             <Button 
               variant="outline" 
               onClick={() => document.getElementById('bulk-image-upload')?.click()}
@@ -440,28 +625,33 @@ export default function Products() {
               <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 gap-4' : 'space-y-3'}>
                 {searchResults.map((item, i) => (
                   <div key={i} className={`group bg-[#121214] border border-white/5 rounded-2xl overflow-hidden hover:border-red-600/30 transition-all ${viewMode === 'list' ? 'flex items-center p-3 gap-4' : ''}`}>
-                    <div className={`${viewMode === 'grid' ? 'aspect-square w-full' : 'w-16 h-16'} bg-black/40 relative`}>
-                      <img 
-                        src={item.image} 
-                        className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          if (target.dataset.triedAll) return;
-                          
-                          const extensions = ['.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.webp', '.WEBP'];
-                          const currentExt = extensions.find(ext => target.src.endsWith(ext));
-                          const currentIndex = currentExt ? extensions.indexOf(currentExt) : -1;
-                          
-                          if (currentIndex < extensions.length - 1) {
-                            const nextExt = extensions[currentIndex + 1];
-                            target.src = target.src.substring(0, target.src.lastIndexOf('.')) + nextExt;
-                          } else {
-                            target.dataset.triedAll = 'true';
-                            target.src = 'https://tl-storage.b-cdn.net/placeholder-image.png';
-                            target.classList.add('opacity-20', 'grayscale');
-                          }
-                        }}
-                      />
+                    <div className={`${viewMode === 'grid' ? 'aspect-square w-full' : 'w-16 h-16'} bg-black/40 relative flex items-center justify-center`}>
+                      {item.images.length === 0 ? (
+                        <ImageIcon className="w-8 h-8 text-white/5" />
+                      ) : (
+                        item.images.slice(0, 3).reverse().map((img: string, idx: number, arr: any[]) => {
+                          const total = arr.length;
+                          const revIdx = total - 1 - idx;
+                          return (
+                            <img 
+                              key={idx}
+                              src={img} 
+                              className="absolute object-contain p-2 transition-all shadow-xl bg-[#121214] rounded-lg border border-white/5"
+                              style={{
+                                width: '80%', height: '80%',
+                                transform: `translateX(${revIdx * 10}px) translateY(${-revIdx * 5}px)`,
+                                zIndex: 10 - revIdx,
+                                opacity: 1 - revIdx * 0.2
+                              }}
+                            />
+                          );
+                        })
+                      )}
+                      {item.images.length > 3 && (
+                        <div className="absolute right-2 bottom-2 bg-red-600 rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-black z-20 border-2 border-[#121214]">
+                          +{item.images.length - 3}
+                        </div>
+                      )}
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-90">
                         <input 
                           type="file" 
@@ -502,7 +692,120 @@ export default function Products() {
                     </div>
                     <div className="p-3 space-y-1">
                       <p className="text-[11px] font-bold text-white leading-tight uppercase line-clamp-2">{item.name}</p>
-                      <p className="text-[9px] font-mono text-white/30">{item.ean}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[9px] font-mono text-white/30">{item.ean}</p>
+                        <button 
+                          onClick={() => loadVariations(item)}
+                          className="text-[9px] font-black uppercase text-blue-500 hover:text-blue-400 flex items-center gap-1 transition-colors bg-blue-500/10 px-1.5 py-0.5 rounded"
+                        >
+                          <Zap className="w-2.5 h-2.5" /> Variações
+                        </button>
+                      </div>
+
+                      {/* Variation Overlay */}
+                      {showVariationsFor === item.ean && (
+                        <div className="absolute inset-0 z-[60] bg-[#121214] border-2 border-blue-500/20 rounded-2xl flex flex-col p-4 animate-in slide-in-from-right-full duration-300 shadow-2xl">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+                               <Sparkles className="w-3 h-3 text-blue-500" /> Variações Inteligentes
+                            </span>
+                            <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="p-1 hover:bg-white/5 rounded-lg text-white/20 hover:text-white">
+                               <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Manual Search Bar */}
+                          <div className="relative mb-4">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-white/20" />
+                            <Input 
+                              value={manualSearch}
+                              onChange={e => handleManualSearch(e.target.value, item)}
+                              placeholder="Pesquisa manual (nome/EAN)..."
+                              className="bg-black/40 border-white/5 pl-9 h-8 text-[10px] rounded-xl placeholder:text-white/10"
+                            />
+                            {isSearchingManual && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 animate-spin text-blue-500" />}
+                          </div>
+
+                          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+                            {/* Manual Search Results */}
+                            {manualResults.length > 0 && (
+                               <div className="space-y-2">
+                                 <span className="text-[8px] font-black uppercase text-blue-500 tracking-tighter flex items-center gap-1">
+                                    <Search className="w-2 h-2" /> Resultados Manuais
+                                 </span>
+                                 {manualResults.map(v => (
+                                   <div key={v.ean} className="flex items-center gap-2 p-2 bg-blue-500/5 rounded-lg border border-blue-500/10 group">
+                                      <img src={getImageUrl(v.ean)} className="w-8 h-8 object-contain bg-white/10 rounded" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[8px] font-black text-white/80 truncate uppercase">{v.name}</p>
+                                        <p className="text-[7px] font-mono text-white/20">{v.ean}</p>
+                                      </div>
+                                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <Button onClick={() => swapProduct(item.ean, v)} className="h-6 px-2 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Trocar</Button>
+                                         <Button onClick={() => addToStack(item.ean, getImageUrl(v.ean))} className="h-6 px-2 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
+                                      </div>
+                                   </div>
+                                 ))}
+                               </div>
+                            )}
+
+                            {/* Automatic Suggestions */}
+                            <span className="text-[8px] font-black uppercase text-white/20 tracking-tighter">Sugestões de Linha</span>
+                            {variations.length > 0 ? variations.map(v => (
+                              <div 
+                                key={v.ean}
+                                onClick={() => swapProduct(item.ean, v)}
+                                className="flex items-center gap-2 p-2 bg-white/5 rounded-lg border border-white/5 hover:border-blue-500/40 cursor-pointer transition-all group"
+                              >
+                                <img src={getImageUrl(v.ean)} className="w-8 h-8 object-contain bg-white/10 rounded" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[8px] font-black text-white/80 truncate uppercase group-hover:text-blue-500">{v.name}</p>
+                                  <p className="text-[7px] font-mono text-white/20">{v.ean}</p>
+                                </div>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">
+                                   <Button onClick={(e) => { e.stopPropagation(); swapProduct(item.ean, v); }} size="icon" variant="ghost" className="h-6 w-6 rounded-lg bg-white/5 hover:bg-green-500/20 hover:text-green-400">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                   </Button>
+                                   <Button onClick={(e) => { e.stopPropagation(); addToStack(item.ean, getImageUrl(v.ean)); }} size="icon" variant="ghost" className="h-6 w-6 rounded-lg bg-white/5 hover:bg-blue-500/20 hover:text-blue-400">
+                                      <Plus className="w-3 h-3" />
+                                   </Button>
+                                </div>
+                              </div>
+                            )) : !isSearchingManual && manualResults.length === 0 && (
+                              <p className="text-[9px] text-white/20 italic text-center py-4 uppercase font-bold tracking-widest">Nenhuma sugestão.</p>
+                            )}
+                            
+                            {/* Current Stack Management */}
+                            {item.images && item.images.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">Pilha Atual</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {item.images.map((img: string, idx: number) => (
+                                    <div key={idx} className="relative group/img bg-white/5 p-1 rounded-lg border border-white/10">
+                                      <img src={img} className="w-10 h-10 object-contain" />
+                                      <button onClick={() => removeFromStack(item.ean, idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                        <X className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => {
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = 'image/*';
+                                    input.onchange = (e) => {
+                                      const file = (e.target as HTMLInputElement).files?.[0];
+                                      if (file) addToStack(item.ean, URL.createObjectURL(file));
+                                    };
+                                    input.click();
+                                  }} className="w-10 h-10 border-2 border-dashed border-white/10 rounded-lg flex items-center justify-center text-white/20 hover:text-white hover:border-white/30 transition-all">
+                                    <Plus className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -516,6 +819,89 @@ export default function Products() {
           )}
         </div>
       </main>
+
+      {/* Manual Product Dialog */}
+      <Dialog open={isManualModalOpen} onOpenChange={setIsManualModalOpen}>
+        <DialogContent className="bg-[#121214] border-white/10 text-white rounded-3xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black tracking-tighter flex items-center gap-2">
+              <Plus className="w-5 h-5 text-red-600" /> Novo Produto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Código de Barras (EAN)</Label>
+              <Input 
+                value={manualEan}
+                onChange={e => setManualEan(e.target.value)}
+                placeholder="789..."
+                className="bg-black/40 border-white/10 rounded-xl h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Nome do Produto / Descrição</Label>
+              <Input 
+                value={manualName}
+                onChange={e => setManualName(e.target.value)}
+                placeholder="Ex: Coca Cola 2L"
+                className="bg-black/40 border-white/10 rounded-xl h-12 uppercase font-bold text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-white/40">Marca</Label>
+                <Input value={manualBrand} onChange={e => setManualBrand(e.target.value)} placeholder="Ex: Monster" className="bg-black/40 border-white/10 rounded-xl h-10 uppercase font-bold text-[10px]" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-white/40">Linha / Modelo</Label>
+                <Input value={manualLine} onChange={e => setManualLine(e.target.value)} placeholder="Ex: Energético" className="bg-black/40 border-white/10 rounded-xl h-10 uppercase font-bold text-[10px]" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-white/40">Categoria</Label>
+              <Input value={manualCategory} onChange={e => setManualCategory(e.target.value)} placeholder="Ex: Bebidas" className="bg-black/40 border-white/10 rounded-xl h-10 uppercase font-bold text-[10px]" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Foto do Produto (PNG/JPG)</Label>
+              <div 
+                onClick={() => document.getElementById('manual-file-input')?.click()}
+                className="border-2 border-dashed border-white/5 bg-black/20 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-red-600/30 transition-all group"
+              >
+                {manualFile ? (
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-green-500" />
+                    <span className="text-[10px] font-bold text-white/60 truncate max-w-[200px]">{manualFile.name}</span>
+                  </div>
+                ) : (
+                  <>
+                    <ImageIcon className="w-5 h-5 text-white/10 group-hover:text-red-600/50 transition-colors" />
+                    <span className="text-[9px] font-bold text-white/20 uppercase">Clique para selecionar foto</span>
+                  </>
+                )}
+                <input 
+                  type="file" 
+                  id="manual-file-input" 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={e => setManualFile(e.target.files?.[0] || null)}
+                />
+              </div>
+            </div>
+            <p className="text-[9px] text-white/20 italic">
+              * Se o código de barras já existir, as informações serão atualizadas.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              onClick={handleManualSave}
+              disabled={isProcessing}
+              className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl"
+            >
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar no Catálogo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

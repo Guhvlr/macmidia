@@ -22,6 +22,7 @@ const CorrectionBoard = lazy(() => import("@/features/kanban/pages/CorrectionBoa
 const UsersAdmin = lazy(() => import("@/features/auth/pages/UsersAdmin"));
 const WhatsAppInbox = lazy(() => import("@/features/automation/pages/WhatsAppInbox"));
 const Products = lazy(() => import("@/features/products/pages/Products"));
+const OfferStudio = lazy(() => import("@/features/offer-generator/pages/OfferStudio"));
 const Report = lazy(() => import("@/features/reports/pages/Report"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -58,6 +59,7 @@ const AppRoutes = () => (
       <Route path="/usuarios" element={<ProtectedRoute><UsersAdmin /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppInbox /></ProtectedRoute>} />
       <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+      <Route path="/gerador-artes" element={<ProtectedRoute><OfferStudio /></ProtectedRoute>} />
       <Route path="/relatorio" element={<ProtectedRoute><Report /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>

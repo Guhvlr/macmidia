@@ -309,7 +309,16 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateSlotSettings = async (index: number, p: any) => {
-    const updated = { ...slotSettings, [index]: { ...(slotSettings[index] || {}), ...p } };
+    const current = slotSettings[index] || {};
+    const updated = { 
+      ...slotSettings, 
+      [index]: { 
+        ...current,
+        priceBadge: p.priceBadge ? { ...(current.priceBadge || {}), ...p.priceBadge } : current.priceBadge,
+        descConfig: p.descConfig ? { ...(current.descConfig || {}), ...p.descConfig } : current.descConfig,
+        imageConfig: p.imageConfig ? { ...(current.imageConfig || {}), ...p.imageConfig } : current.imageConfig,
+      } 
+    };
     setSlotSettings(updated);
     await supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(updated) });
   };
@@ -342,31 +351,9 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const newSettings: Record<number, any> = {};
       for (let i = 0; i < totalSlots; i++) {
-          const slotTypeIdx = i % slots.length;
-          const layout = pTemplates[slotTypeIdx];
-          
-          newSettings[i] = {
-              priceBadge: {
-                  ...layout.priceBadge,
-                  bgColor: sourceStyle.priceBadge.bgColor,
-                  valueColor: sourceStyle.priceBadge.valueColor,
-                  currencyColor: sourceStyle.priceBadge.currencyColor,
-                  suffixColor: sourceStyle.priceBadge.suffixColor,
-                  badgeImageUrl: sourceStyle.priceBadge.badgeImageUrl,
-                  currencyFontFamily: sourceStyle.priceBadge.currencyFontFamily,
-                  valueFontFamily: sourceStyle.priceBadge.valueFontFamily,
-                  borderRadius: sourceStyle.priceBadge.borderRadius,
-              },
-              descConfig: {
-                  ...layout.descConfig,
-                  color: sourceStyle.descConfig.color,
-                  bgColor: sourceStyle.descConfig.bgColor,
-                  showBg: sourceStyle.descConfig.showBg,
-                  fontFamily: sourceStyle.descConfig.fontFamily,
-                  uppercase: sourceStyle.descConfig.uppercase,
-              },
-              imageConfig: { ...layout.imageConfig }
-          };
+          const slotIndex = i % (slots.length || 1);
+          // Mirror the style of the corresponding slot from the current page to all pages
+          newSettings[i] = JSON.parse(JSON.stringify(pTemplates[slotIndex] || sourceStyle));
       }
       
       setSlotSettings(newSettings);

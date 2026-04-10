@@ -13,15 +13,38 @@ const FontStyles = React.memo(({ fonts }: { fonts: { name: string; url: string }
   `).join('\n') }} />
 ));
 
-const ColorSelector = ({ label, color, onChange }: { label: string; color: string; onChange: (c: string) => void }) => (
-  <div className="space-y-2">
-    <label className="text-[9px] font-black uppercase text-white/30 tracking-widest flex items-center justify-between">{label} <span className="text-[10px] text-white/60 font-mono">{color?.toUpperCase()}</span></label>
-    <div className="flex flex-wrap gap-1.5">
-      {COLOR_PALETTE.map(c => <button key={c} onClick={() => onChange(c)} className={`w-4 h-4 rounded-full border border-white/10 transition-all hover:scale-125 ${color === c ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0d0d10]' : ''}`} style={{ backgroundColor: c }} />)}
-      <div className="relative w-4 h-4 rounded-full overflow-hidden border border-white/10 group bg-white/5"><input type="color" value={color || '#000000'} onChange={e => onChange(e.target.value)} className="absolute inset-0 w-full h-full cursor-pointer scale-150" /></div>
+const ColorSelector = ({ label, color, onChange }: { label: string; color: string; onChange: (c: string) => void }) => {
+  // Normalize color for the native HTML color picker (needs #RRGGBB)
+  const normalizedColor = (color && color.startsWith('#') && (color.length === 7 || color.length === 4)) 
+    ? (color.length === 4 ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}` : color)
+    : '#000000';
+
+  return (
+    <div className="space-y-2">
+      <label className="text-[9px] font-black uppercase text-white/30 tracking-widest flex items-center justify-between">
+        {label} <span className="text-[10px] text-white/60 font-mono">{color?.toUpperCase()}</span>
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        {COLOR_PALETTE.map(c => (
+          <button 
+            key={c} 
+            onClick={() => onChange(c)} 
+            className={`w-4 h-4 rounded-full border border-white/10 transition-all hover:scale-125 ${color === c ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0d0d10]' : ''}`} 
+            style={{ backgroundColor: c }} 
+          />
+        ))}
+        <div className="relative w-4 h-4 rounded-full overflow-hidden border border-white/10 group bg-white/5">
+          <input 
+            type="color" 
+            value={normalizedColor} 
+            onChange={e => onChange(e.target.value.toUpperCase())} 
+            className="absolute inset-0 w-full h-full cursor-pointer scale-150" 
+          />
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Section = ({ id, label, icon: Icon, isOpen, onToggle, children }: any) => {
   return (
@@ -289,7 +312,7 @@ export const StepPriceBadge = () => {
               syncAllSlots(style as any, sourceIdx);
             }
           }}
-          className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group border border-indigo-400/30"
+          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group border border-indigo-400/30"
         >
           <Zap className="w-5 h-5 text-indigo-200 group-hover:scale-125 transition-transform" />
           SINCRONIZAÇÃO MESTRE
@@ -326,6 +349,23 @@ export const StepPriceBadge = () => {
                 </Section>
              </div>
           </Section>
+           <Section label="Sufixo (kg/cada)" icon={Layers} isOpen={openSection === 'suffix'} onToggle={() => setOpenSection('suffix')}>
+              <div className="space-y-4">
+                 <div className="flex items-center justify-between p-3 bg-white/[0.03] border border-white/5 rounded-xl">
+                   <span className="text-[10px] font-black uppercase text-white/40">Mostrar Sufixo</span>
+                   <input type="checkbox" checked={activeCfg.priceBadge.showSuffix} onChange={e => up({ priceBadge: { showSuffix: e.target.checked } })} className="w-4 h-4 accent-primary" />
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-[9px] font-black uppercase text-white/30 tracking-widest">Texto do Sufixo</label>
+                   <input type="text" value={activeCfg.priceBadge.suffixText} onChange={e => up({ priceBadge: { suffixText: e.target.value } })} placeholder="Ex: cada, kg, un..." className="w-full bg-black/40 border border-white/10 rounded-xl h-10 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all font-mono" />
+                 </div>
+                 <ColorSelector label="Cor do Sufixo" color={activeCfg.priceBadge.suffixColor} onChange={c => up({ priceBadge: { suffixColor: c } })} />
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.priceBadge.suffixFontSize)}px</label>
+                   <input type="range" min="10" max="100" value={activeCfg.priceBadge.suffixFontSize} onChange={e => up({ priceBadge: { suffixFontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                 </div>
+              </div>
+           </Section>
         </div>
       </div>
 

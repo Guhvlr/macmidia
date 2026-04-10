@@ -31,9 +31,15 @@ export const StepReview = () => {
       
       const results: ProductItem[] = (data.results || []).map((res: any) => {
         const found = !!(res.found && res.match);
+        let cleanName = res.original || res.match?.name || 'Produto sem nome';
+        // Remove patterns like " - 12,90", " R$ 12,90", " 12.90"
+        cleanName = cleanName.replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        cleanName = cleanName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        cleanName = cleanName.trim();
+
         const item: ProductItem = {
           id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: res.match?.name || res.original || 'Produto sem nome',
+          name: cleanName,
           ean: res.match?.ean || 'N/A',
           price: 'R$ 10,99',
           images: found ? [getImageUrl(res.match.ean)] : [],

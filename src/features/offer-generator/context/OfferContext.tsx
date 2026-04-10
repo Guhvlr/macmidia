@@ -117,6 +117,11 @@ interface OfferContextType {
   loadProjectTemplate: (id: string) => void;
   isLoadingTemplates: boolean;
   getSlotSettings: (index: number) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
+  updateSlotSettings: (index: number, p: any) => void;
+  replaceSlotSettings: (index: number, settings: any) => void;
+  activePage: number;
+  setActivePage: React.Dispatch<React.SetStateAction<number>>;
+  syncAllSlots: (settings: any, sourceIdx: number) => void;
   undo: () => void;
   pushHistory: () => void;
 }
@@ -194,6 +199,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
   const [presets, setPresetsState] = useState<any[]>([]);
   const [isLoadingPresets, setIsLoadingPresets] = useState(true);
+  const [activePage, setActivePage] = useState(0);
 
   // Undo History
   const historyRef = useRef<any[]>([]);
@@ -308,6 +314,12 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(updated) });
   };
 
+  const replaceSlotSettings = async (index: number, settings: any) => {
+    const updated = { ...slotSettings, [index]: settings };
+    setSlotSettings(updated);
+    await supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(updated) });
+  };
+
   const getSlotSettings = (index: number) => {
     const s = slotSettings[index] || {};
     return {
@@ -315,6 +327,63 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       descConfig: { ...descConfig, ...(s.descConfig || {}) },
       imageConfig: { ...imageConfig, ...(s.imageConfig || {}) },
     };
+  };
+
+  const syncAllSlots = async (unused: any, sourceIdx: number) => {
+    try {
+      const totalSlots = (pageCount || 1) * (slots?.length || 12);
+      const sourceStyle = getSlotSettings(sourceIdx);
+      
+      const pTemplates: Record<number, any> = {};
+      for (let i = 0; i < slots.length; i++) {
+          const globalIdx = activePage * slots.length + i;
+          pTemplates[i] = JSON.parse(JSON.stringify(getSlotSettings(globalIdx)));
+      }
+
+      const newSettings: Record<number, any> = {};
+      for (let i = 0; i < totalSlots; i++) {
+          const slotTypeIdx = i % slots.length;
+          const layout = pTemplates[slotTypeIdx];
+          
+          newSettings[i] = {
+              priceBadge: {
+                  ...layout.priceBadge,
+                  bgColor: sourceStyle.priceBadge.bgColor,
+                  valueColor: sourceStyle.priceBadge.valueColor,
+                  currencyColor: sourceStyle.priceBadge.currencyColor,
+                  suffixColor: sourceStyle.priceBadge.suffixColor,
+                  badgeImageUrl: sourceStyle.priceBadge.badgeImageUrl,
+                  currencyFontFamily: sourceStyle.priceBadge.currencyFontFamily,
+                  valueFontFamily: sourceStyle.priceBadge.valueFontFamily,
+                  borderRadius: sourceStyle.priceBadge.borderRadius,
+              },
+              descConfig: {
+                  ...layout.descConfig,
+                  color: sourceStyle.descConfig.color,
+                  bgColor: sourceStyle.descConfig.bgColor,
+                  showBg: sourceStyle.descConfig.showBg,
+                  fontFamily: sourceStyle.descConfig.fontFamily,
+                  uppercase: sourceStyle.descConfig.uppercase,
+              },
+              imageConfig: { ...layout.imageConfig }
+          };
+      }
+      
+      setSlotSettings(newSettings);
+      setPriceBadge(JSON.parse(JSON.stringify(sourceStyle.priceBadge)));
+      setDescConfig(JSON.parse(JSON.stringify(sourceStyle.descConfig)));
+      
+      await Promise.all([
+        supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(newSettings) }),
+        supabase.from('settings').upsert({ key: 'offer_generator_price_badge', value: JSON.stringify(sourceStyle.priceBadge) }),
+        supabase.from('settings').upsert({ key: 'offer_generator_desc_config', value: JSON.stringify(sourceStyle.descConfig) })
+      ]);
+
+      toast.success('Visual sincronizado em todas as telas!');
+    } catch (err) {
+      console.error('Sync Error:', err);
+      toast.error('Erro ao sincronizar');
+    }
   };
 
   const setPresets = async (newPresets: any[] | ((prev: any[]) => any[])) => {
@@ -339,13 +408,17 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       products, setProducts, layouts, setLayouts,
       customFonts, setCustomFonts,
       presets, setPresets, isLoadingPresets,
-      slotSettings, setSlotSettings, updateSlotSettings,
+      slotSettings, setSlotSettings, 
       selectedSlotIndex, setSelectedSlotIndex,
       selectedSlotIndices, setSelectedSlotIndices,
       zoom, setZoom,
       panOffset, setPanOffset,
       pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates,
       getSlotSettings,
+      updateSlotSettings,
+      replaceSlotSettings,
+      syncAllSlots,
+      activePage, setActivePage,
       undo, pushHistory
     }}>
       {children}

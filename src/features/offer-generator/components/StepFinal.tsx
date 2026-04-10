@@ -15,7 +15,7 @@ export const StepFinal = () => {
   const [isSingleFile, setIsSingleFile] = useState(true);
 
   const renderWrappedText = (text: string, x: number, y: number, fontSize: number, sFactor: number) => {
-    const maxCharsPerLine = 15;
+    const maxCharsPerLine = 18;
     const words = text.split(' ');
     const lines: string[] = [];
     let currentLine = '';
@@ -146,63 +146,60 @@ export const StepFinal = () => {
     // Get per-slot overrides
     const { priceBadge: pb, descConfig: dc, imageConfig: ic } = getSlotSettings(index);
 
-    const slotCenterX = slot.x + slot.width / 2;
-    const slotCenterY = slot.y + slot.height / 2;
+    const sf = (slot?.width || 500) / 500;
+    const b = pb; const i = ic; const d = dc;
+    
+    const imgW = slot.width * 0.8 * i.scale;
+    const imgH = slot.height * 0.6 * i.scale;
+    const imgX = slot.x + slot.width * i.offsetX/100 - imgW/2;
+    const imgY = slot.y + slot.height * i.offsetY/100 - imgH/2;
 
-    const imgWidth = slot.width * 0.8 * ic.scale;
-    const imgHeight = slot.height * 0.6 * ic.scale;
-    const imgX = slotCenterX - imgWidth / 2 + (ic.offsetX - 50) * (slot.width / 100);
-    const imgY = slotCenterY - imgHeight / 2 - slot.height * 0.15 + (ic.offsetY - 50) * (slot.height / 100);
+    const badgeW = b.badgeWidth * sf;
+    const badgeH = b.badgeHeight * sf;
+    const badgeX = slot.x + (b.badgeOffsetX/100)*slot.width;
+    const badgeY = slot.y + (b.badgeOffsetY/100)*slot.height;
 
-    const REF_W = 500;
-    const sFactor = slot.width / REF_W;
-
-    const badgeW = pb.badgeWidth * sFactor;
-    const badgeH = pb.badgeHeight * sFactor;
-    const badgePosX = slot.x + (pb.badgeOffsetX / 100) * slot.width;
-    const badgePosY = slot.y + (pb.badgeOffsetY / 100) * slot.height;
-
-    const nameX = slot.x + (dc.offsetX / 100) * slot.width;
-    const nameY = slot.y + (dc.offsetY / 100) * slot.height;
+    const nameX = slot.x + (d.offsetX/100)*slot.width;
+    const nameY = slot.y + (d.offsetY/100)*slot.height;
 
     return (
       <g key={product.id}>
-        {(product.images || []).slice(0, 3).reverse().map((img, i, arr) => {
-          const total = arr.length;
-          const pos = total - 1 - i;
+        {(product.images || []).slice(0, 3).reverse().map((img, iIdx, arr) => {
+          const pos = arr.length - 1 - iIdx;
           const offset = pos * 20;
           return (
-            <image key={`${product.id}-img-${pos}`} href={img} x={imgX + offset} y={imgY - offset / 2} width={imgWidth} height={imgHeight} preserveAspectRatio="xMidYMid meet" style={{ filter: pos > 0 ? 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))' : 'none' }} />
+            <image key={`${product.id}-img-${pos}`} href={img} x={imgX + offset} y={imgY - offset / 2} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" style={{ filter: pos > 0 ? 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))' : 'none' }} />
           );
         })}
 
-        <g transform={`translate(${badgePosX}, ${badgePosY})`}>
-           {pb.badgeImageUrl ? (
-             <image href={pb.badgeImageUrl} x={-badgeW/2} y={-badgeH/2} width={badgeW} height={badgeH} />
+        <g transform={`translate(${badgeX}, ${badgeY})`}>
+           {b.badgeImageUrl ? (
+             <image href={b.badgeImageUrl} x={-badgeW/2} y={-badgeH/2} width={badgeW} height={badgeH} />
            ) : (
-             <rect x={-badgeW/2} y={-badgeH/2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sFactor} />
+             <rect x={-badgeW/2} y={-badgeH/2} width={badgeW} height={badgeH} fill={b.bgColor} rx={b.borderRadius * sf} />
            )}
-           <text x={-badgeW/2 + (pb.currencyOffsetX / 100) * badgeW} y={-badgeH/2 + (pb.currencyOffsetY / 100) * badgeH} fill={pb.currencyColor} style={{ fontSize: (pb.currencyFontSize * sFactor), fontFamily: pb.currencyFontFamily, fontWeight: '900' }}>R$</text>
-           <text x={-badgeW/2 + (pb.valueOffsetX / 100) * badgeW} y={-badgeH/2 + (pb.valueOffsetY / 100) * badgeH + (pb.valueFontSize * sFactor * 0.15)} fill={pb.valueColor} textAnchor="middle" style={{ fontSize: (pb.valueFontSize * sFactor), fontFamily: pb.valueFontFamily, fontWeight: '900', letterSpacing: '-0.05em' }}>{product.price.replace('R$', '').trim()}</text>
-           {pb.showSuffix && <text x={-badgeW/2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH/2 + (pb.suffixOffsetY / 100) * badgeH} fill={pb.suffixColor} textAnchor="middle" style={{ fontSize: (pb.suffixFontSize * sFactor), fontWeight: 'bold' }}>{pb.suffixText}</text>}
+           <text x={-badgeW/2 + (b.currencyOffsetX / 100) * badgeW} y={-badgeH/2 + (b.currencyOffsetY / 100) * badgeH} fill={b.currencyColor} style={{ fontSize: (b.currencyFontSize * sf), fontFamily: b.currencyFontFamily, fontWeight: '900' }}>R$</text>
+           <text x={-badgeW/2 + (b.valueOffsetX / 100) * badgeW} y={-badgeH/2 + (b.valueOffsetY / 100) * badgeH + (b.valueFontSize * sf * 0.15)} fill={b.valueColor} textAnchor="middle" style={{ fontSize: (b.valueFontSize * sf), fontFamily: b.valueFontFamily, fontWeight: '900', letterSpacing: '-0.05em' }}>{product.price.replace('R$', '').trim()}</text>
+           {b.showSuffix && <text x={-badgeW/2 + (b.suffixOffsetX / 100) * badgeW} y={-badgeH/2 + (b.suffixOffsetY / 100) * badgeH + (b.suffixFontSize * sf * 0.5)} fill={b.suffixColor} textAnchor="middle" style={{ fontSize: (b.suffixFontSize * sf), fontWeight: 'bold' }}>{b.suffixText}</text>}
         </g>
 
         <g>
           {dc.showBg && (
-            <rect x={nameX - slot.width * 0.4} y={nameY - dc.fontSize * sFactor * 0.7} width={slot.width * 0.8} height={dc.fontSize * sFactor * 1.4} fill={dc.bgColor} rx={4} />
+            <rect x={nameX - slot.width * 0.4} y={nameY - dc.fontSize * sf * 0.7} width={slot.width * 0.8} height={dc.fontSize * sf * 1.4} fill={dc.bgColor} rx={4} />
           )}
           <text 
             textAnchor="middle" 
             fill={dc.color}
             style={{ 
-              fontSize: `${dc.fontSize * sFactor}px`, 
+              fontSize: `${dc.fontSize * sf}px`, 
               fontFamily: dc.fontFamily,
               fontWeight: '900',
+              lineHeight: 1.1,
               textTransform: dc.uppercase ? 'uppercase' : 'none',
               letterSpacing: '-0.02em'
             }}
           >
-            {renderWrappedText(product.name, nameX, nameY, dc.fontSize, sFactor)}
+            {renderWrappedText(product.name, nameX, nameY, dc.fontSize, sf)}
           </text>
         </g>
       </g>

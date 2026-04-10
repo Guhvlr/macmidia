@@ -35,7 +35,7 @@ export const StepReview = () => {
           id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: res.match?.name || res.original || 'Produto sem nome',
           ean: res.match?.ean || 'N/A',
-          price: 'R$ 0,00',
+          price: 'R$ 10,99',
           images: found ? [getImageUrl(res.match.ean)] : [],
           brand: res.match?.brand,
           line: res.match?.line,

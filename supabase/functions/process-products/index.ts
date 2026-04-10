@@ -30,7 +30,7 @@ serve(async (req) => {
 
     if (!openAIKey) throw new Error('OpenAI Key não configurada. Use: npx supabase secrets set OPENAI_API_KEY=...');
 
-    // 2. Parse products list with AI
+    // Parse the products list with AI to extract name + price cleanly
     let parsedItems = []
     try {
       console.log('Chamando OpenAI...');
@@ -43,7 +43,18 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: `Você é um catálogo. Extraia os itens e limpe os nomes. Retorne JSON: { "items": [{ "original": "...", "clean": "..." }] }.` },
+            { 
+              role: 'system', 
+              content: `Você é um motor de extração de dados para tabloides de supermercado.
+Sua tarefa é extrair itens de um texto bruto de lista de produtos.
+REGRAS CRÍTICAS:
+1. "original" = linha bruta exatamente como recebida.
+2. "display_name" = nome do produto para exibição. PRESERVE A MARCA EXATAMENTE como o usuário escreveu (ex: "Italac" deve permanecer "Italac", nunca "Itambé").
+   - Remova apenas: preços (R$ 9,99), quantidades no final (kg, ml, L), traços antes de preços.
+   - NÃO substitua a marca por nenhuma outra.
+3. "search_name" = nome simplificado para busca de imagem no banco. Pode ser mais genérico (ex: "Leite Italac" → "Italac" ou "leite longa vida").
+Retorne JSON: { "items": [{ "original": "linha bruta", "display_name": "nome exibição", "search_name": "nome busca" }] }.` 
+            },
             { role: 'user', content: bulkInput }
           ],
           response_format: { type: 'json_object' }
@@ -58,36 +69,45 @@ serve(async (req) => {
       console.log('IA processou com sucesso:', parsedItems.length, 'itens');
     } catch (aiErr) {
       console.error('IA FALHOU, fallback para nomes originais:', aiErr.message);
-      // Fallback: usar as linhas como nomes originais se a IA falhar
-      parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => ({
-        original: line.trim(),
-        clean: line.trim().replace(/[0-9,.]+$/g, '').trim() // Remove números/preços básicos do final
-      }))
+      // Fallback: use raw lines
+      parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => {
+        const cleanLine = line.trim().replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '').replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '').trim();
+        return {
+          original: line.trim(),
+          display_name: cleanLine,
+          search_name: cleanLine
+        }
+      })
     }
 
     const results = []
-    console.log('Iniciando Busca Fuzzy...');
+    console.log('Iniciando Busca de Imagem (threshold baixo, apenas para foto)...');
 
     for (const item of parsedItems) {
+      // Use a LOW threshold (0.1) to find the best matching IMAGE from the DB
+      // Even if the brand is slightly different, we want to find the closest product photo.
+      // The display_name is ALWAYS what the user typed — it never comes from the DB match.
       const { data: matches, error: rpcErr } = await supabase.rpc('search_products_fuzzy', { 
-        search_text: item.clean,
-        match_threshold: 0.1 
+        search_text: item.search_name || item.display_name,
+        match_threshold: 0.1
       })
 
       if (rpcErr) {
         console.error('Erro RPC:', rpcErr.message);
-        results.push({ original: item.original, found: false, error: rpcErr.message });
+        results.push({ original: item.original, display_name: item.display_name, found: false, error: rpcErr.message });
         continue;
       }
 
       if (matches && matches.length > 0) {
+        // found=true means we have an image match, but name comes from display_name (user's text)
         results.push({
           original: item.original,
-          match: matches[0],
+          display_name: item.display_name, // always the user's text
+          match: matches[0],               // used only for EAN and image URL
           found: true
         })
       } else {
-        results.push({ original: item.original, found: false })
+        results.push({ original: item.original, display_name: item.display_name, found: false })
       }
     }
 
@@ -100,7 +120,7 @@ serve(async (req) => {
     console.error('--- ERRO CRÍTICO ---');
     console.error(error.message);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 200, // Retornamos 200 mesmo no erro para o frontend capturar o JSON do erro
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }

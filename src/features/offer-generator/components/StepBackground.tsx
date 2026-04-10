@@ -73,7 +73,7 @@ export const StepBackground = () => {
         }
       }
       
-      const finalName = selectedClientName ? `[${selectedClientName}] ${name}` : name;
+      const finalName = selectedClientName ? `[${selectedClientName}] ${newLayoutName}` : newLayoutName;
       const { data, error } = await (supabase as any).from('offer_layouts')
         .insert([{ name: finalName, image_url: url, config, client: selectedClientName }])
         .select().single();

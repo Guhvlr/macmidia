@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 export const StepSlots = () => {
   const { 
     config, slots, setSlots, selectedSlotId, setSelectedSlotId,
-    pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates, selectedClientName
+    pageTemplates, saveProjectTemplate, loadProjectTemplate, deleteProjectTemplate, isLoadingTemplates, selectedClientName
   } = useOffer();
 
   const filteredTemplates = React.useMemo(() => {
@@ -19,6 +19,7 @@ export const StepSlots = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   const [mode, setMode] = useState<'draw' | 'select'>('draw');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null);
@@ -26,6 +27,13 @@ export const StepSlots = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState<{ origW: number; origH: number; sx: number; sy: number } | null>(null);
+
+  React.useEffect(() => {
+    if (deletingId) {
+      const timer = setTimeout(() => setDeletingId(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [deletingId]);
 
   const toSvg = useCallback((e: React.MouseEvent) => {
     const svg = svgRef.current;
@@ -153,21 +161,37 @@ export const StepSlots = () => {
                   {isLoadingTemplates ? (
                     <p className="text-center py-4 text-[9px] uppercase tracking-widest opacity-20">Carregando...</p>
                   ) : filteredTemplates.map(t => (
-                    <div key={t.id} className="group flex items-center justify-between p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:border-primary/20 transition-all">
+                    <div key={t.id || t.name} className={`group flex items-center bg-white/[0.03] border rounded-xl transition-all overflow-hidden ${deletingId === (t.id || t.name) ? 'border-red-500/50 bg-red-500/5' : 'border-white/5 hover:border-primary/20'}`}>
                        <button 
-                         onClick={() => loadProjectTemplate(t.id)}
-                         className="flex-1 text-[10px] font-black uppercase text-white/40 group-hover:text-white text-left px-1 truncate"
+                         onClick={() => {
+                           console.log('[DEBUG] Loading template:', t.id || t.name);
+                           loadProjectTemplate(t.id);
+                         }}
+                         className="flex-1 text-[10px] py-2.5 font-black uppercase text-white/40 group-hover:text-white text-left px-3 truncate transition-colors"
+                         title={`Carregar template: ${t.name}`}
                        >
                          {t.name}
                        </button>
                        <button 
-                         onClick={async () => {
-                           if (!confirm('Deseja excluir este template?')) return;
-                           await deleteProjectTemplate(t.id);
+                         onClick={async (e) => {
+                           e.stopPropagation();
+                           e.preventDefault();
+                           const currentId = t.id || t.name;
+                           console.log('[DEBUG] Delete button clicked for:', currentId, 'current deletingId:', deletingId);
+                           
+                           if (deletingId === currentId) {
+                             console.log('[DEBUG] Confirmation confirmed, deleting...');
+                             await deleteProjectTemplate({ id: t.id, name: t.name });
+                             setDeletingId(null);
+                           } else {
+                             console.log('[DEBUG] First click, setting deletingId');
+                             setDeletingId(currentId);
+                           }
                          }}
-                         className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded-lg text-white/20 hover:text-red-500 transition-all"
+                         className={`p-3 transition-all border-l border-white/5 ${deletingId === (t.id || t.name) ? 'bg-red-500 text-white' : 'hover:bg-red-500/10 text-white/10 hover:text-red-500'}`}
+                         title={deletingId === (t.id || t.name) ? "Clique de novo para excluir" : "Excluir Template"}
                        >
-                         <Trash2 className="w-3 h-3" />
+                         {deletingId === (t.id || t.name) ? <Trash2 className="w-3.5 h-3.5 animate-pulse" /> : <Trash2 className="w-3.5 h-3.5" />}
                        </button>
                     </div>
                   ))}

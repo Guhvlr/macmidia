@@ -114,7 +114,7 @@ interface OfferContextType {
   setPanOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   pageTemplates: any[];
   saveProjectTemplate: (name: string) => Promise<void>;
-  deleteProjectTemplate: (id: string) => Promise<void>;
+  deleteProjectTemplate: (template: { id?: string; name: string }) => Promise<void>;
   loadProjectTemplate: (id: string) => void;
   isLoadingTemplates: boolean;
   getSlotSettings: (index: number) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
@@ -315,11 +315,45 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     toast.success('Template salvo!');
   };
 
-  const deleteProjectTemplate = async (id: string) => {
-    const updated = pageTemplates.filter(t => t.id !== id);
-    setPageTemplates(updated);
-    await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
-    toast.success('Template removido!');
+  const deleteProjectTemplate = async (templateToDelete: { id?: string; name: string }) => {
+    console.log('[DEBUG-DEEP] deleteProjectTemplate called with:', templateToDelete);
+    console.log('[DEBUG-DEEP] current pageTemplates:', JSON.stringify(pageTemplates));
+    try {
+      let updated;
+      if (templateToDelete.id) {
+        console.log('[DEBUG-DEEP] Filtering by ID:', templateToDelete.id);
+        updated = pageTemplates.filter(t => t.id !== templateToDelete.id);
+      } else {
+        console.log('[DEBUG-DEEP] Filtering by Name fallback:', templateToDelete.name);
+        updated = pageTemplates.filter(t => t.name !== templateToDelete.name);
+      }
+
+      console.log('[DEBUG-DEEP] Comparison check for first item:', pageTemplates[0]?.id === templateToDelete.id, 'IDs:', pageTemplates[0]?.id, templateToDelete.id);
+      console.log('[DEBUG-DEEP] New count:', updated.length, 'Old count:', pageTemplates.length);
+
+      if (updated.length === pageTemplates.length) {
+        console.warn('[DEBUG-DEEP] Warning: Filtered array length is the same as before. Deletion failed to match any item!');
+        toast.error('Nenhum template correspondente encontrado para exclusão.');
+        return;
+      }
+
+      const { error } = await supabase.from('settings').upsert({ 
+        key: 'offer_generator_page_templates', 
+        value: JSON.stringify(updated) 
+      });
+      
+      if (error) {
+        console.error('[DEBUG-DEEP] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('[DEBUG-DEEP] Supabase success. Updating local state.');
+      setPageTemplates(updated);
+      toast.success('Template removido!');
+    } catch (err: any) {
+      console.error('[DEBUG-DEEP] Catch block error:', err);
+      toast.error('Erro ao excluir template: ' + (err.message || 'Erro desconhecido'));
+    }
   };
 
   const loadProjectTemplate = (id: string) => {

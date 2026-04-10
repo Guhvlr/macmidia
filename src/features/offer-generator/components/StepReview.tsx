@@ -31,15 +31,17 @@ export const StepReview = () => {
       
       const results: ProductItem[] = (data.results || []).map((res: any) => {
         const found = !!(res.found && res.match);
-        let cleanName = res.original || res.match?.name || 'Produto sem nome';
-        // Remove patterns like " - 12,90", " R$ 12,90", " 12.90"
-        cleanName = cleanName.replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '');
-        cleanName = cleanName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
-        cleanName = cleanName.trim();
+        
+        // ALWAYS use display_name (user's original text) — never the DB name
+        // Fallback: clean the original line of prices if display_name is missing
+        let displayName = res.display_name || res.original || 'Produto sem nome';
+        displayName = displayName.replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        displayName = displayName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        displayName = displayName.trim();
 
         const item: ProductItem = {
           id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: cleanName,
+          name: displayName,  // always from user input
           ean: res.match?.ean || 'N/A',
           price: 'R$ 10,99',
           images: found ? [getImageUrl(res.match.ean)] : [],
@@ -72,13 +74,16 @@ export const StepReview = () => {
       if (product.brand && product.line) {
         query = query.eq('brand', product.brand).eq('line', product.line);
       } else {
-        const firstWord = product.name.split(' ')[0];
-        if (firstWord.length < 3) {
-          toast.error('Não foi possível identificar a marca.');
+        // Split and filter common words (like "Leite", "Arroz") to find the BRAND
+        const words = product.name.split(' ').filter(w => w.length > 3);
+        const searchTerm = words[0] || product.name.split(' ')[0];
+        
+        if (searchTerm.length < 3) {
+          toast.error('Nome muito curto para busca inteligente.');
           setIsProcessing(false);
           return;
         }
-        query = query.ilike('name', `%${firstWord}%`);
+        query = query.ilike('name', `%${searchTerm}%`);
       }
 
       const { data, error } = await query.neq('ean', product.ean).limit(15);

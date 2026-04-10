@@ -13,7 +13,8 @@ import {
   LogOut, 
   ChevronLeft, 
   ChevronRight, 
-  LucideIcon 
+  LucideIcon,
+  Zap
 } from 'lucide-react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
@@ -33,6 +34,7 @@ export const navItems: NavItem[] = [
   { path: '/cofre', icon: Folder, label: 'Banco de Dados' },
   { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp' },
   { path: '/produtos', icon: Home, label: 'Produtos', isBeta: true },
+  { path: '/gerador-artes', icon: Zap, label: 'MacOferta Pro' },
 ];
 
 interface Props {

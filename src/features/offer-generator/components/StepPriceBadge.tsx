@@ -1,7 +1,17 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useOffer, PriceBadgeConfig, DescriptionConfig, ImageConfig } from '../context/OfferContext';
-import { ChevronDown, ChevronRight, Zap, Layers, CreditCard, PenTool, Layout, ChevronLeft, Trash2, Hand, Maximize, Image as ImageIcon, Undo2, Save } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap, Layers, CreditCard, PenTool, Layout, ChevronLeft, Trash2, Hand, Maximize, Image as ImageIcon, Undo2, Save, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from '@/components/ui/button';
 
 type ElemId = 'image' | 'name' | 'badge' | 'currency' | 'value' | 'suffix';
 
@@ -88,8 +98,13 @@ export const StepPriceBadge = () => {
     slots, pageCount, config, selectedSlotIndex, setSelectedSlotIndex,
     selectedSlotIndices, setSelectedSlotIndices, zoom, setZoom,
     panOffset, setPanOffset, getSlotSettings, updateSlotSettings, replaceSlotSettings, syncAllSlots,
-    undo, pushHistory, products, customFonts, presets, setPresets, activePage, setActivePage
+    undo, pushHistory, products, customFonts, presets, setPresets, activePage, setActivePage,
+    selectedClientName
   } = useOffer();
+
+  const filteredPresets = React.useMemo(() => {
+    return (presets || []).filter(p => p.client === selectedClientName || !p.client);
+  }, [presets, selectedClientName]);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -107,6 +122,8 @@ export const StepPriceBadge = () => {
   const [openSection, setOpenSection] = useState<string | null>('badge');
   const [clipboard, setClipboard] = useState<any>(null);
   const [marquee, setMarquee] = useState<{ x1: number, y1: number, x2: number, y2: number } | null>(null);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
 
   useEffect(() => {
     const handleKeys = (e: KeyboardEvent) => {
@@ -319,9 +336,9 @@ export const StepPriceBadge = () => {
         </button>
 
         <div className="flex flex-col gap-3">
-          <Section label="Modelos Salvos" icon={Zap} isOpen={openSection === 'presets'} onToggle={() => setOpenSection('presets')}>
-             <button onClick={() => { const n = prompt('Nome do Modelo:'); if (n) setPresets([...(presets||[]), { id: crypto.randomUUID(), name: n, priceBadge: activeCfg.priceBadge, descConfig: activeCfg.descConfig }]); }} className="w-full p-3 bg-primary/10 border border-primary/20 rounded-xl text-primary text-[10px] font-black uppercase hover:bg-primary/20 transition-all"><Save className="w-3.5 h-3.5 inline mr-2" /> Salvar Atual</button>
-             {presets?.map((p: any) => (
+          <Section label={`Modelos: ${selectedClientName || 'Geral'}`} icon={Zap} isOpen={openSection === 'presets'} onToggle={() => setOpenSection('presets')}>
+             <button onClick={() => setSaveModalOpen(true)} className="w-full p-3 bg-primary/10 border border-primary/20 rounded-xl text-primary text-[10px] font-black uppercase hover:bg-primary/20 transition-all"><Save className="w-3.5 h-3.5 inline mr-2" /> Salvar em {selectedClientName || 'Geral'}</button>
+             {filteredPresets?.map((p: any) => (
                 <div key={p.id} className="group flex items-center gap-2 p-2 bg-white/[0.03] border border-white/5 rounded-xl hover:border-primary/40">
                    <button onClick={() => up({ priceBadge: p.priceBadge, descConfig: p.descConfig })} className="flex-1 text-[10px] uppercase text-white/50 group-hover:text-white text-left px-2 truncate font-bold">{p.name}</button>
                    <button onClick={() => setPresets(presets.filter((x: any) => x.id !== p.id))} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
@@ -454,6 +471,56 @@ export const StepPriceBadge = () => {
           </svg>
         </div>
       </div>
+
+      <Dialog open={saveModalOpen} onOpenChange={setSaveModalOpen}>
+        <DialogContent className="bg-[#0d0d10] border-white/10 text-white rounded-2xl shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
+               <Zap className="w-5 h-5 text-primary" /> Salvar Modelo
+            </DialogTitle>
+            <DialogDescription className="text-white/40 text-[11px] font-bold uppercase tracking-wider">
+               Escolha um nome para identificar este modelo de estilo para {selectedClientName || 'Geral'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <Input
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+              placeholder="Ex: Oferta Fim de Semana, Estilo Carnes..."
+              className="bg-white/5 border-white/10 rounded-xl h-12 text-sm font-bold text-white focus:border-primary/50 transition-all"
+              autoFocus
+              onKeyDown={(e) => { 
+                if (e.key === 'Enter' && newPresetName) {
+                    setPresets([...(presets||[]), { id: crypto.randomUUID(), name: newPresetName, priceBadge: activeCfg.priceBadge, descConfig: activeCfg.descConfig, client: selectedClientName }]);
+                    setSaveModalOpen(false);
+                    setNewPresetName('');
+                    toast.success('Modelo salvo!');
+                }
+              }}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setSaveModalOpen(false)} className="rounded-xl text-white/30 hover:text-white hover:bg-white/5 text-[10px] font-black uppercase tracking-widest">
+              Cancelar
+            </Button>
+            <Button 
+                onClick={() => {
+                   if (newPresetName) {
+                      setPresets([...(presets||[]), { id: crypto.randomUUID(), name: newPresetName, priceBadge: activeCfg.priceBadge, descConfig: activeCfg.descConfig, client: selectedClientName }]);
+                      setSaveModalOpen(false);
+                      setNewPresetName('');
+                      toast.success('Modelo salvo!');
+                   }
+                }} 
+                disabled={!newPresetName} 
+                className="bg-primary hover:bg-primary/90 rounded-xl px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 transition-all"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Confirmar e Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

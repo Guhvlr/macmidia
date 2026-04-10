@@ -28,7 +28,7 @@ create policy "Allow admins to select logs"
   );
 
 -- Create a view for quick metrics analysis
-create or replace view public.view_performance_metrics as
+create or replace view public.view_performance_metrics with (security_invoker = true) as
 select 
   action,
   count(*) as total_calls,
@@ -39,7 +39,7 @@ from public.system_logs
 where category = 'performance' and duration_ms is not null
 group by action;
 
-create or replace view public.view_daily_usage as
+create or replace view public.view_daily_usage with (security_invoker = true) as
 select 
   date_trunc('day', created_at) as day,
   category,

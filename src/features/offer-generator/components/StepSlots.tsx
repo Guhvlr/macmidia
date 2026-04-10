@@ -7,8 +7,12 @@ import { supabase } from '@/integrations/supabase/client';
 export const StepSlots = () => {
   const { 
     config, slots, setSlots, selectedSlotId, setSelectedSlotId,
-    pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates
+    pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates, selectedClientName
   } = useOffer();
+
+  const filteredTemplates = React.useMemo(() => {
+    return pageTemplates.filter(t => t.client === selectedClientName);
+  }, [pageTemplates, selectedClientName]);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [templateName, setTemplateName] = useState('');
@@ -117,59 +121,58 @@ export const StepSlots = () => {
 
         {/* Templates Section */}
         <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
-           <div className="flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5 text-primary" />
-              <h3 className="text-[11px] font-black uppercase text-white/80 tracking-widest">Templates Completos</h3>
-           </div>
-           
-           <div className="flex flex-col gap-2">
-              <div className="relative group">
-                <input 
-                  value={templateName} 
-                  onChange={e => setTemplateName(e.target.value)}
-                  placeholder="Nome do Template..." 
-                  className="w-full bg-black/40 border border-white/10 rounded-xl h-10 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all placeholder:text-white/10"
-                />
-                <button 
-                  onClick={async () => {
-                    if (!templateName) return toast.error('Dê um nome ao template');
-                    setIsSaving(true);
-                    await saveProjectTemplate(templateName);
-                    setTemplateName('');
-                    setIsSaving(false);
-                  }}
-                  disabled={isSaving || slots.length === 0}
-                  className="absolute right-2 top-1.5 p-1.5 bg-primary rounded-lg text-white hover:scale-105 transition-all disabled:opacity-20 disabled:scale-100"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              
-              <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
-                 {isLoadingTemplates ? (
-                   <p className="text-center py-4 text-[9px] uppercase tracking-widest opacity-20">Carregando...</p>
-                 ) : pageTemplates.map(t => (
-                   <div key={t.id} className="group flex items-center justify-between p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:border-primary/20 transition-all">
-                      <button 
-                        onClick={() => loadProjectTemplate(t.id)}
-                        className="flex-1 text-[10px] font-black uppercase text-white/40 group-hover:text-white text-left px-1 truncate"
-                      >
-                        {t.name}
-                      </button>
-                      <button 
-                        onClick={async () => {
-                          const updated = pageTemplates.filter(tp => tp.id !== t.id);
-                          await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
-                          window.location.reload();
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded-lg text-white/20 hover:text-red-500 transition-all"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                   </div>
-                 ))}
-              </div>
-           </div>
+            <div className="flex items-center gap-2">
+               <Zap className="w-3.5 h-3.5 text-primary" />
+               <h3 className="text-[11px] font-black uppercase text-white/80 tracking-widest">Templates: {selectedClientName || 'Geral'}</h3>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+               <div className="relative group">
+                 <input 
+                   value={templateName} 
+                   onChange={e => setTemplateName(e.target.value)}
+                   placeholder={`Salvar em [${selectedClientName || 'Geral'}]...`} 
+                   className="w-full bg-black/40 border border-white/10 rounded-xl h-10 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all placeholder:text-white/10"
+                 />
+                 <button 
+                   onClick={async () => {
+                     if (!templateName) return toast.error('Dê um nome ao template');
+                     setIsSaving(true);
+                     await saveProjectTemplate(templateName);
+                     setTemplateName('');
+                     setIsSaving(false);
+                   }}
+                   disabled={isSaving || slots.length === 0}
+                   className="absolute right-2 top-1.5 p-1.5 bg-primary rounded-lg text-white hover:scale-105 transition-all disabled:opacity-20 disabled:scale-100"
+                 >
+                   <PlusCircle className="w-3.5 h-3.5" />
+                 </button>
+               </div>
+               
+               <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                  {isLoadingTemplates ? (
+                    <p className="text-center py-4 text-[9px] uppercase tracking-widest opacity-20">Carregando...</p>
+                  ) : filteredTemplates.map(t => (
+                    <div key={t.id} className="group flex items-center justify-between p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:border-primary/20 transition-all">
+                       <button 
+                         onClick={() => loadProjectTemplate(t.id)}
+                         className="flex-1 text-[10px] font-black uppercase text-white/40 group-hover:text-white text-left px-1 truncate"
+                       >
+                         {t.name}
+                       </button>
+                       <button 
+                         onClick={async () => {
+                           if (!confirm('Deseja excluir este template?')) return;
+                           await deleteProjectTemplate(t.id);
+                         }}
+                         className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded-lg text-white/20 hover:text-red-500 transition-all"
+                       >
+                         <Trash2 className="w-3 h-3" />
+                       </button>
+                    </div>
+                  ))}
+               </div>
+            </div>
         </div>
 
         {/* Slot list */}

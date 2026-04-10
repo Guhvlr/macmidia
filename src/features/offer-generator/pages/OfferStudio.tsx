@@ -48,7 +48,7 @@ const SizeInput = ({ value, onCommit }: { value: number; onCommit: (v: number) =
 
 const OfferStudioInner = () => {
   const navigate = useNavigate();
-  const { step, setStep, config, updateConfig } = useOffer();
+  const { step, setStep, config, updateConfig, selectedClientName, setSelectedClientName, clients } = useOffer();
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white flex flex-col h-screen overflow-hidden">
@@ -58,8 +58,23 @@ const OfferStudioInner = () => {
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
-            <Zap className="w-4 h-4 text-yellow-500" /> Offer Studio
+            <Zap className="w-4 h-4 text-yellow-500" /> MacOferta Pro
           </h1>
+          <div className="h-8 w-px bg-white/5 mx-2" />
+          <div className="flex items-center gap-2">
+            <label className="text-[9px] font-black text-white/20 uppercase tracking-widest whitespace-nowrap">Pasta:</label>
+            <select 
+              value={selectedClientName || ''} 
+              onChange={e => setSelectedClientName(e.target.value || null)}
+              className="bg-white/5 border border-white/10 rounded-lg h-9 px-1 text-[11px] font-bold text-white outline-none focus:border-primary/50 transition-all min-w-[140px] appearance-none cursor-pointer text-center"
+              style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+            >
+              <option value="" className="bg-[#0d0d10] text-white">📁 GERAL / TODOS</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.name} className="bg-[#0d0d10] text-white">{c.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Monitor className="w-3.5 h-3.5 text-white/25" />

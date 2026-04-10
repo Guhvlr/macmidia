@@ -114,6 +114,7 @@ interface OfferContextType {
   setPanOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   pageTemplates: any[];
   saveProjectTemplate: (name: string) => Promise<void>;
+  deleteProjectTemplate: (id: string) => Promise<void>;
   loadProjectTemplate: (id: string) => void;
   isLoadingTemplates: boolean;
   getSlotSettings: (index: number) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
@@ -124,6 +125,9 @@ interface OfferContextType {
   syncAllSlots: (settings: any, sourceIdx: number) => void;
   undo: () => void;
   pushHistory: () => void;
+  selectedClientName: string | null;
+  setSelectedClientName: (name: string | null) => void;
+  clients: any[];
 }
 
 const defaultPriceBadge: PriceBadgeConfig = {
@@ -199,6 +203,21 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
   const [presets, setPresetsState] = useState<any[]>([]);
   const [isLoadingPresets, setIsLoadingPresets] = useState(true);
+  const [selectedClientName, setSelectedClientName] = useState<string | null>(localStorage.getItem('offer_generator_client') || null);
+  const [clients, setClients] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      const { data } = await supabase.from('calendar_clients').select('id, name').order('name');
+      if (data) setClients(data);
+    };
+    fetchClients();
+  }, []);
+
+  useEffect(() => {
+    if (selectedClientName) localStorage.setItem('offer_generator_client', selectedClientName);
+    else localStorage.removeItem('offer_generator_client');
+  }, [selectedClientName]);
   const [activePage, setActivePage] = useState(0);
 
   // Undo History
@@ -289,11 +308,18 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const saveProjectTemplate = async (name: string) => {
-    const newTemplate = { id: crypto.randomUUID(), name, slots, slotSettings, priceBadge, descConfig, config };
+    const newTemplate = { id: crypto.randomUUID(), name, slots, slotSettings, priceBadge, descConfig, config, client: selectedClientName };
     const updated = [...pageTemplates, newTemplate];
     setPageTemplates(updated);
     await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
     toast.success('Template salvo!');
+  };
+
+  const deleteProjectTemplate = async (id: string) => {
+    const updated = pageTemplates.filter(t => t.id !== id);
+    setPageTemplates(updated);
+    await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
+    toast.success('Template removido!');
   };
 
   const loadProjectTemplate = (id: string) => {
@@ -374,7 +400,10 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const setPresets = async (newPresets: any[] | ((prev: any[]) => any[])) => {
-    const updated = typeof newPresets === 'function' ? newPresets(presets) : newPresets;
+    let updated = typeof newPresets === 'function' ? newPresets(presets) : newPresets;
+    // For newly added presets, attach client
+    updated = updated.map(p => p.client === undefined ? { ...p, client: selectedClientName } : p);
+    
     setPresetsState(updated);
     await supabase.from('settings').upsert({ key: 'offer_generator_presets', value: JSON.stringify(updated) });
   };
@@ -400,13 +429,14 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       selectedSlotIndices, setSelectedSlotIndices,
       zoom, setZoom,
       panOffset, setPanOffset,
-      pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates,
+      pageTemplates, saveProjectTemplate, deleteProjectTemplate, loadProjectTemplate, isLoadingTemplates,
       getSlotSettings,
       updateSlotSettings,
       replaceSlotSettings,
       syncAllSlots,
       activePage, setActivePage,
-      undo, pushHistory
+      undo, pushHistory,
+      selectedClientName, setSelectedClientName, clients
     }}>
       {children}
     </OfferContext.Provider>

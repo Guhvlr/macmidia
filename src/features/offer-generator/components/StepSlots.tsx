@@ -1,11 +1,18 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useOffer, Slot } from '../context/OfferContext';
-import { Trash2, MousePointer, PenTool } from 'lucide-react';
+import { Trash2, MousePointer, PenTool, Zap, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export const StepSlots = () => {
-  const { config, slots, setSlots, selectedSlotId, setSelectedSlotId } = useOffer();
+  const { 
+    config, slots, setSlots, selectedSlotId, setSelectedSlotId,
+    pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates
+  } = useOffer();
+
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [templateName, setTemplateName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const [mode, setMode] = useState<'draw' | 'select'>('draw');
   const [isDrawing, setIsDrawing] = useState(false);
@@ -80,49 +87,112 @@ export const StepSlots = () => {
   const selectedSlot = slots.find(s => s.id === selectedSlotId);
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex overflow-hidden">
       {/* Sidebar */}
-      <div className="w-[340px] border-r border-white/5 bg-[#121214] p-5 overflow-y-auto custom-scrollbar space-y-5">
+      <div className="w-[340px] border-r border-white/5 bg-[#0d0d10] p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
         <div>
-          <h2 className="text-sm font-black uppercase tracking-widest text-white mb-1">Etapa 2</h2>
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">Defina onde os produtos vão aparecer</p>
+          <h2 className="text-sm font-black uppercase tracking-widest text-white">Etapa 2: Layout</h2>
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">Desenhe os slots de produtos</p>
         </div>
 
-        {/* Mode */}
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => setMode('draw')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-bold uppercase border transition-all ${mode === 'draw' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-white/5 border-white/10 text-white/40'}`}>
-            <PenTool className="w-3.5 h-3.5" /> Desenhar
-          </button>
-          <button onClick={() => setMode('select')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-bold uppercase border transition-all ${mode === 'select' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-white/5 border-white/10 text-white/40'}`}>
-            <MousePointer className="w-3.5 h-3.5" /> Mover
-          </button>
+        {/* Mode & Basic Actions */}
+        <div className="flex flex-col gap-3">
+           <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setMode('draw')}
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${mode === 'draw' ? 'bg-green-500/10 border-green-500/40 text-green-500 shadow-lg shadow-green-500/10' : 'bg-white/5 border-white/10 text-white/40'}`}>
+                <PenTool className="w-3.5 h-3.5" /> Desenhar
+              </button>
+              <button onClick={() => setMode('select')}
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${mode === 'select' ? 'bg-blue-500/10 border-blue-500/40 text-blue-500 shadow-lg shadow-blue-500/10' : 'bg-white/5 border-white/10 text-white/40'}`}>
+                <MousePointer className="w-3.5 h-3.5" /> Mover
+              </button>
+           </div>
+
+           {slots.length > 0 && (
+             <button onClick={() => { setSlots([]); setSelectedSlotId(null); }} className="w-full bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 rounded-xl py-2 text-[9px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 transition-all">
+                Limpar Tudo
+             </button>
+           )}
         </div>
-        <p className="text-[9px] text-white/20 leading-relaxed">
-          {mode === 'draw' ? '✏️ Clique e arraste na arte para criar uma área de slot.' : '☝ Clique num slot para mover. Use o handle azul para redimensionar.'}
-        </p>
+
+        {/* Templates Section */}
+        <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
+           <div className="flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-primary" />
+              <h3 className="text-[11px] font-black uppercase text-white/80 tracking-widest">Templates Completos</h3>
+           </div>
+           
+           <div className="flex flex-col gap-2">
+              <div className="relative group">
+                <input 
+                  value={templateName} 
+                  onChange={e => setTemplateName(e.target.value)}
+                  placeholder="Nome do Template..." 
+                  className="w-full bg-black/40 border border-white/10 rounded-xl h-10 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all placeholder:text-white/10"
+                />
+                <button 
+                  onClick={async () => {
+                    if (!templateName) return toast.error('Dê um nome ao template');
+                    setIsSaving(true);
+                    await saveProjectTemplate(templateName);
+                    setTemplateName('');
+                    setIsSaving(false);
+                  }}
+                  disabled={isSaving || slots.length === 0}
+                  className="absolute right-2 top-1.5 p-1.5 bg-primary rounded-lg text-white hover:scale-105 transition-all disabled:opacity-20 disabled:scale-100"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              
+              <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                 {isLoadingTemplates ? (
+                   <p className="text-center py-4 text-[9px] uppercase tracking-widest opacity-20">Carregando...</p>
+                 ) : pageTemplates.map(t => (
+                   <div key={t.id} className="group flex items-center justify-between p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:border-primary/20 transition-all">
+                      <button 
+                        onClick={() => loadProjectTemplate(t.id)}
+                        className="flex-1 text-[10px] font-black uppercase text-white/40 group-hover:text-white text-left px-1 truncate"
+                      >
+                        {t.name}
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          const updated = pageTemplates.filter(tp => tp.id !== t.id);
+                          await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
+                          window.location.reload();
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded-lg text-white/20 hover:text-red-500 transition-all"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </div>
 
         {/* Slot list */}
         <div className="space-y-2">
           <label className="text-[10px] font-black uppercase text-white/40 flex justify-between">
-            <span>Slots</span>
+            <span>Slots Individuais</span>
             <span className="bg-white/10 px-2 py-0.5 rounded-full">{slots.length}</span>
           </label>
-          {slots.length === 0 && <p className="text-white/15 text-[10px] text-center py-4 italic">Use "Desenhar" para criar slots na arte →</p>}
           {slots.map((s, i) => (
             <div key={s.id} onClick={() => { setSelectedSlotId(s.id); setMode('select'); }}
               className={`rounded-lg p-2 cursor-pointer border flex items-center gap-2 transition-all ${selectedSlotId === s.id ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white/[0.03] border-white/5 hover:border-white/10'}`}>
               <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center text-[9px] font-black text-white/40">{i + 1}</div>
               <p className="text-[9px] text-white/40 font-mono flex-1">{Math.round(s.x)},{Math.round(s.y)} · {Math.round(s.width)}×{Math.round(s.height)}</p>
-              <button onClick={(e) => { e.stopPropagation(); setSlots(prev => prev.filter(sl => sl.id !== s.id)); if (selectedSlotId === s.id) setSelectedSlotId(null); }} className="text-white/20 hover:text-red-400">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setSlots(prev => prev.filter(sl => sl.id !== s.id)); if (selectedSlotId === s.id) setSelectedSlotId(null); }} 
+                className="text-white/20 hover:text-red-400 p-1"
+              >
                 <Trash2 className="w-3 h-3" />
               </button>
             </div>
           ))}
         </div>
 
-        {/* Selected slot fine-tune */}
         {selectedSlot && (
           <div className="pt-3 border-t border-white/5 space-y-2">
             <label className="text-[9px] font-black uppercase text-blue-400">Ajuste Fino — Slot {slots.indexOf(selectedSlot) + 1}</label>
@@ -132,35 +202,26 @@ export const StepSlots = () => {
                   <label className="text-[8px] text-white/25 font-bold uppercase">{k === 'width' ? 'W' : k === 'height' ? 'H' : k.toUpperCase()}</label>
                   <input type="number" value={Math.round(selectedSlot[k])}
                     onChange={e => setSlots(prev => prev.map(s => s.id === selectedSlot.id ? { ...s, [k]: parseInt(e.target.value) || 0 } : s))}
-                    className="w-full bg-black/40 border border-white/10 rounded h-7 px-1 text-[10px] text-white text-center" />
+                    className="w-full bg-black/40 border border-white/10 rounded h-7 px-1 text-[10px] text-white text-center font-bold" />
                 </div>
               ))}
             </div>
           </div>
         )}
-
-        {slots.length > 0 && (
-          <button onClick={() => { setSlots([]); setSelectedSlotId(null); }} className="text-[9px] text-red-400/50 hover:text-red-400 w-full text-center py-2">
-            Limpar todos os slots
-          </button>
-        )}
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 bg-black/40 flex items-center justify-center p-6 overflow-auto">
-        <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg"
+      <div className="flex-1 bg-black/40 flex items-center justify-center p-6 overflow-auto custom-scrollbar">
+        <svg ref={svgRef} 
           width={config.width} height={config.height} viewBox={`0 0 ${config.width} ${config.height}`}
           style={{ width: '100%', maxWidth: '700px', height: 'auto', cursor: mode === 'draw' ? 'crosshair' : 'default', userSelect: 'none' }}
           className="shadow-2xl ring-1 ring-white/10"
           onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
           onClick={() => { if (mode === 'select' && !isDragging) setSelectedSlotId(null); }}>
 
-          {/* Background */}
           {config.backgroundImageUrl ? (
             <image href={config.backgroundImageUrl} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
-          ) : <rect width="100%" height="100%" fill="#e5e5e5" />}
+          ) : <rect width="100%" height="100%" fill="#1a1a1a" />}
 
-          {/* Slots */}
           {slots.map((s, i) => {
             const sel = selectedSlotId === s.id;
             return (
@@ -172,15 +233,12 @@ export const StepSlots = () => {
                   strokeDasharray={sel ? '' : '8,4'} rx={6}
                   style={{ cursor: mode === 'select' ? 'move' : 'crosshair' }}
                   onMouseDown={e => onSlotDown(e, s)} />
-                {/* Number */}
                 <text x={s.x + 12} y={s.y + 22} fontSize={14} fill={sel ? '#3b82f6' : 'rgba(255,255,255,0.6)'} fontWeight="900" fontFamily="monospace">{i + 1}</text>
-                {/* Resize handle */}
                 {sel && <rect x={s.x + s.width - 16} y={s.y + s.height - 16} width={16} height={16} fill="#3b82f6" rx={3} style={{ cursor: 'nwse-resize' }} onMouseDown={e => onResizeDown(e, s)} />}
               </g>
             );
           })}
 
-          {/* Draw preview */}
           {isDrawing && dr && (
             <rect x={dr.x} y={dr.y} width={dr.w} height={dr.h} fill="rgba(34,197,94,0.15)" stroke="#22c55e" strokeWidth={2} strokeDasharray="6,3" rx={6} />
           )}

@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface ProductItem {
   id: string;
@@ -23,28 +25,24 @@ export interface PriceBadgeConfig {
   badgeImageUrl: string | null;
   badgeWidth: number;
   badgeHeight: number;
-  badgeOffsetX: number;  // % position within slot
+  badgeOffsetX: number;
   badgeOffsetY: number;
-  // "R$"
   currencyFontSize: number;
   currencyOffsetX: number;
   currencyOffsetY: number;
   currencyColor: string;
   currencyFontFamily: string;
-  // Value (ex: 2,79)
   valueFontSize: number;
   valueOffsetX: number;
   valueOffsetY: number;
   valueColor: string;
   valueFontFamily: string;
-  // Suffix ("cada", "un", "kg")
   suffixText: string;
   suffixFontSize: number;
   suffixOffsetX: number;
   suffixOffsetY: number;
   suffixColor: string;
   showSuffix: boolean;
-  // Fallback
   bgColor: string;
   borderRadius: number;
 }
@@ -55,7 +53,7 @@ export interface DescriptionConfig {
   color: string;
   bgColor: string;
   showBg: boolean;
-  offsetX: number;   // % position within slot
+  offsetX: number;
   offsetY: number;
   maxChars: number;
   uppercase: boolean;
@@ -63,7 +61,7 @@ export interface DescriptionConfig {
 
 export interface ImageConfig {
   scale: number;
-  offsetX: number;  // % position within slot
+  offsetX: number;
   offsetY: number;
 }
 
@@ -77,6 +75,7 @@ interface OfferContextType {
   step: number;
   setStep: React.Dispatch<React.SetStateAction<number>>;
   config: ArtBoardConfig;
+  setConfig: React.Dispatch<React.SetStateAction<ArtBoardConfig>>; // for undo
   updateConfig: (p: Partial<ArtBoardConfig>) => void;
   slots: Slot[];
   setSlots: React.Dispatch<React.SetStateAction<Slot[]>>;
@@ -85,10 +84,13 @@ interface OfferContextType {
   pageCount: number;
   setPageCount: React.Dispatch<React.SetStateAction<number>>;
   priceBadge: PriceBadgeConfig;
+  setPriceBadge: React.Dispatch<React.SetStateAction<PriceBadgeConfig>>; // for undo
   updatePriceBadge: (p: Partial<PriceBadgeConfig>) => void;
   descConfig: DescriptionConfig;
+  setDescConfig: React.Dispatch<React.SetStateAction<DescriptionConfig>>; // for undo
   updateDescConfig: (p: Partial<DescriptionConfig>) => void;
   imageConfig: ImageConfig;
+  setImageConfig: React.Dispatch<React.SetStateAction<ImageConfig>>; // for undo
   updateImageConfig: (p: Partial<ImageConfig>) => void;
   products: ProductItem[];
   setProducts: React.Dispatch<React.SetStateAction<ProductItem[]>>;
@@ -96,6 +98,27 @@ interface OfferContextType {
   setLayouts: React.Dispatch<React.SetStateAction<any[]>>;
   customFonts: { name: string; url: string }[];
   setCustomFonts: React.Dispatch<React.SetStateAction<{ name: string; url: string }[]>>;
+  presets: any[];
+  setPresets: (presets: any[] | ((prev: any[]) => any[])) => void;
+  isLoadingPresets: boolean;
+  slotSettings: Record<number, any>;
+  setSlotSettings: React.Dispatch<React.SetStateAction<Record<number, any>>>; // for undo
+  updateSlotSettings: (index: number, p: any) => void;
+  selectedSlotIndex: number | null;
+  setSelectedSlotIndex: (idx: number | null) => void;
+  selectedSlotIndices: number[];
+  setSelectedSlotIndices: React.Dispatch<React.SetStateAction<number[]>>;
+  zoom: number;
+  setZoom: React.Dispatch<React.SetStateAction<number>>;
+  panOffset: { x: number; y: number };
+  setPanOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
+  pageTemplates: any[];
+  saveProjectTemplate: (name: string) => Promise<void>;
+  loadProjectTemplate: (id: string) => void;
+  isLoadingTemplates: boolean;
+  getSlotSettings: (index: number) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
+  undo: () => void;
+  pushHistory: () => void;
 }
 
 const defaultPriceBadge: PriceBadgeConfig = {
@@ -119,7 +142,7 @@ const defaultPriceBadge: PriceBadgeConfig = {
   suffixOffsetX: 55,
   suffixOffsetY: 90,
   suffixColor: '#ffffff',
-  showSuffix: false,
+  showSuffix: true,
   bgColor: '#e11d48',
   borderRadius: 14,
 };
@@ -162,6 +185,143 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [layouts, setLayouts] = useState<any[]>([]);
   const [customFonts, setCustomFonts] = useState<{ name: string; url: string }[]>([]);
+  const [slotSettings, setSlotSettings] = useState<Record<number, any>>({});
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
+  const [selectedSlotIndices, setSelectedSlotIndices] = useState<number[]>([]);
+  const [zoom, setZoom] = useState(0.8);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [pageTemplates, setPageTemplates] = useState<any[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
+  const [presets, setPresetsState] = useState<any[]>([]);
+  const [isLoadingPresets, setIsLoadingPresets] = useState(true);
+
+  // Undo History
+  const historyRef = useRef<any[]>([]);
+  const pushHistory = useCallback(() => {
+    const snap = JSON.stringify({ slots, slotSettings, priceBadge, descConfig, imageConfig, config });
+    if (historyRef.current[historyRef.current.length - 1] === snap) return;
+    historyRef.current.push(snap);
+    if (historyRef.current.length > 30) historyRef.current.shift();
+  }, [slots, slotSettings, priceBadge, descConfig, imageConfig, config]);
+
+  const undo = useCallback(() => {
+    if (historyRef.current.length <= 1) {
+      toast.info('Nada para desfazer');
+      return;
+    }
+    historyRef.current.pop(); // Remove current
+    const last = JSON.parse(historyRef.current[historyRef.current.length - 1]);
+    setSlots(last.slots);
+    setSlotSettings(last.slotSettings);
+    setPriceBadge(last.priceBadge);
+    setDescConfig(last.descConfig);
+    setImageConfig(last.imageConfig);
+    setConfig(last.config);
+    toast.success('Desfeito!');
+  }, []);
+
+  useEffect(() => {
+    const handleUndoKeys = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handleUndoKeys);
+    return () => window.removeEventListener('keydown', handleUndoKeys);
+  }, [undo]);
+
+  const fetchPresets = useCallback(async () => {
+    try {
+      const { data } = await supabase.from('settings').select('value').eq('key', 'offer_generator_presets').maybeSingle();
+      if (data?.value) setPresetsState(JSON.parse(data.value));
+    } catch (err) {} finally { setIsLoadingPresets(false); }
+  }, []);
+
+  const fetchFonts = useCallback(async () => {
+    try {
+      const { data } = await (supabase as any).from('offer_fonts').select('*');
+      if (!data) return;
+      for (const f of data) {
+        setCustomFonts(prev => {
+          if (prev.some(x => x.name === f.name)) return prev;
+          fetch(f.url).then(r => r.blob()).then(blob => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = reader.result as string;
+              const fontFace = new FontFace(f.name, `url(${base64})`);
+              fontFace.load().then(loaded => {
+                document.fonts.add(loaded);
+                setCustomFonts(cur => cur.some(x => x.name === f.name) ? cur : [...cur, { name: f.name, url: base64 }]);
+              });
+            };
+            reader.readAsDataURL(blob);
+          });
+          return prev;
+        });
+      }
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    const initData = async () => {
+      try {
+        const { data: tData } = await supabase.from('settings').select('value').eq('key', 'offer_generator_page_templates').maybeSingle();
+        if (tData?.value) setPageTemplates(JSON.parse(tData.value));
+        const { data: sData } = await supabase.from('settings').select('value').eq('key', 'offer_generator_slot_settings').maybeSingle();
+        if (sData?.value) setSlotSettings(JSON.parse(sData.value));
+      } catch (e) {} finally { setIsLoadingTemplates(false); }
+    };
+    initData();
+    fetchPresets();
+    fetchFonts();
+  }, [fetchPresets, fetchFonts]);
+
+  // Initial history push
+  useEffect(() => {
+    if (historyRef.current.length === 0) pushHistory();
+  }, []);
+
+  const saveProjectTemplate = async (name: string) => {
+    const newTemplate = { id: crypto.randomUUID(), name, slots, slotSettings, priceBadge, descConfig, config };
+    const updated = [...pageTemplates, newTemplate];
+    setPageTemplates(updated);
+    await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
+    toast.success('Template salvo!');
+  };
+
+  const loadProjectTemplate = (id: string) => {
+    const base = pageTemplates.find(t => t.id === id);
+    if (!base) return;
+    pushHistory();
+    setSlots(base.slots || []);
+    setSlotSettings(base.slotSettings || {});
+    setPriceBadge(base.priceBadge || priceBadge);
+    setDescConfig(base.descConfig || descConfig);
+    setConfig(prev => ({ ...prev, ...base.config }));
+    toast.success(`Template "${base.name}" carregado!`);
+  };
+
+  const updateSlotSettings = async (index: number, p: any) => {
+    const updated = { ...slotSettings, [index]: { ...(slotSettings[index] || {}), ...p } };
+    setSlotSettings(updated);
+    await supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(updated) });
+  };
+
+  const getSlotSettings = (index: number) => {
+    const s = slotSettings[index] || {};
+    return {
+      priceBadge: { ...priceBadge, ...(s.priceBadge || {}) },
+      descConfig: { ...descConfig, ...(s.descConfig || {}) },
+      imageConfig: { ...imageConfig, ...(s.imageConfig || {}) },
+    };
+  };
+
+  const setPresets = async (newPresets: any[] | ((prev: any[]) => any[])) => {
+    const updated = typeof newPresets === 'function' ? newPresets(presets) : newPresets;
+    setPresetsState(updated);
+    await supabase.from('settings').upsert({ key: 'offer_generator_presets', value: JSON.stringify(updated) });
+  };
 
   const updateConfig = (p: Partial<ArtBoardConfig>) => setConfig(prev => ({ ...prev, ...p }));
   const updatePriceBadge = (p: Partial<PriceBadgeConfig>) => setPriceBadge(prev => ({ ...prev, ...p }));
@@ -170,14 +330,23 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <OfferContext.Provider value={{
-      step, setStep, config, updateConfig,
+      step, setStep, config, setConfig, updateConfig,
       slots, setSlots, selectedSlotId, setSelectedSlotId,
       pageCount, setPageCount,
-      priceBadge, updatePriceBadge,
-      descConfig, updateDescConfig,
-      imageConfig, updateImageConfig,
+      priceBadge, setPriceBadge, updatePriceBadge,
+      descConfig, setDescConfig, updateDescConfig,
+      imageConfig, setImageConfig, updateImageConfig,
       products, setProducts, layouts, setLayouts,
       customFonts, setCustomFonts,
+      presets, setPresets, isLoadingPresets,
+      slotSettings, setSlotSettings, updateSlotSettings,
+      selectedSlotIndex, setSelectedSlotIndex,
+      selectedSlotIndices, setSelectedSlotIndices,
+      zoom, setZoom,
+      panOffset, setPanOffset,
+      pageTemplates, saveProjectTemplate, loadProjectTemplate, isLoadingTemplates,
+      getSlotSettings,
+      undo, pushHistory
     }}>
       {children}
     </OfferContext.Provider>

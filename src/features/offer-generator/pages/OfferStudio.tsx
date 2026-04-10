@@ -128,9 +128,5 @@ const OfferStudioInner = () => {
 };
 
 export default function OfferStudio() {
-  return (
-    <OfferProvider>
-      <OfferStudioInner />
-    </OfferProvider>
-  );
+  return <OfferStudioInner />;
 }

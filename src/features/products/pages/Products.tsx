@@ -82,9 +82,9 @@ export default function Products() {
 
   const getImageUrl = (ean: string) => {
     if (!ean || ean === 'Não encontrado') return null;
-    // Remove any non-alphanumeric chars just in case
     const cleanEan = ean.replace(/[^a-zA-Z0-9]/g, '');
-    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png`;
+    // Adiciona timestamp para ignorar o cache do navegador/CDN
+    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png?t=${Date.now()}`;
   };
 
   const handleCopyLink = (ean: string) => {
@@ -107,12 +107,47 @@ export default function Products() {
       const cleanEan = ean.replace(/[^a-zA-Z0-9]/g, '');
       const filePath = `${cleanEan}.png`;
 
-      // Upload/Replace in Storage
-      const { error: storageErr } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file, { upsert: true });
+      // 1. Remove a imagem antiga primeiro para evitar qualquer conflito de cache ou permissão de upsert
+      await supabase.storage.from('product-images').remove([filePath]);
 
-      if (storageErr) throw storageErr;
+      // 2. Faz o upload da nova imagem
+      const { data: storageData, error: storageErr } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file, { 
+          upsert: true,
+          cacheControl: '0' 
+        });
+
+      if (storageErr) {
+        console.error('Erro detalhado do Storage:', storageErr);
+        throw new Error(`Falha no Storage: ${storageErr.message}`);
+      }
+      
+      console.log('Upload concluído com sucesso:', storageData);
+      
+      // ✅ Sincroniza com o Banco de Dados (Upsert)
+      // Agora salvamos explicitamente a nova URL e o caminho no registro do banco
+      const productInList = searchResults.find(p => p.ean === ean);
+      const storageUrl = getImageUrl(cleanEan);
+      
+      const productData = {
+        ean: cleanEan,
+        name: (productInList && productInList.name !== 'Não encontrado') ? productInList.name : 'Produto s/ Nome',
+        brand: productInList?.brand || '',
+        line: productInList?.line || '',
+        category: productInList?.category || '',
+        image_url: storageUrl, // Atualiza a URL no banco
+        image_path: filePath,  // Atualiza o caminho no banco
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: dbErr } = await (supabase.from('products') as any).upsert(productData, { onConflict: 'ean' });
+      
+      if (dbErr) {
+        // Fallback sem updated_at se a coluna não existir
+        const { updated_at, ...dataWithoutTime } = productData;
+        await (supabase.from('products') as any).upsert(dataWithoutTime, { onConflict: 'ean' });
+      }
 
       // Update in result list so it shows immediately
       const newUrl = getImageUrl(cleanEan) + '?t=' + Date.now();
@@ -678,7 +713,7 @@ export default function Products() {
                           +{item.images.length - 3}
                         </div>
                       )}
-                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-90">
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-90 z-30">
                         <input 
                           type="file" 
                           id={`upload-${item.ean}`}

@@ -289,14 +289,15 @@ REGRAS:
     setAiResult('');
     setSelectedEmployee('');
 
-    const defaultName = msg.sender_name ||
-      msg.sender.replace(/@.*/, '').replace(/\d{2}(\d{4,})/, '$1') ||
-      'Cliente WhatsApp';
+    // ✅ Prioriza o nome do grupo/sender salvo no banco — não modifica nada
+    const defaultName = (msg.sender_name && msg.sender_name.trim() && msg.sender_name !== 'Grupo sem Nome')
+      ? msg.sender_name.trim()
+      : msg.sender.replace(/@.*/, '') || 'Cliente WhatsApp';
     setEditClientName(defaultName);
     setIsSequencia(false);
 
-    // ✅ CORREÇÃO: Se for documento com conteúdo extraído, pré-preenche a descrição
-    if (msg.message_type === 'document' && msg.message_text && msg.message_text.trim()) {
+    // ✅ Pré-preenche a descrição com o texto da mensagem (texto, documento extraído, etc.)
+    if (msg.message_text && msg.message_text.trim()) {
       const cleanText = msg.message_text
         .replace('✅ [CONTEÚDO EXCEL]:', '')
         .replace('✅ [CONTEÚDO WORD]:', '')
@@ -327,7 +328,7 @@ REGRAS:
         return;
       }
 
-      const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA.
+        const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA.
 Transforme a mensagem bruta em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
 
 REGRAS:
@@ -337,6 +338,7 @@ REGRAS:
 4. NUNCA altere preços — mantenha exatamente como recebidos
 5. NUNCA USE formatação markdown (asteriscos, negrito, etc.)
 6. Retorne APENAS o texto processado, sem comentários
+7. PRESERVE o Nome do Cliente recebido como remetente se ele já parecer um nome de grupo ou empresa.
 
 Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto processado..." }`;
 
@@ -348,6 +350,7 @@ REGRAS:
 2. Crie chamadas agressivas para ofertas
 3. Sugira CTAs eficientes
 4. NUNCA USE formatação markdown
+5. PRESERVE o Nome do Cliente/Grupo original como identificação principal.
 
 Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto criativo..." }`;
 
@@ -378,7 +381,14 @@ Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto criati
       const processedText = (parsedData.description || selectedMessage.message_text).replace(/\*/g, '');
 
       setAiResult(processedText);
-      if (parsedData.clientName && parsedData.clientName !== 'Desconhecido') {
+      
+      // ✅ SÓ altera o nome do cliente se o atual for genérico ou se a IA trouxer algo muito específico e o atual estiver vazio
+      const isGenericName = !editClientName || 
+                            editClientName === 'Cliente WhatsApp' || 
+                            editClientName === 'CLIENTE WHATSAPP' ||
+                            editClientName === 'DESCONHECIDO';
+
+      if (parsedData.clientName && parsedData.clientName !== 'Desconhecido' && isGenericName) {
         setEditClientName(parsedData.clientName.replace(/["']/g, '').toUpperCase());
       }
 

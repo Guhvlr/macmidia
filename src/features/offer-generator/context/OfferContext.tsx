@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import type { OfferProject } from '../components/OfferDashboard';
 
 export interface ProductItem {
   id: string;
@@ -135,6 +136,14 @@ interface OfferContextType {
   selectedClientName: string | null;
   setSelectedClientName: (name: string | null) => void;
   clients: any[];
+  // Project management
+  activeProjectId: string | null;
+  activeProjectName: string | null;
+  openProject: (project: OfferProject) => void;
+  saveProject: () => Promise<void>;
+  closeProject: () => void;
+  createAndOpenProject: (name: string, date: string) => Promise<void>;
+  resetToDefaults: () => void;
 }
 
 const defaultPriceBadge: PriceBadgeConfig = {
@@ -212,6 +221,8 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isLoadingPresets, setIsLoadingPresets] = useState(true);
   const [selectedClientName, setSelectedClientName] = useState<string | null>(localStorage.getItem('offer_generator_client') || null);
   const [clients, setClients] = useState<any[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -454,6 +465,102 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateDescConfig = (p: Partial<DescriptionConfig>) => setDescConfig(prev => ({ ...prev, ...p }));
   const updateImageConfig = (p: Partial<ImageConfig>) => setImageConfig(prev => ({ ...prev, ...p }));
 
+  // ── Project Management ──────────────────────────────────────
+  const resetToDefaults = useCallback(() => {
+    setStep(1);
+    setConfig(defaultConfig);
+    setSlots([]);
+    setSelectedSlotId(null);
+    setPageCount(1);
+    setPriceBadge(defaultPriceBadge);
+    setDescConfig(defaultDescConfig);
+    setImageConfig(defaultImageConfig);
+    setProducts([]);
+    setLayouts([]);
+    setSlotSettings({});
+    setSelectedSlotIndex(null);
+    setSelectedSlotIndices([]);
+    setZoom(0.8);
+    setPanOffset({ x: 0, y: 0 });
+    setActivePage(0);
+    historyRef.current = [];
+  }, []);
+
+  const getProjectStateSnapshot = useCallback(() => {
+    return {
+      step, config, slots, pageCount, priceBadge, descConfig, imageConfig,
+      products, layouts, slotSettings, activePage, selectedClientName,
+    };
+  }, [step, config, slots, pageCount, priceBadge, descConfig, imageConfig, products, layouts, slotSettings, activePage, selectedClientName]);
+
+  const loadProjectState = useCallback((state: any) => {
+    if (!state) return;
+    if (state.step != null) setStep(state.step);
+    if (state.config) setConfig({ ...defaultConfig, ...state.config });
+    if (state.slots) setSlots(state.slots);
+    if (state.pageCount != null) setPageCount(state.pageCount);
+    if (state.priceBadge) setPriceBadge({ ...defaultPriceBadge, ...state.priceBadge });
+    if (state.descConfig) setDescConfig({ ...defaultDescConfig, ...state.descConfig });
+    if (state.imageConfig) setImageConfig({ ...defaultImageConfig, ...state.imageConfig });
+    if (state.products) setProducts(state.products);
+    if (state.layouts) setLayouts(state.layouts);
+    if (state.slotSettings) setSlotSettings(state.slotSettings);
+    if (state.activePage != null) setActivePage(state.activePage);
+    if (state.selectedClientName !== undefined) setSelectedClientName(state.selectedClientName);
+    historyRef.current = [];
+    setTimeout(() => pushHistory(), 50);
+  }, [pushHistory]);
+
+  const createAndOpenProject = useCallback(async (name: string, date: string) => {
+    resetToDefaults();
+    try {
+      const { data, error } = await (supabase as any)
+        .from('offer_projects')
+        .insert({ name, offer_date: date, state: {} })
+        .select()
+        .single();
+      if (error) throw error;
+      setActiveProjectId(data.id);
+      setActiveProjectName(data.name);
+      toast.success(`Oferta "${name}" criada!`);
+    } catch (err: any) {
+      toast.error('Erro ao criar oferta: ' + (err.message || ''));
+      throw err;
+    }
+  }, [resetToDefaults]);
+
+  const openProject = useCallback((project: OfferProject) => {
+    resetToDefaults();
+    setActiveProjectId(project.id);
+    setActiveProjectName(project.name);
+    loadProjectState(project.state);
+    toast.success(`Oferta "${project.name}" aberta!`);
+  }, [resetToDefaults, loadProjectState]);
+
+  const saveProject = useCallback(async () => {
+    if (!activeProjectId) {
+      toast.error('Nenhuma oferta ativa para salvar');
+      return;
+    }
+    try {
+      const snapshot = getProjectStateSnapshot();
+      const { error } = await (supabase as any)
+        .from('offer_projects')
+        .update({ state: snapshot, updated_at: new Date().toISOString() })
+        .eq('id', activeProjectId);
+      if (error) throw error;
+      toast.success('Alterações salvas!');
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err.message || ''));
+    }
+  }, [activeProjectId, getProjectStateSnapshot]);
+
+  const closeProject = useCallback(() => {
+    resetToDefaults();
+    setActiveProjectId(null);
+    setActiveProjectName(null);
+  }, [resetToDefaults]);
+
   return (
     <OfferContext.Provider value={{
       step, setStep, config, setConfig, updateConfig,
@@ -477,7 +584,9 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       syncAllSlots,
       activePage, setActivePage,
       undo, pushHistory,
-      selectedClientName, setSelectedClientName, clients
+      selectedClientName, setSelectedClientName, clients,
+      activeProjectId, activeProjectName,
+      openProject, saveProject, closeProject, createAndOpenProject, resetToDefaults,
     }}>
       {children}
     </OfferContext.Provider>

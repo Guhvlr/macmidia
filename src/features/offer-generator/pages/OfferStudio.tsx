@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { OfferProvider, useOffer } from '../context/OfferContext';
+import { useOffer } from '../context/OfferContext';
 import { StepBackground } from '../components/StepBackground';
 import { StepSlots } from '../components/StepSlots';
 import { StepPages } from '../components/StepPages';
 import { StepPriceBadge } from '../components/StepPriceBadge';
 import { StepReview } from '../components/StepReview';
 import { StepFinal } from '../components/StepFinal';
-import { ChevronLeft, ChevronRight, Zap, Monitor } from 'lucide-react';
+import { OfferDashboard } from '../components/OfferDashboard';
+import { ChevronLeft, ChevronRight, Zap, Monitor, Save, LogOut, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
 
 const STEPS = [
   { num: 1, label: 'Layout' },
@@ -47,20 +47,50 @@ const SizeInput = ({ value, onCommit }: { value: number; onCommit: (v: number) =
 };
 
 const OfferStudioInner = () => {
-  const navigate = useNavigate();
-  const { step, setStep, config, updateConfig, selectedClientName, setSelectedClientName, clients } = useOffer();
+  const {
+    step, setStep, config, updateConfig,
+    selectedClientName, setSelectedClientName, clients,
+    activeProjectId, activeProjectName,
+    openProject, saveProject, closeProject, createAndOpenProject,
+  } = useOffer();
 
+  const [isSaving, setIsSaving] = useState(false);
+
+  // ── If no project is active, show the dashboard ──
+  if (!activeProjectId) {
+    return (
+      <OfferDashboard
+        onOpenProject={openProject}
+        onCreateProject={(name, date) => createAndOpenProject(name, date)}
+      />
+    );
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await saveProject();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ── Active project → show step-by-step editor ──
   return (
     <div className="min-h-screen bg-[#09090b] text-white flex flex-col h-screen overflow-hidden">
       <header className="px-5 py-3 border-b border-white/5 bg-[#0d0d10] shrink-0 flex items-center justify-between z-20">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl bg-white/5 h-9 w-9">
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
-            <Zap className="w-4 h-4 text-yellow-500" /> MacOferta Pro
-          </h1>
-          <div className="h-8 w-px bg-white/5 mx-2" />
+          {/* Project name instead of back button */}
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-yellow-500" />
+            <h1 className="text-lg font-black tracking-tighter">MacOferta Pro</h1>
+          </div>
+          <div className="h-8 w-px bg-white/5" />
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+            <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Projeto:</span>
+            <span className="text-[11px] font-bold text-primary truncate max-w-[200px]">{activeProjectName}</span>
+          </div>
+          <div className="h-8 w-px bg-white/5" />
           <div className="flex items-center gap-2">
             <label className="text-[9px] font-black text-white/20 uppercase tracking-widest whitespace-nowrap">Pasta:</label>
             <select 
@@ -77,6 +107,24 @@ const OfferStudioInner = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Save & Exit buttons */}
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="h-9 px-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all gap-2"
+          >
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Salvar Alterações
+          </Button>
+          <Button
+            variant="outline"
+            onClick={closeProject}
+            className="h-9 px-4 bg-white/5 border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all gap-2"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sair da Ferramenta
+          </Button>
+          <div className="h-8 w-px bg-white/5 mx-1" />
           <Monitor className="w-3.5 h-3.5 text-white/25" />
           <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2.5 py-1 border border-white/10">
             <SizeInput value={config.width} onCommit={w => updateConfig({ width: w })} />

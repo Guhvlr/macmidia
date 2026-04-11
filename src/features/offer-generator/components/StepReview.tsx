@@ -48,13 +48,13 @@ export const StepReview = () => {
 
         // ── IMAGE LOGIC ──
         // Barcode mode (exact): always use image if found
-        // Description mode: only use image if confidence is HIGH
+        // Description mode: only use image if confidence is HIGH or MEDIUM
         let images: string[] = [];
         if (found) {
-          if (isBarcode || confidence === 'exact' || confidence === 'high') {
+          if (isBarcode || confidence === 'exact' || confidence === 'high' || confidence === 'medium') {
             images = [getImageUrl(res.match.ean)];
           }
-          // medium/low/none → NO image (better empty than wrong)
+          // low/none → NO image (better empty than wrong)
         }
 
         // ── PRICE ──

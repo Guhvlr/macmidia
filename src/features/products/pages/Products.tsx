@@ -298,7 +298,7 @@ export default function Products() {
 
         // Image logic: only use if exact (barcode) or high confidence
         let images: string[] = [];
-        if (found && (isBarcode || confidence === 'exact' || confidence === 'high')) {
+        if (found && (isBarcode || confidence === 'exact' || confidence === 'high' || confidence === 'medium')) {
           images = [getImageUrl(res.match.ean)];
         }
 

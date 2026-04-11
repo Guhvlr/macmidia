@@ -301,7 +301,7 @@ Retorne JSON: { "items": [...] }`
         match: bestMatch,
         confidence: conf.level,
         confidence_reason: conf.reason,
-        warning: conf.level === 'high' ? undefined : 'Imagem não encontrada com confiança',
+        warning: (conf.level === 'high' || conf.level === 'medium') ? undefined : 'Imagem não encontrada com confiança',
       });
     }
 

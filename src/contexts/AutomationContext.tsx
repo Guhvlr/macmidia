@@ -27,7 +27,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       const imageUrls = card.images || [];
 
       if (imageUrls.length > 0) {
-        for (const url of imageUrls.slice(0, 2)) {
+        for (const url of imageUrls.slice(0, 13)) {
           try {
             const resp = await fetch(url);
             const blob = await resp.blob();

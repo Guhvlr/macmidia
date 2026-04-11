@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Sparkles, User, Clock, Check, X, RefreshCw, ChevronDown, Filter, FileSpreadsheet, FileCode, Zap } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, Trash2, Loader2, Image, FileText, Sparkles, User, Clock, Check, X, RefreshCw, Filter, FileSpreadsheet, FileCode, Zap, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +24,21 @@ interface InboxMessage {
   raw_payload: any;
 }
 
+// Verifica se a mensagem é um documento Excel ou Word
+const isExcelOrWord = (msg: InboxMessage) => {
+  const mime = (msg.media_mime_type || '').toLowerCase();
+  const text = (msg.message_text || '').toLowerCase();
+  const isExcel = mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || text.includes('.xlsx') || text.includes('.xls');
+  const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml') || text.includes('.docx') || text.includes('.doc');
+  return isExcel || isWord;
+};
+
+// Verifica se o conteúdo do arquivo já foi extraído
+const hasExtractedContent = (msg: InboxMessage) => {
+  const text = msg.message_text || '';
+  return text.includes('[CONTEÚDO EXCEL]') || text.includes('[CONTEÚDO WORD]') || text.includes('✅ [CONTEÚDO');
+};
+
 const WhatsAppInbox = () => {
   const navigate = useNavigate();
   const { employees, addKanbanCard } = useApp();
@@ -35,11 +50,14 @@ const WhatsAppInbox = () => {
   const [selectedMessage, setSelectedMessage] = useState<InboxMessage | null>(null);
   const [aiResult, setAiResult] = useState<string>('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [editClientName, setEditClientName] = useState('');
   const [isSequencia, setIsSequencia] = useState(false);
   const [filterActive, setFilterActive] = useState(true);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [extractMode, setExtractMode] = useState<'order' | 'sections' | null>(null);
+  const [extractTargetMsg, setExtractTargetMsg] = useState<InboxMessage | null>(null);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -62,7 +80,6 @@ const WhatsAppInbox = () => {
 
   useEffect(() => {
     fetchMessages();
-    // Subscribe to real-time inserts
     const channel = supabase
       .channel('whatsapp-inbox-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_inbox' }, (payload) => {
@@ -85,7 +102,6 @@ const WhatsAppInbox = () => {
       setMessages(prev => prev.filter(m => m.id !== id));
       toast.success('Mensagem descartada.');
     } catch (err) {
-      console.error(err);
       toast.error('Erro ao descartar.');
     }
   };
@@ -93,21 +109,178 @@ const WhatsAppInbox = () => {
   const handleClearAll = async () => {
     try {
       setRefreshing(true);
-      const { error } = await (supabase as any)
-        .from('whatsapp_inbox')
-        .update({ status: 'dismissed' })
-        .eq('status', 'pending');
-
-      if (error) throw error;
-      
+      await (supabase as any).from('whatsapp_inbox').update({ status: 'dismissed' }).eq('status', 'pending');
       setMessages([]);
       setShowClearConfirm(false);
-      toast.success('Caixa de entrada limpa com sucesso!');
-    } catch (err: any) {
-      console.error('Erro ao limpar caixa:', err);
+      toast.success('Caixa de entrada limpa!');
+    } catch (err) {
       toast.error('Erro ao limpar caixa de entrada.');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleExtractFile = async (msg: InboxMessage, mode: 'order' | 'sections') => {
+    setExtractTargetMsg(null);
+    setExtractMode(null);
+    setExtractingId(msg.id);
+    toast.info('📂 Baixando arquivo do WhatsApp...');
+
+    try {
+      // 1. Pega as credenciais da Evolution API do raw_payload
+      const payload = msg.raw_payload || {};
+      const serverUrl = (payload.server_url || '').replace(/\/$/, '');
+      const apiKey = payload.apikey || '';
+      const instance = payload.instance || '';
+      const messageId = payload.data?.key?.id || '';
+
+      if (!serverUrl || !apiKey || !instance || !messageId) {
+        throw new Error('Dados da Evolution API não encontrados nesta mensagem.');
+      }
+
+      // 2. Chama a Evolution API para descriptografar e baixar o arquivo
+      toast.info('📂 Descriptografando arquivo...');
+
+      const evoResponse = await fetch(`${serverUrl}/chat/getBase64FromMediaMessage/${instance}`, {
+        method: 'POST',
+        headers: {
+          'apikey': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            key: payload.data?.key,
+            message: payload.data?.message,
+          },
+          convertToMp4: false,
+        }),
+      });
+
+      if (!evoResponse.ok) {
+        const errText = await evoResponse.text();
+        throw new Error(`Evolution API erro ${evoResponse.status}: ${errText}`);
+      }
+
+      const evoData = await evoResponse.json();
+      const base64Data = evoData.base64 || evoData.data?.base64 || '';
+      if (!base64Data) throw new Error('Evolution API não retornou o conteúdo do arquivo.');
+
+      toast.info('📊 Lendo planilha...');
+
+      // 3. Converte base64 para bytes e lê com SheetJS
+      const binaryStr = atob(base64Data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const XLSX = await import('https://esm.sh/xlsx' as any).catch(() => null);
+      let rawContent = '';
+
+      if (XLSX) {
+        const workbook = XLSX.read(bytes, { type: 'array' });
+        workbook.SheetNames.forEach((sheetName: string) => {
+          const worksheet = workbook.Sheets[sheetName];
+          const txt = XLSX.utils.sheet_to_txt(worksheet);
+          if (txt.trim()) rawContent += `--- Planilha: ${sheetName} ---\n${txt}\n\n`;
+        });
+      } else {
+        rawContent = new TextDecoder().decode(bytes);
+      }
+
+      if (!rawContent.trim()) throw new Error('Planilha vazia ou sem conteúdo legível.');
+
+      toast.info('🤖 Formatando ofertas com IA...');
+
+      // 4. Busca chave OpenAI
+      const { data: settingsData } = await (supabase as any)
+        .from('settings')
+        .select('value')
+        .eq('key', 'openai_api_key')
+        .single();
+
+      const openaiKey = settingsData?.value;
+      if (!openaiKey) throw new Error('Chave OpenAI não configurada.');
+
+      // 5. Prompt muda conforme o modo escolhido
+      const systemPrompt = mode === 'sections'
+        ? `Você é um extrator de dados de ofertas de supermercado.
+Receberá o conteúdo bruto de uma planilha Excel.
+
+REGRAS:
+1. Extraia TODOS os produtos e preços.
+2. Formate cada produto como: NOME DO PRODUTO - R$ PREÇO
+3. Agrupe obrigatoriamente por categorias usando exatamente estes títulos:
+   ═══ CARNES ═══
+   ═══ FRIOS E LATICÍNIOS ═══
+   ═══ MERCEARIA ═══
+   ═══ BEBIDAS ═══
+   ═══ LIMPEZA ═══
+   ═══ HIGIENE ═══
+   ═══ HORTIFRUTI ═══
+   ═══ PADARIA ═══
+   ═══ CONGELADOS ═══
+   ═══ OUTROS ═══
+4. NUNCA altere os preços.
+5. NUNCA use asteriscos ou markdown.
+6. Se houver data, coloque no topo como: DATA XX/XX/XX
+7. Retorne APENAS o texto formatado.`
+        : `Você é um extrator de dados de ofertas de supermercado.
+Receberá o conteúdo bruto de uma planilha Excel.
+
+REGRAS:
+1. Extraia TODOS os produtos e preços NA ORDEM ORIGINAL da planilha.
+2. Formate cada produto como: NOME DO PRODUTO - R$ PREÇO
+3. MANTENHA EXATAMENTE a sequência em que aparecem. NÃO reorganize.
+4. NUNCA altere os preços.
+5. NUNCA use asteriscos ou markdown.
+6. Se houver data, coloque no topo como: DATA XX/XX/XX
+7. Retorne APENAS o texto formatado.`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Conteúdo da planilha:\n\n${rawContent}` }
+          ],
+          temperature: 0.1,
+          max_tokens: 3000,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Erro ao processar com IA.');
+
+      const aiData = await response.json();
+      const formattedContent = aiData.choices?.[0]?.message?.content?.trim() || rawContent;
+      const cleanContent = formattedContent.replace(/\*/g, '');
+
+      // 6. Salva no banco e atualiza localmente
+      await (supabase as any)
+        .from('whatsapp_inbox')
+        .update({ message_text: cleanContent })
+        .eq('id', msg.id);
+
+      setMessages(prev =>
+        prev.map(m => m.id === msg.id ? { ...m, message_text: cleanContent } : m)
+      );
+
+      toast.success(
+        mode === 'sections'
+          ? '✅ Planilha extraída e separada por seções!'
+          : '✅ Planilha extraída na ordem original!'
+      );
+
+    } catch (err: any) {
+      console.error('Erro ao extrair arquivo:', err);
+      toast.error(`Erro ao extrair: ${err.message}`);
+    } finally {
+      setExtractingId(null);
     }
   };
 
@@ -115,14 +288,22 @@ const WhatsAppInbox = () => {
     setSelectedMessage(msg);
     setAiResult('');
     setSelectedEmployee('');
-    
-    // Tenta puxar o nome já limpo (ou o ID do grupo)
-    const defaultName = msg.sender_name || 
-                        msg.sender.replace(/@.*/, '').replace(/\d{2}(\d{4,})/, '$1') ||
-                        'Cliente WhatsApp';
+
+    const defaultName = msg.sender_name ||
+      msg.sender.replace(/@.*/, '').replace(/\d{2}(\d{4,})/, '$1') ||
+      'Cliente WhatsApp';
     setEditClientName(defaultName);
     setIsSequencia(false);
-    
+
+    // ✅ CORREÇÃO: Se for documento com conteúdo extraído, pré-preenche a descrição
+    if (msg.message_type === 'document' && msg.message_text && msg.message_text.trim()) {
+      const cleanText = msg.message_text
+        .replace('✅ [CONTEÚDO EXCEL]:', '')
+        .replace('✅ [CONTEÚDO WORD]:', '')
+        .trim();
+      setAiResult(cleanText);
+    }
+
     setShowSendDialog(true);
   };
 
@@ -131,7 +312,6 @@ const WhatsAppInbox = () => {
     setAiLoading(true);
 
     try {
-      // Get OpenAI key from settings
       const { data: settingsData } = await (supabase as any)
         .from('settings')
         .select('value')
@@ -139,65 +319,37 @@ const WhatsAppInbox = () => {
         .single();
 
       const apiKey = settingsData?.value;
-      
+
       if (!apiKey) {
-        toast.error('Chave da OpenAI não configurada. Vá em Configurações para adicionar.');
+        toast.error('Chave da OpenAI não configurada.');
         setAiResult(selectedMessage.message_text);
         setAiLoading(false);
         return;
       }
 
-      const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA. 
-Sua tarefa é receber uma mensagem bruta do WhatsApp e transformá-la em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
+      const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA.
+Transforme a mensagem bruta em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
 
 REGRAS:
 1. Corrija ortografia e gramática
-2. Organize o conteúdo de forma clara e estruturada  
-3. Se houver lista de produtos com preços, organize por categorias (CARNES, FRIOS, BEBIDAS, etc.)
+2. Organize o conteúdo de forma clara e estruturada
+3. Se houver lista de produtos com preços, organize por categorias
 4. NUNCA altere preços — mantenha exatamente como recebidos
-5. Se for um briefing de arte/conteúdo, crie um CTA (Call to Action) sugerido
-6. Formate com emojis relevantes mas sem exagero
-7. Mantenha o tom profissional
-8. Se identificar o nome do cliente ou supermercado, NÃO COLOQUE no texto da descrição. Extraia-o para o campo apropriado.
-9. NUNCA USE formatação markdown. É ESTRITAMENTE PROIBIDO usar asteriscos (**), negrito ou itálico. Retorne o texto puramente plano.
+5. NUNCA USE formatação markdown (asteriscos, negrito, etc.)
+6. Retorne APENAS o texto processado, sem comentários
 
-Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
-{
-  "clientName": "Nome do Cliente/Grupo (ex: Laranjeiras)",
-  "description": "Texto processado da mensagem..."
-}
-`;
+Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto processado..." }`;
 
-      const creativePrompt = `Você é um REDATOR CRIATIVO E DIRETOR DE ARTE ESPECIALISTA EM VAREJO (SUPERMERCADOS) da Agência MAC MIDIA.
-Sua tarefa é transformar um briefing simples (ex: "faz um post de carne") em uma DESCRIÇÃO DE CARD detalhada, focada em gerar vendas para o supermercado.
+      const creativePrompt = `Você é um REDATOR CRIATIVO especialista em varejo da Agência MAC MIDIA.
+Transforme o briefing em uma DESCRIÇÃO DE CARD detalhada e criativa.
 
-🧠 MEMÓRIA DE VAREJO (OBRIGATÓRIO):
-- Você trabalha com SUPERMERCADOS. Toda sugestão criativa deve ser voltada para produtos de consumo, alimentação, bebidas e utilidades domésticas.
-- Foque em datas específicas do varejo: "Terça-feira do Hortifruti", "Quinta-feira da Carne", "Final de Semana de Ofertas".
-- Pense na jornada do cliente: do café da manhã ao churrasco de domingo.
+REGRAS:
+1. Foque em supermercados e varejo
+2. Crie chamadas agressivas para ofertas
+3. Sugira CTAs eficientes
+4. NUNCA USE formatação markdown
 
-REGRAS DE OURO:
-1. FOCO EM SUPERMERCADO: Pense em categorias como Açougue (Carnes), Hortifruti, Limpeza, Padaria e Mercearia.
-2. STORYTELLING DE VAREJO: Crie chamadas agressivas para ofertas ou textos afetivos para datas comemorativas.
-3. ROTEIRO DE VÍDEO/REELS: Se for vídeo, sugira cenas dinâmicas (ex: close na carne suculenta, close no preço).
-4. LEGENDAS DE IMPACTO: Escreva legendas que usem gatilhos de escassez (ex: "Só hoje!", "Enquanto durar o estoque").
-5. CALL TO ACTION (CTA): Sempre direcione para o WhatsApp da loja, link da bio ou para a loja física.
-6. DESIGN SUGERIDO: Sugira cores vibrantes (amarelo, vermelho, verde) que estimulem o apetite e a compra.
-7. NUNCA USE formatação markdown (asteriscos, negrito, etc.). Retorne o texto puramente plano.
-
-ESTRUTURA SUGERIDA:
-- TÍTULO CHAMATIVO
-- BRIEFING DA ARTE (O que o designer deve criar)
-- LEGENDA PARA SOCIAL MEDIA
-- ROTEIRO RÁPIDO (Se aplicável)
-- CTA FINAL
-
-Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
-{
-  "clientName": "Nome do Cliente/Grupo (ex: Laranjeiras)",
-  "description": "Texto processado e criativo focado em supermercado..."
-}
-`;
+Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto criativo..." }`;
 
       const systemPrompt = mode === 'creative' ? creativePrompt : standardPrompt;
 
@@ -219,28 +371,22 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`OpenAI error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
 
       const data = await response.json();
-      const contentString = data.choices?.[0]?.message?.content || '{}';
-      const parsedData = JSON.parse(contentString);
-      
-      const processedText = parsedData.description || selectedMessage.message_text;
-      const strippedText = processedText.replace(/\*/g, ''); // Remove all asterisks
-      
-      setAiResult(strippedText);
+      const parsedData = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+      const processedText = (parsedData.description || selectedMessage.message_text).replace(/\*/g, '');
+
+      setAiResult(processedText);
       if (parsedData.clientName && parsedData.clientName !== 'Desconhecido') {
-        const cleanedName = parsedData.clientName.replace(/["']/g, '');
-        setEditClientName(cleanedName.toUpperCase());
+        setEditClientName(parsedData.clientName.replace(/["']/g, '').toUpperCase());
       }
-      
-      toast.success(mode === 'creative' ? '✨ CriATIVIDADE em ação!' : '✨ Ofertas organizadas!');
+
+      toast.success(mode === 'creative' ? '✨ Criatividade em ação!' : '✨ Ofertas organizadas!');
     } catch (err: any) {
       console.error('Erro na IA:', err);
       setAiResult(selectedMessage.message_text);
-      toast.error('IA indisponível no momento. Usando texto original.');
+      toast.error('IA indisponível. Usando texto original.');
     } finally {
       setAiLoading(false);
     }
@@ -256,12 +402,8 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
 
     try {
       let finalText = aiResult || selectedMessage.message_text;
-      
-      if (isSequencia) {
-        finalText = `✅ SEQUÊNCIA ✅\n\n${finalText}`;
-      }
+      if (isSequencia) finalText = `✅ SEQUÊNCIA ✅\n\n${finalText}`;
 
-      // Build card
       addKanbanCard({
         clientName: editClientName.trim() || 'Cliente WhatsApp',
         description: finalText,
@@ -278,21 +420,18 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
           userId: 'system',
           userName: '📱 WhatsApp',
           actionType: 'create' as const,
-          description: 'Card criado manualmente via Caixa de Entrada do WhatsApp',
+          description: 'Card criado via Caixa de Entrada do WhatsApp',
           createdAt: new Date().toISOString(),
         }],
       });
 
-      // Mark as processed
       await (supabase as any).from('whatsapp_inbox').update({ status: 'processed' }).eq('id', selectedMessage.id);
       setMessages(prev => prev.filter(m => m.id !== selectedMessage.id));
-      
       setShowSendDialog(false);
       setSelectedMessage(null);
       setAiResult('');
       toast.success('✅ Card criado no Kanban com sucesso!');
     } catch (err: any) {
-      console.error('Erro ao criar card:', err);
       toast.error('Erro ao enviar para o Kanban.');
     } finally {
       setProcessingId(null);
@@ -301,10 +440,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    
+    const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
     if (diffMin < 1) return 'agora';
     if (diffMin < 60) return `${diffMin}min`;
     const diffH = Math.floor(diffMin / 60);
@@ -317,9 +453,9 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
     if (msg.message_type === 'document') {
       const mime = (msg.media_mime_type || '').toLowerCase();
       const text = (msg.message_text || '').toLowerCase();
-      if (mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || text.includes('.xlsx') || text.includes('.xls')) 
+      if (mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('sheet') || text.includes('.xlsx') || text.includes('.xls'))
         return <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />;
-      if (mime.includes('word') || mime.includes('officedocument.wordprocessingml') || text.includes('.docx') || text.includes('.doc')) 
+      if (mime.includes('word') || mime.includes('officedocument.wordprocessingml') || text.includes('.docx') || text.includes('.doc'))
         return <FileCode className="w-3.5 h-3.5 text-blue-500" />;
       return <FileText className="w-3.5 h-3.5 text-amber-500" />;
     }
@@ -329,23 +465,12 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
 
   const getFilteredMessages = () => {
     if (!filterActive) return messages;
-    
     return messages.filter(msg => {
-      // 1. Sempre manter mensagens com anexo (imagem/doc/áudio), pois costumam ser ofertas ou briefings
       if (msg.media_url || msg.message_type !== 'text') return true;
-      
       const text = (msg.message_text || '').trim();
       if (!text) return false;
-
-      // 2. Detecção de Padrão de Preço (ex: 10,99 ou R$ 10,99) - ESSENCIAL PARA "OFERTA"
-      const priceRegex = /\d+[,.]\d{2}/i;
-      const hasPrices = priceRegex.test(text);
-
-      // 3. Palavras-chave FORTES de varejo/supermercado
-      const forceKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama'];
-      const hasForceKeywords = forceKeywords.some(k => text.toLowerCase().includes(k));
-
-      // 4. Se tiver preço OU palavras de força de venda, consideramos oferta
+      const hasPrices = /\d+[,.]\d{2}/i.test(text);
+      const hasForceKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama'].some(k => text.toLowerCase().includes(k));
       return hasPrices || hasForceKeywords;
     });
   };
@@ -373,49 +498,32 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
       {/* Header */}
       <header className="px-6 md:px-12 py-8 flex flex-col gap-6 bg-[#0a0a0c]/80 backdrop-blur-xl border-b border-white/5 relative">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500/40 via-transparent to-green-500/40" />
-        
         <div className="flex items-center gap-6 w-full">
-          <Button 
-            variant="ghost" size="icon" onClick={() => navigate('/')} 
+          <Button
+            variant="ghost" size="icon" onClick={() => navigate('/')}
             className="h-12 w-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all border border-white/5 group"
           >
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
           </Button>
-
           <div className="flex-1">
-            <h1 className="text-2xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none">
-              Caixa de Entrada
-            </h1>
-            <p className="text-[10px] text-white/30 mt-2 uppercase tracking-[0.2em] font-bold">
-              Mensagens do WhatsApp · Triagem Manual
-            </p>
+            <h1 className="text-2xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none">Caixa de Entrada</h1>
+            <p className="text-[10px] text-white/30 mt-2 uppercase tracking-[0.2em] font-bold">Mensagens do WhatsApp · Triagem Manual</p>
           </div>
-
           <div className="flex items-center gap-3">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => setFilterActive(!filterActive)}
               className={`h-10 rounded-xl border transition-all text-xs font-bold ${filterActive ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-white/5 border-white/5 text-white/50'}`}
             >
               <Filter className="w-4 h-4 mr-2" />
               {filterActive ? 'Filtro: Inteligente' : 'Filtro: Desligado'}
             </Button>
-            <Button 
-              variant="ghost" 
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-white/50 hover:text-white text-xs font-bold"
-            >
+            <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} className="h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-white/50 hover:text-white text-xs font-bold">
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => setShowClearConfirm(true)}
-              className="h-10 px-4 rounded-xl text-xs font-bold"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Limpar Tudo
+            <Button variant="destructive" onClick={() => setShowClearConfirm(true)} className="h-10 px-4 rounded-xl text-xs font-bold">
+              <Trash2 className="w-4 h-4 mr-2" /> Limpar Tudo
             </Button>
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -428,39 +536,30 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
       </header>
 
       <main className="flex-1 overflow-y-auto p-6 md:p-12 max-w-5xl mx-auto w-full custom-scrollbar">
-        {/* Empty state */}
         {messages.length === 0 && (
           <div className="glass-card p-16 text-center max-w-lg mx-auto border-dashed border-white/10 mt-10">
             <div className="w-20 h-20 rounded-full bg-green-500/5 flex items-center justify-center mx-auto mb-6">
               <MessageSquare className="w-10 h-10 text-green-500/30" />
             </div>
             <h3 className="text-xl font-bold text-white mb-2">Caixa Vazia</h3>
-            <p className="text-white/40 text-sm max-w-[300px] mx-auto">
-              Nenhuma mensagem pendente do WhatsApp. Novas mensagens aparecerão aqui automaticamente.
-            </p>
+            <p className="text-white/40 text-sm max-w-[300px] mx-auto">Nenhuma mensagem pendente. Novas mensagens aparecerão aqui automaticamente.</p>
           </div>
         )}
 
-        {/* Message List */}
         <div className="space-y-3">
           {getFilteredMessages().map((msg, i) => (
-            <div 
-              key={msg.id} 
+            <div
+              key={msg.id}
               className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 hover:border-white/10 hover:bg-white/[0.05] transition-all animate-in fade-in slide-in-from-bottom-2 duration-300 group"
               style={{ animationDelay: `${i * 0.05}s` }}
             >
               <div className="flex items-start gap-4">
-                {/* Avatar */}
                 <div className="w-12 h-12 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-400 font-bold text-sm shrink-0 uppercase">
                   {(msg.sender_name || '?').substring(0, 2)}
                 </div>
-
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="text-sm font-bold text-white truncate">
-                      {msg.sender_name || 'Desconhecido'}
-                    </span>
+                    <span className="text-sm font-bold text-white truncate">{msg.sender_name || 'Desconhecido'}</span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/30 font-bold uppercase flex items-center gap-1">
                       {getTypeIcon(msg)} {getTypeLabel(msg.message_type)}
                     </span>
@@ -468,11 +567,9 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                       <Clock className="w-3 h-3" /> {formatTime(msg.created_at)}
                     </span>
                   </div>
-                  
                   <p className="text-sm text-white/60 leading-relaxed line-clamp-4 whitespace-pre-wrap">
                     {msg.message_text || `[${getTypeLabel(msg.message_type)} recebido sem texto]`}
                   </p>
-                  
                   {msg.media_url && (
                     <div className="mt-3 flex items-center gap-2 text-[10px] text-white/30">
                       <Image className="w-3.5 h-3.5" />
@@ -481,16 +578,35 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                   )}
                 </div>
 
-                {/* Actions */}
+                {/* ✅ Botões de ação */}
                 <div className="flex flex-col gap-2 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
-                  <Button 
+
+                  {/* Botão Extrair Arquivo — abre modal de modo */}
+                  {msg.message_type === 'document' && isExcelOrWord(msg) && (
+                    <Button
+                      onClick={() => {
+                        setExtractTargetMsg(msg);
+                        setExtractMode(null);
+                      }}
+                      disabled={extractingId === msg.id}
+                      className="h-10 px-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg"
+                    >
+                      {extractingId === msg.id
+                        ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                        : <Package className="w-3.5 h-3.5 mr-2" />
+                      }
+                      {extractingId === msg.id ? 'Extraindo...' : 'Extrair Arquivo'}
+                    </Button>
+                  )}
+
+                  <Button
                     onClick={() => handleOpenSend(msg)}
                     className="h-10 px-5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-green-900/30"
                   >
                     <Send className="w-3.5 h-3.5 mr-2" /> Enviar ao Kanban
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     onClick={() => handleDismiss(msg.id)}
                     className="h-9 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-xl text-[10px] font-bold uppercase tracking-wider"
                   >
@@ -503,11 +619,10 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
         </div>
       </main>
 
-      {/* Send to Kanban Dialog */}
+      {/* Dialog: Enviar ao Kanban */}
       <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
         <DialogContent className="bg-[#121214] border-white/10 text-white max-w-4xl p-0 rounded-2xl overflow-hidden shadow-2xl h-[90vh] sm:h-[80vh]">
           <div className="flex h-full min-h-0">
-            {/* Left side: Form */}
             <div className="flex-1 flex flex-col min-w-0">
               <DialogHeader className="p-6 pb-0">
                 <DialogTitle className="text-xl font-black tracking-tighter flex items-center gap-3">
@@ -516,14 +631,11 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                   </div>
                   Enviar para o Kanban
                 </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Formulário para transformar uma mensagem do WhatsApp em um card de produção no Kanban.
-                </DialogDescription>
+                <DialogDescription className="sr-only">Formulário para transformar mensagem do WhatsApp em card no Kanban.</DialogDescription>
               </DialogHeader>
 
               {selectedMessage && (
                 <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
-                  {/* Original message preview */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Mensagem Original</label>
                     <div className="bg-white/5 rounded-xl p-4 border border-white/5 max-h-32 overflow-y-auto custom-scrollbar">
@@ -533,11 +645,10 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                     </div>
                   </div>
 
-                  {/* Nome e Sequencia */}
                   <div className="flex gap-4">
                     <div className="flex-1 space-y-2">
                       <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Nome do Cliente / Grupo</label>
-                      <input 
+                      <input
                         value={editClientName}
                         onChange={e => setEditClientName(e.target.value)}
                         placeholder="Ex: Supermercado Laranjeiras..."
@@ -558,18 +669,17 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                     </div>
                   </div>
 
-                  {/* AI Section */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Descrição do Card</label>
                       <div className="flex items-center gap-2">
-                        <Button 
+                        <Button
                           variant="ghost" onClick={() => handleProcessWithAI('standard')} disabled={aiLoading}
                           className="h-7 px-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[9px] font-black uppercase border border-emerald-500/20"
                         >
                           <Zap className="w-3 h-3 mr-1.5" /> AI Ofertas
                         </Button>
-                        <Button 
+                        <Button
                           variant="ghost" onClick={() => handleProcessWithAI('creative')} disabled={aiLoading}
                           className="h-7 px-2.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-[9px] font-black uppercase border border-purple-500/20"
                         >
@@ -577,14 +687,14 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                         </Button>
                       </div>
                     </div>
-                    <Textarea 
-                      value={aiResult || selectedMessage.message_text}
+                    <Textarea
+                      value={aiResult}
                       onChange={e => setAiResult(e.target.value)}
-                      className="bg-white/5 border-white/10 rounded-xl min-h-[100px] text-white leading-relaxed p-4 resize-none text-sm"
+                      placeholder="A descrição aparecerá aqui. Use os botões de IA ou edite manualmente."
+                      className="bg-white/5 border-white/10 rounded-xl min-h-[120px] text-white leading-relaxed p-4 resize-none text-sm placeholder:text-white/20"
                     />
                   </div>
 
-                  {/* Employee Select */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Responsável no Kanban</label>
                     <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
@@ -599,7 +709,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                     </Select>
                   </div>
 
-                  <Button 
+                  <Button
                     onClick={handleSendToKanban}
                     disabled={!selectedEmployee || processingId === selectedMessage.id}
                     className="w-full h-12 bg-green-600 hover:bg-green-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-green-900/30"
@@ -611,7 +721,7 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
               )}
             </div>
 
-            {/* Right side: Client Guide */}
+            {/* Guia de Clientes */}
             <div className="w-[320px] bg-green-500/[0.03] border-l border-white/5 flex flex-col min-w-0">
               <div className="p-6 border-b border-white/5">
                 <h3 className="text-sm font-black uppercase tracking-widest text-green-400 flex items-center gap-2">
@@ -635,8 +745,8 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
                     </div>
                     <div className="grid grid-cols-1 gap-1 pl-3.5">
                       {item.clients.map(client => (
-                        <div 
-                          key={client} 
+                        <div
+                          key={client}
                           className="text-[10px] text-white/40 hover:text-green-400 cursor-pointer transition-colors flex items-center gap-2 group"
                           onClick={() => setEditClientName(client.toUpperCase())}
                         >
@@ -656,23 +766,69 @@ Retorne a resposta EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
         </DialogContent>
       </Dialog>
 
-      {/* Clear All Confirmation */}
+      {/* Confirmação limpar tudo */}
       <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
         <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Limpar toda a caixa?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/50 text-[13px]">
-              Tem certeza que deseja descartar todas as {messages.length} mensagens pendentes? Esta ação não pode ser desfeita.
+              Deseja descartar todas as {messages.length} mensagens pendentes? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-white/5 border-none">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={handleClearAll}>
-              Sim, limpar tudo
-            </AlertDialogAction>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={handleClearAll}>Sim, limpar tudo</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal: Escolher modo de extração */}
+      <Dialog open={!!extractTargetMsg && extractMode === null} onOpenChange={(open) => { if (!open) setExtractTargetMsg(null); }}>
+        <DialogContent className="bg-[#121214] border-white/10 text-white max-w-sm rounded-2xl p-0 overflow-hidden">
+          <div className="p-6 border-b border-white/5">
+            <DialogTitle className="text-base font-black uppercase tracking-widest flex items-center gap-3">
+              <Package className="w-5 h-5 text-emerald-400" />
+              Como extrair a planilha?
+            </DialogTitle>
+            <DialogDescription className="text-white/40 text-xs mt-1">
+              Escolha como os produtos devem ser organizados na descrição do card.
+            </DialogDescription>
+          </div>
+          <div className="p-4 space-y-3">
+            <button
+              onClick={() => {
+                setExtractMode('order');
+                if (extractTargetMsg) handleExtractFile(extractTargetMsg, 'order');
+              }}
+              className="w-full flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/20 transition-all group text-left"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white/5 group-hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 text-lg">
+                📋
+              </div>
+              <div>
+                <p className="text-sm font-black text-white uppercase tracking-wide">Manter Ordem</p>
+                <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">Extrai os produtos na mesma sequência da planilha, sem reorganizar.</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setExtractMode('sections');
+                if (extractTargetMsg) handleExtractFile(extractTargetMsg, 'sections');
+              }}
+              className="w-full flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/20 transition-all group text-left"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white/5 group-hover:bg-blue-500/10 flex items-center justify-center flex-shrink-0 text-lg">
+                🗂️
+              </div>
+              <div>
+                <p className="text-sm font-black text-white uppercase tracking-wide">Separar por Seções</p>
+                <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">Agrupa automaticamente por Carnes, Mercearia, Bebidas, Frios, etc.</p>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

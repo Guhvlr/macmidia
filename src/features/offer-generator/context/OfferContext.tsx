@@ -11,6 +11,12 @@ export interface ProductItem {
   brand?: string;
   line?: string;
   category?: string;
+  has_qr_code?: boolean;
+  description_on_front?: boolean;
+  confidence?: 'exact' | 'high' | 'medium' | 'low' | 'none';
+  confidence_reason?: string;
+  warning?: string;
+  mode?: 'barcode' | 'description';
 }
 
 export interface Slot {

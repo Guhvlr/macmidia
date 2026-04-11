@@ -162,6 +162,10 @@ export const StepFinal = () => {
     const nameX = slot.x + (d.offsetX/100)*slot.width;
     const nameY = slot.y + (d.offsetY/100)*slot.height;
 
+    const qrSize = 80 * sf;
+    const qrX = slot.x + slot.width - qrSize - 10;
+    const qrY = slot.y + 10;
+
     return (
       <g key={product.id}>
         {(product.images || []).slice(0, 3).reverse().map((img, iIdx, arr) => {
@@ -171,6 +175,20 @@ export const StepFinal = () => {
             <image key={`${product.id}-img-${pos}`} href={img} x={imgX + offset} y={imgY - offset / 2} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" style={{ filter: pos > 0 ? 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))' : 'none' }} />
           );
         })}
+
+        {/* QR Code integration */}
+        {product.has_qr_code && (
+          <g transform={`translate(${qrX}, ${qrY})`}>
+            <rect width={qrSize} height={qrSize} fill="white" rx={4} />
+            <image 
+              href={`https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${product.ean}`} 
+              width={qrSize - 4} 
+              height={qrSize - 4} 
+              x={2} 
+              y={2} 
+            />
+          </g>
+        )}
 
         <g transform={`translate(${badgeX}, ${badgeY})`}>
            {b.badgeImageUrl ? (
@@ -183,7 +201,7 @@ export const StepFinal = () => {
            {b.showSuffix && <text x={-badgeW/2 + (b.suffixOffsetX / 100) * badgeW} y={-badgeH/2 + (b.suffixOffsetY / 100) * badgeH + (b.suffixFontSize * sf * 0.5)} fill={b.suffixColor} textAnchor="middle" style={{ fontSize: (b.suffixFontSize * sf), fontWeight: 'bold' }}>{b.suffixText}</text>}
         </g>
 
-        <g>
+        <g transform={product.description_on_front ? `translate(0, ${-slot.height * 0.2})` : ''}>
           {dc.showBg && (
             <rect x={nameX - slot.width * 0.4} y={nameY - dc.fontSize * sf * 0.7} width={slot.width * 0.8} height={dc.fontSize * sf * 1.4} fill={dc.bgColor} rx={4} />
           )}

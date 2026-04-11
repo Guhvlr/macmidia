@@ -219,13 +219,13 @@ export const MembersSection = memo( ({
               <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 px-3 py-2">Assistente de Produção</DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-white/5 mx-1" />
               
-              {/* <DropdownMenuItem 
+              <DropdownMenuItem 
                 onClick={() => triggerAICorrection(card.id)} 
                 className="text-[11px] font-bold py-3 px-3 cursor-pointer rounded-xl hover:bg-primary/10 hover:text-primary transition-all flex items-center gap-3"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Auditoria de Imagens
-              </DropdownMenuItem> */}
+              </DropdownMenuItem>
     
               <DropdownMenuItem 
                 onClick={() => fixDescriptionWithAI(card.id, 'keep_sequence')} 

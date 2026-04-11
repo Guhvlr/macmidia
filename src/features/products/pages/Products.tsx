@@ -203,7 +203,9 @@ export default function Products() {
           name: String(row.Descricao || row.descricao || row.nome || row.produto || row.PRODUTO || '').trim(),
           brand: String(row.Marca || row.marca || row.MARCA || '').trim(),
           line: String(row.Linha || row.linha || row.LINHA || '').trim(),
-          category: String(row.Categoria || row.categoria || row.CATEGORIA || '').trim()
+          category: String(row.Categoria || row.categoria || row.CATEGORIA || '').trim(),
+          has_qr_code: !!(row.HasQR || row.QRCode || row.qr_code || row.QR),
+          description_on_front: !!(row.DescFront || row.DescricaoFrente || row.description_on_front)
         })).filter(row => row.ean && row.name);
 
         if (batch.length > 0) {
@@ -271,7 +273,7 @@ export default function Products() {
     }
   };
 
-  // Handle bulk search with Edge Function
+  // Handle bulk search with Edge Function — V2 Dual-Mode
   const handleBulkSearch = async () => {
     if (!bulkInput.trim()) {
       toast.error('Cole uma lista de produtos primeiro.');
@@ -291,20 +293,40 @@ export default function Products() {
       setProcessStep('Organizando resultados...');
       const processedResults = (data.results || []).map((res: any) => {
         const found = !!(res.found && res.match);
+        const confidence = res.confidence || 'none';
+        const isBarcode = res.mode === 'barcode';
+
+        // Image logic: only use if exact (barcode) or high confidence
+        let images: string[] = [];
+        if (found && (isBarcode || confidence === 'exact' || confidence === 'high')) {
+          images = [getImageUrl(res.match.ean)];
+        }
+
+        // Display name: use the one from the edge function (already correct per mode)
+        let displayName = res.display_name || res.original || 'Não encontrado';
+        displayName = displayName.replace(/\s*[-–—]?\s*R?\$?\s*\d+[,.]\d{2}/gi, '').trim();
+
         return {
           id: res.match?.id || Math.random(),
-          name: res.match?.name || res.original,
+          name: displayName,
           ean: res.match?.ean || 'Não encontrado',
           found: res.found,
-          images: found ? [getImageUrl(res.match.ean)] : [],
+          images,
           brand: res.match?.brand,
           line: res.match?.line,
-          category: res.match?.category
+          category: res.match?.category,
+          confidence,
+          confidence_reason: res.confidence_reason,
+          warning: res.warning,
+          mode: res.mode,
         };
       });
 
       setSearchResults(processedResults);
-      toast.success('Busca concluída!');
+      
+      const withImage = processedResults.filter((r: any) => r.images.length > 0).length;
+      const noImage = processedResults.length - withImage;
+      toast.success(`Busca concluída! ${withImage} com imagem, ${noImage} sem imagem.`);
     } catch (err: any) {
       console.error('ERRO DETALHADO:', err);
       const errorMsg = err.message || err.error_description || JSON.stringify(err);
@@ -455,10 +477,28 @@ export default function Products() {
           item.ean === ean ? { ...item, name: manualName, found: true, images: [getImageUrl(ean)] } : item
         ));
       }
-    } catch (err: any) {
-      toast.error('Erro ao salvar: ' + err.message);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleClearCatalog = async () => {
+    if (!confirm('ATENÇÃO: Isso excluirá TODOS os produtos do catálogo permanentemente. Tem certeza?')) return;
+    
+    setIsProcessing(true);
+    setProcessStep('Limpando catálogo...');
+    try {
+      const { error } = await supabase.from('products').delete().neq('ean', '0'); // Hack to delete all
+      if (error) throw error;
+      
+      setTotalProducts(0);
+      setSearchResults([]);
+      toast.success('Catálogo limpo com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro ao limpar: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+      setProcessStep('');
     }
   };
 
@@ -503,20 +543,6 @@ export default function Products() {
               onChange={handleBulkUpload}
               accept="image/*"
             />
-            <Button 
-              variant="outline" 
-              onClick={async () => {
-                const { data, error } = await supabase.storage.from('product-images').list();
-                if (error) toast.error('Erro ao listar: ' + error.message);
-                else {
-                  const names = data.slice(0, 10).map(f => f.name).join(', ');
-                  toast.info(`Status do servidor: ${names ? 'Arquivos presentes' : 'Pasta vazia'}`);
-                }
-              }}
-              className="bg-white/5 rounded-xl text-xs font-bold border border-white/5"
-            >
-              <Search className="w-4 h-4 mr-2 text-yellow-500" /> Diagnosticar Storage
-            </Button>
           </div>
         </div>
       </header>
@@ -693,7 +719,15 @@ export default function Products() {
                     <div className="p-3 space-y-1">
                       <p className="text-[11px] font-bold text-white leading-tight uppercase line-clamp-2">{item.name}</p>
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[9px] font-mono text-white/30">{item.ean}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[9px] font-mono text-white/30">{item.ean}</p>
+                          {item.confidence === 'exact' && <span className="text-[7px] bg-green-600/20 text-green-400 px-1 rounded font-black uppercase border border-green-600/30">EXATO</span>}
+                          {item.confidence === 'high' && <span className="text-[7px] bg-green-600/15 text-green-400 px-1 rounded font-black uppercase border border-green-600/20">ALTA</span>}
+                          {item.confidence === 'medium' && <span className="text-[7px] bg-amber-600/20 text-amber-400 px-1 rounded font-black uppercase border border-amber-600/30">MÉDIA</span>}
+                          {item.confidence === 'low' && <span className="text-[7px] bg-red-600/20 text-red-400 px-1 rounded font-black uppercase border border-red-600/30">BAIXA</span>}
+                          {item.confidence === 'none' && <span className="text-[7px] bg-white/5 text-white/25 px-1 rounded font-black uppercase border border-white/10">N/A</span>}
+                          {item.mode === 'barcode' && <span className="text-[7px] bg-blue-600/15 text-blue-400 px-1 rounded font-black uppercase border border-blue-600/20">EAN</span>}
+                        </div>
                         <button 
                           onClick={() => loadVariations(item)}
                           className="text-[9px] font-black uppercase text-blue-500 hover:text-blue-400 flex items-center gap-1 transition-colors bg-blue-500/10 px-1.5 py-0.5 rounded"
@@ -701,6 +735,9 @@ export default function Products() {
                           <Zap className="w-2.5 h-2.5" /> Variações
                         </button>
                       </div>
+                      {item.warning && (
+                        <p className="text-[8px] text-amber-400/60 font-bold mt-0.5">⚠ {item.warning}</p>
+                      )}
 
                       {/* Variation Overlay */}
                       {showVariationsFor === item.ean && (

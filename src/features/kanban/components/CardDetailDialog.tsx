@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { CardHeader } from './card-detail/CardHeader';
 import { MembersSection } from './card-detail/MembersSection';
 import { DescriptionSection } from './card-detail/DescriptionSection';
+import { AIReportSection } from './card-detail/AIReportSection';
 import { ChecklistSection } from './card-detail/ChecklistSection';
 import { AttachmentsSection } from './card-detail/AttachmentsSection';
 import { HistorySection } from './card-detail/HistorySection';
@@ -346,6 +347,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                 setIsEditingDesc={setIsEditingDesc}
                 handleSaveDescription={handleSaveDescription}
               />
+
+              <AIReportSection card={card} />
 
               <ChecklistSection 
                 checklists={checklists}

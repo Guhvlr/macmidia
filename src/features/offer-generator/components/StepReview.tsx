@@ -19,7 +19,7 @@ export const StepReview = () => {
 
   const getImageUrl = (ean: string) => {
     if (!ean || ean === 'N/A') return '';
-    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${ean.replace(/[^a-zA-Z0-9]/g, '')}.png`;
+    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${ean.replace(/[^a-zA-Z0-9]/g, '')}.png?t=${Date.now()}`;
   };
 
   // ═══════════════════════════════════════════

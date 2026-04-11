@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOffer, ProductItem } from '../context/OfferContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles } from 'lucide-react';
+import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -19,9 +19,12 @@ export const StepReview = () => {
 
   const getImageUrl = (ean: string) => {
     if (!ean || ean === 'N/A') return '';
-    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${ean.replace(/[^a-zA-Z0-9]/g, '')}.png`;
+    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${ean.replace(/[^a-zA-Z0-9]/g, '')}.png?t=${Date.now()}`;
   };
 
+  // ═══════════════════════════════════════════
+  // BULK SEARCH — V2 Dual-Mode Engine
+  // ═══════════════════════════════════════════
   const handleBulkSearch = async () => {
     if (!bulkInput.trim()) return;
     setIsProcessing(true);
@@ -31,27 +34,69 @@ export const StepReview = () => {
       
       const results: ProductItem[] = (data.results || []).map((res: any) => {
         const found = !!(res.found && res.match);
-        const item: ProductItem = {
+        const isBarcode = res.mode === 'barcode';
+        const confidence = res.confidence || 'none';
+        
+        // ── DISPLAY NAME ──
+        // Barcode mode: use DB name (official)
+        // Description mode: use user's exact text (NEVER alter)
+        let displayName = res.display_name || res.original || 'Produto sem nome';
+        // Clean any residual price strings from display_name
+        displayName = displayName.replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        displayName = displayName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        displayName = displayName.trim();
+
+        // ── IMAGE LOGIC ──
+        // Barcode mode (exact): always use image if found
+        // Description mode: only use image if confidence is HIGH or MEDIUM
+        let images: string[] = [];
+        if (found) {
+          if (isBarcode || confidence === 'exact' || confidence === 'high' || confidence === 'medium') {
+            images = [getImageUrl(res.match.ean)];
+          }
+          // low/none → NO image (better empty than wrong)
+        }
+
+        // ── PRICE ──
+        let price = 'R$ 0,00';
+        if (res.price) {
+          price = `R$ ${String(res.price).replace('.', ',')}`;
+        } else {
+          // Fallback: extract from original text
+          const m = (res.original || '').match(/(\d+[,.]\d{2})/);
+          if (m) price = `R$ ${m[0].replace('.', ',')}`;
+        }
+
+        return {
           id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: res.match?.name || res.original || 'Produto sem nome',
+          name: displayName,
           ean: res.match?.ean || 'N/A',
-          price: 'R$ 0,00',
-          images: found ? [getImageUrl(res.match.ean)] : [],
+          price,
+          images,
           brand: res.match?.brand,
           line: res.match?.line,
-          category: res.match?.category
-        };
-        
-        // Extract price from original text
-        const m = (res.original || '').match(/(\d+[,.]\d{2})/);
-        if (m) item.price = `R$ ${m[0].replace('.', ',')}`;
-        
-        return item;
+          category: res.match?.category,
+          confidence,
+          confidence_reason: res.confidence_reason,
+          warning: res.warning,
+          mode: res.mode || 'description',
+        } as ProductItem;
       });
+
+      // Stats for toast
+      const exact = results.filter(r => r.confidence === 'exact').length;
+      const high = results.filter(r => r.confidence === 'high').length;
+      const withImage = results.filter(r => r.images.length > 0).length;
+      const noImage = results.length - withImage;
 
       setProducts(prev => [...prev, ...results]);
       setBulkInput('');
-      toast.success(`${results.length} produtos localizados!`);
+      
+      let msg = `${results.length} produtos processados!`;
+      if (exact > 0) msg += ` • ${exact} exatos`;
+      if (high > 0) msg += ` • ${high} alta confiança`;
+      if (noImage > 0) msg += ` • ${noImage} sem imagem`;
+      toast.success(msg);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -66,13 +111,16 @@ export const StepReview = () => {
       if (product.brand && product.line) {
         query = query.eq('brand', product.brand).eq('line', product.line);
       } else {
-        const firstWord = product.name.split(' ')[0];
-        if (firstWord.length < 3) {
-          toast.error('Não foi possível identificar a marca.');
+        // Split and filter common words (like "Leite", "Arroz") to find the BRAND
+        const words = product.name.split(' ').filter(w => w.length > 3);
+        const searchTerm = words[0] || product.name.split(' ')[0];
+        
+        if (searchTerm.length < 3) {
+          toast.error('Nome muito curto para busca inteligente.');
           setIsProcessing(false);
           return;
         }
-        query = query.ilike('name', `%${firstWord}%`);
+        query = query.ilike('name', `%${searchTerm}%`);
       }
 
       const { data, error } = await query.neq('ean', product.ean).limit(15);
@@ -131,7 +179,7 @@ export const StepReview = () => {
     setProducts(prev => prev.map(p => {
       if (p.id === productId) {
         if (p.images.includes(imageUrl)) return p;
-        return { ...p, images: [...p.images, imageUrl] };
+        return { ...p, images: [...p.images, imageUrl], confidence: 'high' as const, warning: undefined };
       }
       return p;
     }));
@@ -162,6 +210,36 @@ export const StepReview = () => {
     input.click();
   };
 
+  // ── Confidence badge renderer ──
+  const ConfidenceBadge = ({ product }: { product: ProductItem }) => {
+    const c = product.confidence;
+    if (c === 'exact') return (
+      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20">
+        <ShieldCheck className="w-2.5 h-2.5" /> EXATO
+      </span>
+    );
+    if (c === 'high') return (
+      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20">
+        <ShieldCheck className="w-2.5 h-2.5" /> ALTA
+      </span>
+    );
+    if (c === 'medium') return (
+      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+        <ShieldAlert className="w-2.5 h-2.5" /> MÉDIA
+      </span>
+    );
+    if (c === 'low') return (
+      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full border border-red-500/20">
+        <ShieldX className="w-2.5 h-2.5" /> BAIXA
+      </span>
+    );
+    return (
+      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-white/5 text-white/30 px-2 py-0.5 rounded-full border border-white/10">
+        <AlertTriangle className="w-2.5 h-2.5" /> SEM IMAGEM
+      </span>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col bg-[#09090b]">
       {/* Top Search Area */}
@@ -172,9 +250,18 @@ export const StepReview = () => {
             <Textarea 
               value={bulkInput} 
               onChange={e => setBulkInput(e.target.value)}
-              placeholder="Ex: Coca Cola 2L R$ 8.99\nMonster Mango R$ 9.99"
-              className="bg-black/40 border-white/10 rounded-2xl min-h-[80px] text-sm resize-none custom-scrollbar p-4"
+              placeholder={"Ex: Coca Cola 2L R$ 8.99\nMonster Mango R$ 9.99\n\nOu por código de barras:\n7896004400913 R$ 5.99"}
+              className="bg-black/40 border-white/10 rounded-2xl min-h-[100px] text-sm resize-none custom-scrollbar p-4"
             />
+            <div className="flex gap-3 mt-2">
+              <span className="flex items-center gap-1.5 text-[9px] text-white/20 font-bold uppercase">
+                <FileText className="w-3 h-3" /> Descrição + Preço
+              </span>
+              <span className="text-white/10">•</span>
+              <span className="flex items-center gap-1.5 text-[9px] text-white/20 font-bold uppercase">
+                <Barcode className="w-3 h-3" /> Código de Barras + Preço
+              </span>
+            </div>
           </div>
           <div className="w-[200px] flex flex-col justify-end">
             <Button onClick={handleBulkSearch} disabled={isProcessing || !bulkInput.trim()} className="h-14 bg-red-600 hover:bg-red-700 rounded-2xl font-black uppercase tracking-widest text-[10px]">
@@ -198,14 +285,17 @@ export const StepReview = () => {
           </div>
 
           {products.map((p, idx) => (
-            <div key={p.id} className="bg-[#121214] border border-white/5 rounded-2xl p-4 flex gap-6 items-center group hover:border-white/10 transition-all">
+            <div key={p.id} className={`bg-[#121214] border rounded-2xl p-4 flex gap-6 items-center group hover:border-white/10 transition-all ${
+              p.warning ? 'border-amber-500/20' : 'border-white/5'
+            }`}>
               <div className="w-6 text-[10px] font-black text-white/10">{idx + 1}</div>
               
-              {/* Stack Preview */}
+              {/* Stack Preview / No Image Placeholder */}
               <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
                 {p.images.length === 0 ? (
-                  <div className="w-16 h-16 bg-white/5 rounded-xl border border-dashed border-white/10 flex items-center justify-center">
-                    <Trash2 className="w-4 h-4 text-white/10" />
+                  <div className="w-16 h-16 bg-white/5 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-500/40" />
+                    <span className="text-[6px] font-bold text-white/15 uppercase">Sem foto</span>
                   </div>
                 ) : (
                   p.images.slice(0, 3).map((img, i) => (
@@ -232,13 +322,30 @@ export const StepReview = () => {
                 <Input value={p.name} onChange={e => {
                   const n = [...products]; n[idx].name = e.target.value; setProducts(n);
                 }} className="bg-transparent border-none p-0 text-sm font-black uppercase tracking-tight h-auto focus:ring-0 text-white" />
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-3 mt-1 flex-wrap">
                   <span className="text-[10px] font-mono text-white/20">{p.ean}</span>
                   <div className="w-px h-3 bg-white/10" />
                   <input value={p.price} onChange={e => {
                     const n = [...products]; n[idx].price = e.target.value; setProducts(n);
                   }} className="bg-transparent border-none p-0 text-red-500 font-black h-auto focus:ring-0 w-24 text-[11px]" />
+                  <div className="w-px h-3 bg-white/10" />
+                  <ConfidenceBadge product={p} />
+                  {p.mode && (
+                    <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                      p.mode === 'barcode' 
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                        : 'bg-white/5 text-white/25 border-white/10'
+                    }`}>
+                      {p.mode === 'barcode' ? 'EAN' : 'DESC'}
+                    </span>
+                  )}
                 </div>
+                {/* Warning message */}
+                {p.warning && (
+                  <p className="text-[9px] text-amber-400/70 mt-1 flex items-center gap-1 font-bold">
+                    <AlertTriangle className="w-3 h-3 shrink-0" /> {p.warning}
+                  </p>
+                )}
               </div>
 
               {/* Actions */}
@@ -296,7 +403,7 @@ export const StepReview = () => {
                                   <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
                                   <div className="flex gap-1 mt-2">
                                      <Button onClick={() => {
-                                       setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]] } : old));
+                                       setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]], confidence: 'high' as const, warning: undefined } : old));
                                        setShowVariationsFor(null);
                                        toast.success('Produto substituído!');
                                      }} className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Substituir</Button>
@@ -354,6 +461,9 @@ export const StepReview = () => {
                 <Search className="w-8 h-8 text-red-600" />
               </div>
               <p className="text-white/30 text-xs italic">Nenhum produto selecionado para revisão.</p>
+              <p className="text-white/15 text-[10px] mt-2 uppercase font-bold tracking-widest">
+                Aceita descrição + preço ou código de barras + preço
+              </p>
             </div>
           )}
         </div>

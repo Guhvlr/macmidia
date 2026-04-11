@@ -1,137 +1,99 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { useOffer, ProductItem, PriceBadgeConfig, DescriptionConfig, ImageConfig } from '../context/OfferContext';
+import { useOffer, ProductItem } from '../context/OfferContext';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import {
   Loader2, Download, CheckCircle, Monitor, Smartphone,
-  FileIcon, Edit2, X, Move, ZoomIn, ZoomOut, Maximize,
-  ChevronLeft, ChevronRight, Undo2, Save, Layers, Type, Copy
+  FileIcon, Edit2, X, Maximize, ChevronLeft, ChevronRight,
+  Undo2, Save, Move, ZoomIn, ZoomOut, Type, Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { CanvasEditor } from './CanvasEditor';
 
 type ElemId = 'image' | 'name' | 'badge' | 'currency' | 'value' | 'suffix';
 
-// ─── Texto com quebra de linha dinâmica ───────────────────────────────────────
-const computeWrappedLines = (
-  text: string,
-  y: number,
-  fontSize: number,
-  sFactor: number,
-  slotWidth: number
+// ─── Texto com quebra dinâmica ────────────────────────────────────────────────
+const renderWrappedText = (
+  text: string, x: number, y: number,
+  fontSize: number, sFactor: number, slotWidth: number
 ) => {
-  const scaledFontSize = fontSize * sFactor;
-  // TRAVA SEVERA: Forçar no máximo ~18 caracteres por linha para empilhar bonitinho sem sangrar no encarte "Pilha de Palavras".
-  const charsPerLine = Math.min(18, Math.max(8, Math.floor((slotWidth * 0.60) / (scaledFontSize * 0.55))));
-  
-  // Primeiro divide pelas quebras de linha manuais (\n)
-  const manualLines = (text || '').split('\n');
-  const finalLines: string[] = [];
-
-  manualLines.forEach(mLine => {
-    const words = mLine.split(' ');
-    let cur = '';
-    words.forEach(w => {
-      if ((cur + w).length > charsPerLine) { 
-        if (cur.trim()) finalLines.push(cur.trim()); 
-        cur = w + ' '; 
-      } else {
-        cur += w + ' ';
-      }
-    });
-    if (cur.trim()) finalLines.push(cur.trim());
+  const scaledFs = fontSize * sFactor;
+  const charsPerLine = 18; // Fixo para bater com a tela 4
+  const words = (text || '').split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  words.forEach(w => {
+    if ((cur + w).length > charsPerLine) { if (cur.trim()) lines.push(cur.trim()); cur = w + ' '; }
+    else cur += w + ' ';
   });
-
-  const lh = scaledFontSize * 1.15;
-  const startY = y - (finalLines.length * lh) / 2 + lh / 2;
-  return finalLines.map((l, i) => ({ text: l, y: startY + i * lh }));
+  if (cur.trim()) lines.push(cur.trim());
+  const lh = scaledFs * 1.1;
+  const startY = y - (lines.length * lh) / 2 + lh / 2;
+  return lines.map((l, i) => i === 0 
+    ? <tspan key={i} x={x} y={startY}>{l}</tspan> 
+    : <tspan key={i} x={x} dy={lh}>{l}</tspan>
+  );
 };
 
-// ─── Editor Visual Modal ───────────────────────────────────────────────────────
-interface QuickEditorProps {
-  pageIndex: number;
+// ─── Editor Visual ─────────────────────────────────────────────────────────────
+interface EditorProps {
   onClose: () => void;
 }
 
-type Tool = 'select' | 'text';
-
-const QuickEditor = ({ pageIndex, onClose }: QuickEditorProps) => {
+const FullEditor = ({ onClose }: EditorProps) => {
   const {
     config, slots, products, setProducts, customFonts,
     getSlotSettings, updateSlotSettings, pageCount
   } = useOffer();
 
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [zoom, setZoom] = useState(0.7);
+  const [activePage, setActivePage] = useState(0);
+  const [zoom, setZoom] = useState(0.65);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0, ox: 0, oy: 0 });
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedElem, setSelectedElem] = useState<ElemId | null>(null);
   const [dragging, setDragging] = useState<ElemId | null>(null);
-  const [resizing, setResizing] = useState<boolean>(false);
   const [dragOff, setDragOff] = useState({ x: 0, y: 0 });
   const [dragState, setDragState] = useState<{ dx: number; dy: number } | null>(null);
   const [history, setHistory] = useState<string[]>([]);
-  const [activeTool, setActiveTool] = useState<Tool>('select');
-  const [clipboard, setClipboard] = useState<any>(null);
+  const [histIdx, setHistIdx] = useState(-1);
+  const [editingProduct, setEditingProduct] = useState<{ id: string; name: string; price: string } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  // Edição de texto direta
-  const [editingElem, setEditingElem] = useState<{ slotIdx: number, type: 'name' | 'price' } | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [editFontSize, setEditFontSize] = useState(30);
-
+  // Salva snapshot no histórico
   const pushHistory = useCallback(() => {
-    // Salva o estado atual dos produtos e das configurações de slot para o Undo
-    const currentState = {
-      products: JSON.parse(JSON.stringify(products)),
-    };
-    setHistory(prev => [...prev.slice(-20), JSON.stringify(currentState)]);
-  }, [products]);
+    const snap = JSON.stringify(products.map(p => ({ ...p })));
+    setHistory(prev => {
+      const next = [...prev.slice(0, histIdx + 1), snap];
+      setHistIdx(next.length - 1);
+      return next.slice(-30);
+    });
+  }, [products, histIdx]);
 
   const undo = useCallback(() => {
-    if (history.length === 0) { toast.info('Nada para desfazer'); return; }
-    try {
-      const last = JSON.parse(history[history.length - 1]);
-      if (last.products) {
-        setProducts(last.products);
-        setHistory(prev => prev.slice(0, -1));
-        toast.success('Desfeito!');
-      }
-    } catch (e) {
-      console.error('Erro no Undo:', e);
-    }
-  }, [history, setProducts]);
-
-  const copy = useCallback(() => {
-    if (selectedSlotIndex !== null) {
-      setClipboard(products[selectedSlotIndex]);
-      toast.success('Copiado!');
-    }
-  }, [selectedSlotIndex, products]);
-
-  const paste = useCallback(() => {
-    if (clipboard) {
-      pushHistory();
-      setProducts(prev => [...prev, { ...clipboard, id: `paste-${Date.now()}` }]);
-      toast.success('Colado!');
-    }
-  }, [clipboard, pushHistory, setProducts]);
+    if (histIdx <= 0) { toast.info('Nada para desfazer'); return; }
+    const prev = JSON.parse(history[histIdx - 1]);
+    setProducts(prev);
+    setHistIdx(h => h - 1);
+    toast.success('Desfeito!');
+  }, [history, histIdx, setProducts]);
 
   useEffect(() => {
     const handleKeys = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); copy(); }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); paste(); }
-      if (e.key === 'Escape') {
-        if (editingElem) setEditingElem(null);
-        else onClose();
-      }
+      if (e.key === 'Escape' && !editingProduct) onClose();
     };
     window.addEventListener('keydown', handleKeys);
     return () => window.removeEventListener('keydown', handleKeys);
-  }, [undo, copy, paste, onClose, editingElem]);
+  }, [undo, onClose, editingProduct]);
+
+  // Inicializa histórico
+  useEffect(() => {
+    const snap = JSON.stringify(products.map(p => ({ ...p })));
+    setHistory([snap]);
+    setHistIdx(0);
+  }, []);
 
   const toSvg = useCallback((e: React.MouseEvent) => {
     const r = svgRef.current?.getBoundingClientRect();
@@ -145,47 +107,16 @@ const QuickEditor = ({ pageIndex, onClose }: QuickEditorProps) => {
   const getElems = useCallback((slot: any, cfg: any) => {
     const sf = (slot?.width || 500) / 500;
     const { priceBadge: b, imageConfig: ic, descConfig: d } = cfg;
-    
-    const badgeW = b.badgeWidth * sf;
-    const badgeH = b.badgeHeight * sf;
-    const badgeX = slot.x + (b.badgeOffsetX / 100) * slot.width - badgeW / 2;
-    const badgeY = slot.y + (b.badgeOffsetY / 100) * slot.height - badgeH / 2;
-
     return {
-      image: {
-        x: slot.x + slot.width * ic.offsetX / 100 - (slot.width * 0.8 * ic.scale) / 2,
-        y: slot.y + slot.height * ic.offsetY / 100 - (slot.height * 0.6 * ic.scale) / 2,
-        w: slot.width * 0.8 * ic.scale, h: slot.height * 0.6 * ic.scale
-      },
-      name: {
-        x: slot.x + slot.width * d.offsetX / 100 - slot.width * 0.4,
-        y: slot.y + slot.height * d.offsetY / 100 - (d.fontSize * sf) / 2,
-        w: slot.width * 0.8, h: d.fontSize * sf * 1.5
-      },
-      badge: {
-        x: badgeX, y: badgeY, w: badgeW, h: badgeH
-      },
-      currency: {
-        x: badgeX + (b.currencyOffsetX / 100) * badgeW,
-        y: badgeY + (b.currencyOffsetY / 100) * badgeH,
-        w: 40 * sf, h: 40 * sf
-      },
-      value: {
-        x: badgeX + (b.valueOffsetX / 100) * badgeW,
-        y: badgeY + (b.valueOffsetY / 100) * badgeH,
-        w: 100 * sf, h: 100 * sf
-      },
-      suffix: {
-        x: badgeX + (b.suffixOffsetX / 100) * badgeW,
-        y: badgeY + (b.suffixOffsetY / 100) * badgeH,
-        w: 50 * sf, h: 20 * sf
-      },
+      image: { x: slot.x + slot.width * ic.offsetX / 100 - (slot.width * 0.8 * ic.scale) / 2, y: slot.y + slot.height * ic.offsetY / 100 - (slot.height * 0.6 * ic.scale) / 2, w: slot.width * 0.8 * ic.scale, h: slot.height * 0.6 * ic.scale },
+      name: { x: slot.x + slot.width * d.offsetX / 100 - slot.width * 0.4, y: slot.y + slot.height * d.offsetY / 100 - (d.fontSize * sf) / 2, w: slot.width * 0.8, h: d.fontSize * sf * 1.5 },
+      badge: { x: slot.x + (b.badgeOffsetX / 100) * slot.width - (b.badgeWidth * sf) / 2, y: slot.y + (b.badgeOffsetY / 100) * slot.height - (b.badgeHeight * sf) / 2, w: b.badgeWidth * sf, h: b.badgeHeight * sf },
       sFactor: sf
     };
   }, []);
 
   const onStartDrag = (e: React.MouseEvent, id: ElemId, gIdx: number) => {
-    if (e.button !== 0 || activeTool !== 'select') return;
+    if (e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
     pushHistory();
     setSelectedSlotIndex(gIdx);
@@ -198,42 +129,16 @@ const QuickEditor = ({ pageIndex, onClose }: QuickEditorProps) => {
     setDragState({ dx: 0, dy: 0 });
   };
 
-  const onStartResize = (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    pushHistory();
-    setResizing(true);
-  };
-
   const onMouseMove = (e: React.MouseEvent) => {
     if (isPanning) {
       setPanOffset({ x: panStart.ox + (e.clientX - panStart.x), y: panStart.oy + (e.clientY - panStart.y) });
       return;
     }
-    if (selectedSlotIndex === null) return;
+    if (!dragging || selectedSlotIndex === null) return;
     const c = toSvg(e);
     const slotIdx = selectedSlotIndex % slots.length;
-    const cfg = getSlotSettings(selectedSlotIndex);
-    const slot = slots[slotIdx];
-
-    if (dragging) {
-      const el = (getElems(slot, cfg) as any)[dragging];
-      setDragState({ dx: c.x - dragOff.x - el.x, dy: c.y - dragOff.y - el.y });
-    } else if (resizing && selectedElem) {
-      const el = (getElems(slot, cfg) as any)[selectedElem];
-      const nw = Math.max(20, c.x - el.x);
-      const nh = Math.max(20, c.y - el.y);
-      const sf = slot.width / 500;
-
-      if (selectedElem === 'image') {
-        const newScale = nw / (slot.width * 0.8);
-        updateSlotSettings(selectedSlotIndex, { imageConfig: { ...cfg.imageConfig, scale: newScale } });
-      } else if (selectedElem === 'name') {
-        const newFontSize = nh / (sf * 1.5);
-        updateSlotSettings(selectedSlotIndex, { descConfig: { ...cfg.descConfig, fontSize: newFontSize } });
-      } else if (selectedElem === 'badge' || selectedElem === 'value') {
-        updateSlotSettings(selectedSlotIndex, { priceBadge: { ...cfg.priceBadge, badgeWidth: nw/sf, badgeHeight: nh/sf } });
-      }
-    }
+    const el = (getElems(slots[slotIdx], getSlotSettings(selectedSlotIndex)) as any)[dragging];
+    setDragState({ dx: c.x - dragOff.x - el.x, dy: c.y - dragOff.y - el.y });
   };
 
   const onMouseUp = () => {
@@ -244,449 +149,243 @@ const QuickEditor = ({ pageIndex, onClose }: QuickEditorProps) => {
       const slot = slots[slotIdx];
       const cfg = getSlotSettings(selectedSlotIndex);
       let up: any = {};
-      
-      if (dragging === 'image') {
-        up.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx/slot.width)*100, offsetY: cfg.imageConfig.offsetY + (dy/slot.height)*100 };
-      } else if (dragging === 'name') {
-        up.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx/slot.width)*100, offsetY: cfg.descConfig.offsetY + (dy/slot.height)*100 };
-      } else if (dragging === 'badge' || dragging === 'value') {
-        up.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx/slot.width)*100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy/slot.height)*100 };
-      }
-
+      if (dragging === 'image') up.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.imageConfig.offsetY + (dy / slot.height) * 100 };
+      else if (dragging === 'name') up.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.descConfig.offsetY + (dy / slot.height) * 100 };
+      else if (dragging === 'badge') up.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx / slot.width) * 100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy / slot.height) * 100 };
       if (Object.keys(up).length > 0) updateSlotSettings(selectedSlotIndex, up);
     }
     setDragging(null);
-    setResizing(false);
     setDragState(null);
   };
 
-  const duplicateSelected = () => {
-    if (selectedSlotIndex === null) {
-      toast.info('Selecione um produto primeiro');
-      return;
-    }
+  const saveProductEdit = () => {
+    if (!editingProduct) return;
+    setProducts(prev => prev.map(p =>
+      p.id === editingProduct.id ? { ...p, name: editingProduct.name, price: editingProduct.price } : p
+    ));
     pushHistory();
-    const product = products[selectedSlotIndex];
-    if (product) {
-      setProducts(prev => [...prev.slice(0, selectedSlotIndex + 1), { ...product, id: `copy-${Date.now()}` }, ...prev.slice(selectedSlotIndex + 1)]);
-      toast.success('Produto duplicado!');
-    }
+    setEditingProduct(null);
+    toast.success('Produto atualizado!');
   };
 
-  const startInlineEdit = (gIdx: number, type: 'name' | 'price', currentVal: string) => {
-    setSelectedSlotIndex(gIdx);
-    setEditingElem({ slotIdx: gIdx, type });
-    setEditValue(currentVal);
-  };
-
-  const saveInlineEdit = () => {
-    if (!editingElem) return;
-    pushHistory();
-    const slotIdx = editingElem.slotIdx;
-    
-    // Atualiza o texto do produto
-    setProducts(prev => prev.map((p, i) => {
-      if (i === slotIdx) {
-        return editingElem.type === 'name' ? { ...p, name: editValue } : { ...p, price: editValue };
-      }
-      return p;
-    }));
-
-    // Atualiza as configurações de fonte do slot
-    if (editingElem.type === 'name') {
-      updateSlotSettings(slotIdx, {
-        descConfig: { ...getSlotSettings(slotIdx).descConfig, fontSize: editFontSize }
-      });
-    } else {
-      updateSlotSettings(slotIdx, {
-        priceBadge: { ...getSlotSettings(slotIdx).priceBadge, valueFontSize: editFontSize }
-      });
-    }
-
-    setEditingElem(null);
-    toast.success('Atualizado!');
+  const handleSaveAndClose = () => {
+    toast.success('Alterações salvas! Voltando para exportar.');
+    onClose();
   };
 
   const FontStyles = () => (
     <style dangerouslySetInnerHTML={{
-      __html: customFonts.map(f =>
-        `@font-face { font-family: '${f.name}'; src: url('${f.url}'); font-display: swap; }`
-      ).join('\n')
+      __html: customFonts.map(f => `@font-face { font-family: '${f.name}'; src: url('${f.url}'); font-display: swap; }`).join('\n')
     }} />
   );
 
   return (
-    <div className="fixed inset-0 z-[200] bg-[#060608]/98 flex flex-col animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[200] bg-[#09090b] flex flex-col animate-in fade-in duration-200">
       <FontStyles />
 
-      {/* Header do editor */}
-      <div className="flex items-center justify-between px-6 py-4 bg-[#0d0d10] border-b border-white/5 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-8 h-8 bg-red-600/10 rounded-xl flex items-center justify-center border border-red-600/20">
-            <Edit2 className="w-4 h-4 text-red-500" />
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 bg-[#0d0d10] border-b border-white/8 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center">
+            <Edit2 className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-white">Editor Visual Avançado</h2>
-            <p className="text-[9px] text-white/30 font-bold uppercase tracking-wider">Tela {pageIndex + 1} de {pageCount}</p>
+            <h2 className="text-sm font-black uppercase tracking-widest text-white">Editor de Artes</h2>
+            <p className="text-[10px] text-white/30 font-bold uppercase">Duplo clique no produto para editar texto e preço</p>
           </div>
         </div>
 
-        {/* Controles do Menu */}
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={undo} 
-            disabled={history.length === 0}
-            className="p-2 hover:bg-white/5 rounded-xl text-white/40 hover:text-white transition-all disabled:opacity-20" 
-            title="Desfazer (Ctrl+Z)"
-          >
+        <div className="flex items-center gap-2">
+          <button onClick={undo} className="p-2 hover:bg-white/8 rounded-xl text-white/40 hover:text-white transition-all" title="Desfazer Ctrl+Z">
             <Undo2 className="w-4 h-4" />
           </button>
-          
-          <div className="flex items-center gap-1 bg-white/5 rounded-xl px-2 py-1.5 border border-white/10">
-            <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} className="text-white/40 hover:text-white w-6 h-6 flex items-center justify-center text-lg">-</button>
-            <span className="text-[10px] font-black text-white/40 min-w-[45px] text-center">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(4, z + 0.1))} className="text-white/40 hover:text-white w-6 h-6 flex items-center justify-center text-lg">+</button>
+          <div className="flex items-center gap-1 bg-white/5 rounded-xl px-3 py-1.5 border border-white/8">
+            <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} className="text-white/40 hover:text-white w-5 h-5 flex items-center justify-center text-sm">−</button>
+            <span className="text-[10px] font-bold text-white/40 min-w-[36px] text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="text-white/40 hover:text-white w-5 h-5 flex items-center justify-center text-sm">+</button>
           </div>
-
-          <div className="w-px h-6 bg-white/10" />
-          
-          <Button
-            onClick={onClose}
-            className="h-10 px-6 bg-red-600 hover:bg-red-700 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-red-600/10"
-          >
-            <Save className="w-4 h-4 mr-2" /> Salvar Alterações
+          <button onClick={() => { setZoom(0.65); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-white/8 rounded-xl text-white/40 hover:text-white">
+            <Maximize className="w-4 h-4" />
+          </button>
+          <div className="w-px h-5 bg-white/10" />
+          <Button onClick={handleSaveAndClose} className="h-9 px-5 bg-primary hover:bg-primary/90 rounded-xl text-[10px] font-black uppercase tracking-widest">
+            <Save className="w-3.5 h-3.5 mr-2" /> Salvar e Exportar
           </Button>
+          <button onClick={onClose} className="p-2 hover:bg-white/8 rounded-xl text-white/30 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Barra de Ferramentas Lateral */}
-        <div className="w-16 bg-[#0d0d10] border-r border-white/5 flex flex-col items-center py-6 gap-4 shrink-0">
-          <button 
-            onClick={() => setActiveTool('select')}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'select' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'text-white/20 hover:bg-white/5'}`}
-            title="Ferramenta de Seleção (V)"
+      {/* Abas das telas */}
+      <div className="flex items-center gap-1 px-5 py-2 bg-[#0d0d10] border-b border-white/5 overflow-x-auto shrink-0">
+        <span className="text-[9px] font-black uppercase text-white/20 tracking-widest mr-2 shrink-0">Telas:</span>
+        {Array.from({ length: pageCount }).map((_, i) => (
+          <button
+            key={i}
+            onClick={() => { setActivePage(i); setSelectedSlotIndex(null); setSelectedElem(null); }}
+            className={`shrink-0 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+              activePage === i
+                ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                : 'bg-white/5 text-white/30 hover:bg-white/10 hover:text-white border border-white/5'
+            }`}
           >
-            <Move className="w-5 h-5" />
+            Tela {i + 1}
           </button>
-          <button onClick={() => setActiveTool('text')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'text' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'text-white/20 hover:bg-white/5'}`}><Type className="w-5 h-5" /></button>
-          <div className="w-8 h-px bg-white/5 my-2" />
-          <button onClick={copy} className="w-10 h-10 rounded-xl flex items-center justify-center text-white/20 hover:bg-white/5 hover:text-white transition-all"><Copy className="w-5 h-5" /></button>
-          <button onClick={paste} className="w-10 h-10 rounded-xl flex items-center justify-center text-white/20 hover:bg-white/5 hover:text-white transition-all"><Download className="w-5 h-5 translate-y-1" /></button>
-          
-          <div className="mt-auto">
-             <button 
-              onClick={() => { setZoom(0.7); setPanOffset({ x: 0, y: 0 }); }} 
-              className="p-3 text-white/20 hover:text-white transition-colors"
-              title="Resetar Visualização"
-            >
-              <Maximize className="w-4 h-4" />
-            </button>
-          </div>
+        ))}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setActivePage(p => Math.max(0, p - 1))}
+            className="p-1.5 hover:bg-white/8 rounded-lg text-white/30 hover:text-white"
+            disabled={activePage === 0}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setActivePage(p => Math.min(pageCount - 1, p + 1))}
+            className="p-1.5 hover:bg-white/8 rounded-lg text-white/30 hover:text-white"
+            disabled={activePage === pageCount - 1}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Dica */}
+      <div className="px-5 py-1.5 bg-amber-500/5 border-b border-amber-500/10 text-[10px] text-amber-400/60 font-bold uppercase tracking-wider flex items-center gap-2 shrink-0">
+        <Move className="w-3 h-3" />
+        Arraste imagem, descrição ou preço • Duplo clique para editar texto e preço • Ctrl+Z desfaz
+      </div>
+
+      {/* Canvas */}
+      <div
+        className="flex-1 overflow-hidden relative flex items-center justify-center bg-[#060608]"
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onMouseDown={e => {
+          if (e.button === 1) { e.preventDefault(); setIsPanning(true); setPanStart({ x: e.clientX, y: e.clientY, ox: panOffset.x, oy: panOffset.y }); }
+        }}
+        onWheel={e => { setZoom(z => Math.min(3, Math.max(0.2, z + (e.deltaY > 0 ? -0.05 : 0.05)))); }}
+        style={{ cursor: isPanning ? 'grabbing' : dragging ? 'grabbing' : 'default' }}
+      >
+        <div style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }}>
+          <svg
+            ref={svgRef}
+            width={config.width}
+            height={config.height}
+            viewBox={`0 0 ${config.width} ${config.height}`}
+            style={{ background: 'white', userSelect: 'none', display: 'block' }}
+            className="shadow-2xl"
+          >
+            {config.backgroundImageUrl && (
+              <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />
+            )}
+
+            {slots.map((slot, sIdx) => {
+              const gIdx = activePage * slots.length + sIdx;
+              const product = products[gIdx];
+              if (!product) return null;
+
+              const cfg = getSlotSettings(gIdx);
+              const { priceBadge: pb, descConfig: dc, imageConfig: ic } = cfg;
+              const sf = slot.width / 500;
+              const el = getElems(slot, cfg);
+              const isSelected = selectedSlotIndex === gIdx;
+
+              const v = { ...el };
+              if (isSelected && dragState && dragging) {
+                (v as any)[dragging] = { ...(v as any)[dragging], x: (v as any)[dragging].x + dragState.dx, y: (v as any)[dragging].y + dragState.dy };
+              }
+
+              return (
+                <g key={gIdx}>
+                  <rect x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="none" stroke={isSelected ? '#D9254B' : 'rgba(0,0,0,0.05)'} strokeWidth={isSelected ? 3 : 1} strokeDasharray={isSelected ? 'none' : '4,2'} pointerEvents="none" />
+
+                  {/* IMAGEM */}
+                  <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'image', gIdx)}>
+                    <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} fill="rgba(0,0,0,0.02)" stroke="rgba(217,37,75,0.1)" strokeDasharray="3,3" rx={8} />
+                    {product.images?.[0] && <image href={product.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" />}
+                    {isSelected && selectedElem === 'image' && <rect x={v.image.x - 2} y={v.image.y - 2} width={v.image.w + 4} height={v.image.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={8} pointerEvents="none" />}
+                  </g>
+
+                  {/* BADGE */}
+                  <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'badge', gIdx)}>
+                    {pb.badgeImageUrl
+                      ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="none" />
+                      : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={pb.borderRadius * sf} fill={pb.bgColor} />
+                    }
+                    <text x={v.badge.x + v.badge.w * pb.currencyOffsetX / 100} y={v.badge.y + v.badge.h * pb.currencyOffsetY / 100} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>
+                    <text x={v.badge.x + v.badge.w * pb.valueOffsetX / 100} y={v.badge.y + v.badge.h * pb.valueOffsetY / 100} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
+                    {pb.showSuffix && <text x={v.badge.x + v.badge.w * pb.suffixOffsetX / 100} y={v.badge.y + v.badge.h * pb.suffixOffsetY / 100} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{pb.suffixText}</text>}
+                    {isSelected && selectedElem === 'badge' && <rect x={v.badge.x - 2} y={v.badge.y - 2} width={v.badge.w + 4} height={v.badge.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={pb.borderRadius * sf} pointerEvents="none" />}
+                  </g>
+
+                  {/* DESCRIÇÃO — duplo clique para editar */}
+                  <g
+                    style={{ cursor: 'move' }}
+                    onMouseDown={e => onStartDrag(e, 'name', gIdx)}
+                    onDoubleClick={e => {
+                      e.stopPropagation();
+                      setEditingProduct({ id: product.id, name: product.name, price: product.price });
+                    }}
+                  >
+                    <rect x={v.name.x} y={v.name.y} width={v.name.w} height={v.name.h} fill="rgba(217,37,75,0.03)" stroke="rgba(217,37,75,0.15)" strokeDasharray="3,3" rx={4} />
+                    <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="800" fontFamily={dc.fontFamily} pointerEvents="none">
+                      {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name, v.name.x + v.name.w / 2, v.name.y + v.name.h / 2, dc.fontSize, sf, slot.width)}
+                    </text>
+                    {isSelected && selectedElem === 'name' && <rect x={v.name.x - 2} y={v.name.y - 2} width={v.name.w + 4} height={v.name.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={4} pointerEvents="none" />}
+                  </g>
+                </g>
+              );
+            })}
+          </svg>
         </div>
 
-        {/* Canvas Principal */}
-        <div
-          className="flex-1 relative flex items-center justify-center bg-black overflow-hidden"
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
-          onMouseDown={e => {
-            if (e.button === 1 || (e.button === 0 && e.altKey)) {
-              e.preventDefault();
-              setIsPanning(true);
-              setPanStart({ x: e.clientX, y: e.clientY, ox: panOffset.x, oy: panOffset.y });
-            }
-          }}
-          onWheel={e => {
-            if (e.ctrlKey) return;
-            if (editingElem) return;
-            setZoom(z => Math.min(4, Math.max(0.1, z + (e.deltaY > 0 ? -0.1 : 0.1))));
-          }}
-          style={{ cursor: isPanning ? 'grabbing' : resizing ? 'nwse-resize' : dragging ? 'grabbing' : (activeTool === 'text' ? 'text' : 'default') }}
-        >
-          <div style={{
-            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
-            transformOrigin: 'center center',
-            transition: isPanning || dragging ? 'none' : 'transform 0.15s ease-out'
-          }}>
-            <svg
-              ref={svgRef}
-              width={config.width}
-              height={config.height}
-              viewBox={`0 0 ${config.width} ${config.height}`}
-              style={{ background: 'white', userSelect: 'none', display: 'block' }}
-              className="shadow-2xl ring-1 ring-white/10"
-              onClick={() => {
-                if (editingElem) saveInlineEdit();
-              }}
-            >
-              {config.backgroundImageUrl && (
-                <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />
-              )}
-
-              {slots.map((slot, sIdx) => {
-                const gIdx = pageIndex * slots.length + sIdx;
-                const product = products[gIdx];
-                if (!product) return null;
-
-                const cfg = getSlotSettings(gIdx);
-                const { priceBadge: pb, descConfig: dc, imageConfig: ic } = cfg;
-                const sf = slot.width / 500;
-                const el = getElems(slot, cfg);
-
-                const v = { ...el };
-                if (selectedSlotIndex === gIdx && dragState && dragging) {
-                  (v as any)[dragging] = {
-                    ...(v as any)[dragging],
-                    x: (v as any)[dragging].x + dragState.dx,
-                    y: (v as any)[dragging].y + dragState.dy
-                  };
-                }
-
-                const isSelected = selectedSlotIndex === gIdx;
-
-                return (
-                  <g key={gIdx} onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedSlotIndex(gIdx);
-                  }}>
-                    {/* IMAGEM */}
-                    <g
-                      style={{ cursor: activeTool === 'select' ? 'move' : 'default' }}
-                      onMouseDown={e => onStartDrag(e, 'image', gIdx)}
-                    >
-                      {isSelected && selectedElem === 'image' && (
-                        <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h}
-                          fill="none" 
-                          stroke="#D9254B" 
-                          strokeWidth={2 / zoom}
-                        />
-                      )}
-                      {product.images?.[0] && (
-                        <image
-                          href={product.images[0]}
-                          x={v.image.x} y={v.image.y}
-                          width={v.image.w} height={v.image.h}
-                          preserveAspectRatio="xMidYMid meet"
-                        />
-                      )}
-                      {isSelected && selectedElem === 'image' && (
-                        <circle cx={v.image.x + v.image.w} cy={v.image.y + v.image.h} r={6/zoom} fill="white" stroke="#D9254B" cursor="nwse-resize" onMouseDown={onStartResize} />
-                      )}
-                    </g>
-
-                    {/* BADGE DE PREÇO (FUNDO) */}
-                    <g
-                      style={{ cursor: activeTool === 'select' ? 'move' : 'default' }}
-                      onMouseDown={e => onStartDrag(e, 'badge', gIdx)}
-                    >
-                      {pb.badgeImageUrl
-                        ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} />
-                        : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={pb.borderRadius * sf} fill={pb.bgColor} />
-                      }
-                      {isSelected && selectedElem === 'badge' && (
-                        <>
-                          <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} fill="none" stroke="#D9254B" strokeWidth={2 / zoom} />
-                          <circle cx={v.badge.x + v.badge.w} cy={v.badge.y + v.badge.h} r={6/zoom} fill="white" stroke="#D9254B" cursor="nwse-resize" onMouseDown={onStartResize} />
-                        </>
-                      )}
-                    </g>
-
-                    {/* RS / VALOR / SUFIXO (Separados para mover) */}
-                    <g
-                      style={{ cursor: activeTool === 'select' ? 'move' : (activeTool === 'text' ? 'text' : 'default') }}
-                      onMouseDown={e => onStartDrag(e, 'value', gIdx)}
-                      onClick={(e) => {
-                        if (activeTool === 'text') {
-                          e.stopPropagation();
-                          startInlineEdit(gIdx, 'price', product.price);
-                          setEditFontSize(pb.valueFontSize);
-                        }
-                      }}
-                    >
-                      <text
-                        x={v.currency.x}
-                        y={v.currency.y}
-                        fontSize={pb.currencyFontSize * sf}
-                        fill={pb.currencyColor}
-                        fontWeight="900"
-                        fontFamily={pb.currencyFontFamily}
-                        pointerEvents="none"
-                      >R$</text>
-                      <text
-                        x={v.value.x}
-                        y={v.value.y}
-                        fontSize={pb.valueFontSize * sf}
-                        fill={pb.valueColor}
-                        fontWeight="900"
-                        textAnchor="middle"
-                        fontFamily={pb.valueFontFamily}
-                        pointerEvents="none"
-                      >{product.price.replace('R$', '').trim()}</text>
-                      {pb.showSuffix && (
-                        <text
-                          x={v.suffix.x}
-                          y={v.suffix.y}
-                          fontSize={pb.suffixFontSize * sf}
-                          fill={pb.suffixColor}
-                          fontWeight="600"
-                          textAnchor="middle"
-                          pointerEvents="none"
-                        >{pb.suffixText}</text>
-                      )}
-                      {isSelected && selectedElem === 'value' && (
-                        <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} fill="none" stroke="#red" strokeWidth={1} />
-                      )}
-                    </g>
-
-                    {/* DESCRIÇÃO COM CONTROLES */}
-                    <g
-                      style={{ cursor: activeTool === 'select' ? 'move' : (activeTool === 'text' ? 'text' : 'default') }}
-                      onMouseDown={e => onStartDrag(e, 'name', gIdx)}
-                      onClick={(e) => {
-                        if (activeTool === 'text') {
-                          e.stopPropagation();
-                          startInlineEdit(gIdx, 'name', product.name);
-                          setEditFontSize(dc.fontSize);
-                        }
-                      }}
-                    >
-                      {isSelected && selectedElem === 'name' && (
-                        <rect x={v.name.x} y={v.name.y} width={v.name.w} height={v.name.h}
-                          fill="rgba(217,37,75,0.05)" 
-                          stroke="#D9254B" 
-                          strokeWidth={2 / zoom}
-                          rx={4}
-                        />
-                      )}
-                      <g style={{ cursor: activeTool === 'select' ? 'move' : (activeTool === 'text' ? 'text' : 'default') }} onMouseDown={e => onStartDrag(e, 'name', gIdx)} onClick={(e) => { if(activeTool === 'text') { e.stopPropagation(); startInlineEdit(gIdx, 'name', product.name); setEditFontSize(dc.fontSize); }}}>
-                        {isSelected && selectedElem === 'name' && (
-                          <rect x={v.name.x} y={v.name.y} width={v.name.w} height={v.name.h} fill="rgba(217,37,75,0.05)" stroke="#D9254B" strokeWidth={2 / zoom} rx={4} />
-                        )}
-                        {computeWrappedLines(product.name, v.name.y + v.name.h / 2, dc.fontSize, sf, slot.width).map((line, i) => (
-                          <text
-                            key={i}
-                            x={v.name.x + v.name.w / 2}
-                            y={line.y}
-                            textAnchor="middle"
-                            fill={dc.color}
-                            fontSize={dc.fontSize * sf}
-                            fontWeight="900"
-                            fontFamily={dc.fontFamily}
-                            style={{ textTransform: dc.uppercase ? 'uppercase' : 'none' }}
-                            pointerEvents="none"
-                          >
-                            {line.text}
-                          </text>
-                        ))}
-                      </g>
-                      {isSelected && selectedElem === 'name' && (
-                        <circle cx={v.name.x + v.name.w} cy={v.name.y + v.name.h} r={6/zoom} fill="white" stroke="#D9254B" cursor="nwse-resize" onMouseDown={onStartResize} />
-                      )}
-                    </g>
-                  </g>
-                );
-              })}
-            </svg>
-
-            {/* Editor de Texto Flutuante (Inline) */}
-            {editingElem && selectedSlotIndex !== null && products[selectedSlotIndex] && (
-              <div 
-                className="absolute bg-[#121214] border-2 border-red-600 rounded-2xl p-4 shadow-2xl z-50 animate-in zoom-in-95 duration-150 w-[320px]"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="flex flex-col gap-4">
-                   <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                       <Type className="w-3 h-3 text-red-500" />
-                       <span className="text-[9px] font-black uppercase text-white/40 tracking-[0.2em]">
-                         Editar {editingElem.type === 'name' ? 'Descrição' : 'Preço'}
-                       </span>
-                     </div>
-                     <button onClick={() => setEditingElem(null)} className="text-white/20 hover:text-white transition-colors">
-                       <X className="w-4 h-4" />
-                     </button>
-                   </div>
-                   
-                   {editingElem.type === 'name' ? (
-                     <div className="space-y-3">
-                       <textarea
-                         autoFocus
-                         value={editValue}
-                         onChange={e => setEditValue(e.target.value)}
-                         onKeyDown={e => {
-                           if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); saveInlineEdit(); }
-                           if (e.key === 'Escape') { e.preventDefault(); setEditingElem(null); }
-                         }}
-                         rows={4}
-                         placeholder="Digite a descrição..."
-                         className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-red-600/50 resize-none custom-scrollbar"
-                       />
-                       <div className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-white/5">
-                         <span className="text-[8px] font-black uppercase text-white/30">TAMANHO DA FONTE</span>
-                         <div className="flex items-center gap-3">
-                           <button onClick={() => setEditFontSize(f => Math.max(10, f - 2))} className="text-white/40 hover:text-white">-</button>
-                           <span className="text-[10px] font-black text-white">{editFontSize}px</span>
-                           <button onClick={() => setEditFontSize(f => Math.min(100, f + 2))} className="text-white/40 hover:text-white">+</button>
-                         </div>
-                       </div>
-                     </div>
-                   ) : (
-                     <div className="space-y-3">
-                       <div className="relative">
-                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-red-500 font-black text-xs">R$</span>
-                         <input
-                           autoFocus
-                           value={editValue.replace('R$', '').trim()}
-                           onChange={e => setEditValue(e.target.value)}
-                           onKeyDown={e => {
-                             if (e.key === 'Enter') { e.preventDefault(); saveInlineEdit(); }
-                             if (e.key === 'Escape') { e.preventDefault(); setEditingElem(null); }
-                           }}
-                           placeholder="0,00"
-                           className="w-full bg-black/60 border border-white/10 rounded-xl h-12 pl-10 pr-4 text-sm font-black text-white outline-none focus:border-red-600/50"
-                         />
-                       </div>
-                       <div className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-white/5">
-                         <span className="text-[8px] font-black uppercase text-white/30">TAMANHO DO PREÇO</span>
-                         <div className="flex items-center gap-3">
-                           <button onClick={() => setEditFontSize(f => Math.max(20, f - 5))} className="text-white/40 hover:text-white">-</button>
-                           <span className="text-[10px] font-black text-white">{editFontSize}px</span>
-                           <button onClick={() => setEditFontSize(f => Math.min(200, f + 5))} className="text-white/40 hover:text-white">+</button>
-                         </div>
-                       </div>
-                     </div>
-                   )}
-                   
-                   <div className="flex gap-2 font-black uppercase tracking-widest text-[9px]">
-                     <Button 
-                      variant="ghost" 
-                      onClick={() => setEditingElem(null)}
-                      className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/40 rounded-xl"
-                     >
-                       Cancelar
-                     </Button>
-                     <Button 
-                      onClick={saveInlineEdit}
-                      className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg shadow-red-600/20"
-                     >
-                       Aplicar
-                     </Button>
-                   </div>
-                   <p className="text-[8px] text-white/20 text-center font-bold uppercase tracking-wider">
-                     {editingElem.type === 'name' ? 'Dica: use Ctrl+Enter para salvar rápido' : 'Pressione Enter para salvar'}
-                   </p>
+        {/* Modal edição de texto */}
+        {editingProduct && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="bg-[#121214] border border-white/10 rounded-2xl p-6 w-96 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
+                  <Type className="w-4 h-4 text-primary" /> Editar Produto
+                </h3>
+                <button onClick={() => setEditingProduct(null)} className="text-white/30 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[9px] font-black uppercase text-white/30 tracking-widest block mb-2">Descrição do Produto</label>
+                  <textarea
+                    value={editingProduct.name}
+                    onChange={e => setEditingProduct(p => p ? { ...p, name: e.target.value } : null)}
+                    rows={3}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-primary/50 resize-none"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black uppercase text-white/30 tracking-widest block mb-2">Preço</label>
+                  <input
+                    value={editingProduct.price}
+                    onChange={e => setEditingProduct(p => p ? { ...p, price: e.target.value } : null)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 h-11 text-sm font-black text-red-400 outline-none focus:border-primary/50"
+                    onKeyDown={e => { if (e.key === 'Enter') saveProductEdit(); if (e.key === 'Escape') setEditingProduct(null); }}
+                  />
                 </div>
               </div>
-            )}
+              <div className="flex gap-3 mt-6">
+                <Button variant="ghost" onClick={() => setEditingProduct(null)} className="flex-1 h-11 bg-white/5 rounded-xl text-[10px] font-black uppercase text-white/40">
+                  Cancelar
+                </Button>
+                <Button onClick={saveProductEdit} className="flex-1 h-11 bg-primary hover:bg-primary/90 rounded-xl text-[10px] font-black uppercase">
+                  <Save className="w-3.5 h-3.5 mr-2" /> Salvar
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -699,7 +398,7 @@ export const StepFinal = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [exportFilename, setExportFilename] = useState('tabloide_macmidia');
   const [isSingleFile, setIsSingleFile] = useState(true);
-  const [editingPage, setEditingPage] = useState<number | null>(null); // ← página sendo editada
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const toBase64 = async (url: string): Promise<string> => {
     if (!url) return '';
@@ -715,17 +414,20 @@ export const StepFinal = () => {
     } catch { return url; }
   };
 
-  const processSvgForExport = async (svg: SVGSVGElement) => {
+  const processSvgForExport = async (svg: SVGSVGElement, format: 'svg' | 'png') => {
     const clone = svg.cloneNode(true) as SVGSVGElement;
     clone.setAttribute('width', config.width.toString());
     clone.setAttribute('height', config.height.toString());
     clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     for (const img of Array.from(clone.querySelectorAll('image'))) {
       const href = img.getAttribute('href') || img.getAttribute('xlink:href');
-      if (href && (href.startsWith('http') || href.startsWith('blob'))) {
+      if (!href) continue;
+      if (href.startsWith('http') || href.startsWith('blob')) {
         const b64 = await toBase64(href);
         img.setAttribute('href', b64);
         img.setAttribute('xlink:href', b64);
+      } else if (href.startsWith('data:')) {
+        img.setAttribute('xlink:href', href);
       }
     }
     return clone;
@@ -746,7 +448,7 @@ export const StepFinal = () => {
         for (let i = 0; i < pageCount; i++) {
           const svg = svgRefs.current[i];
           if (!svg) continue;
-          const processed = await processSvgForExport(svg);
+          const processed = await processSvgForExport(svg, format);
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           g.setAttribute('transform', `translate(${i * (config.width + spacing)}, 0)`);
           Array.from(processed.childNodes).forEach(n => g.appendChild(n.cloneNode(true)));
@@ -758,7 +460,7 @@ export const StepFinal = () => {
         for (let i = 0; i < pageCount; i++) {
           const svg = svgRefs.current[i];
           if (!svg) continue;
-          const processedClone = await processSvgForExport(svg);
+          const processedClone = await processSvgForExport(svg, format);
           const svgData = new XMLSerializer().serializeToString(processedClone);
           if (format === 'svg') {
             zip.file(`tela_${i + 1}.svg`, svgData);
@@ -803,30 +505,17 @@ export const StepFinal = () => {
       <g key={product.id}>
         {(product.images || []).slice(0, 3).reverse().map((img, iIdx, arr) => {
           const pos = arr.length - 1 - iIdx;
-          return (
-            <image key={`img-${pos}`} href={img}
-              x={imgX + pos * 20} y={imgY - pos * 10}
-              width={imgW} height={imgH}
-              preserveAspectRatio="xMidYMid meet"
-            />
-          );
+          return <image key={`img-${pos}`} href={img} x={imgX + pos * 20} y={imgY - pos * 10} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />;
         })}
         <g transform={`translate(${badgeX}, ${badgeY})`}>
-          {pb.badgeImageUrl
-            ? <image href={pb.badgeImageUrl} x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} />
-            : <rect x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sf} />
-          }
-          <text x={-badgeW / 2 + (pb.currencyOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.currencyOffsetY / 100) * badgeH} fill={pb.currencyColor} style={{ fontSize: pb.currencyFontSize * sf, fontFamily: pb.currencyFontFamily, fontWeight: '900' }}>R$</text>
-          <text x={-badgeW / 2 + (pb.valueOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.valueOffsetY / 100) * badgeH + pb.valueFontSize * sf * 0.15} fill={pb.valueColor} textAnchor="middle" style={{ fontSize: pb.valueFontSize * sf, fontFamily: pb.valueFontFamily, fontWeight: '900', letterSpacing: '-0.05em' }}>{product.price.replace('R$', '').trim()}</text>
-          {pb.showSuffix && <text x={-badgeW / 2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.suffixOffsetY / 100) * badgeH + pb.suffixFontSize * sf * 0.5} fill={pb.suffixColor} textAnchor="middle" style={{ fontSize: pb.suffixFontSize * sf, fontWeight: 'bold' }}>{pb.suffixText}</text>}
+          {pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} preserveAspectRatio="none" /> : <rect x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sf} />}
+          <text x={-badgeW / 2 + (pb.currencyOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.currencyOffsetY / 100) * badgeH} fill={pb.currencyColor} fontSize={pb.currencyFontSize * sf} fontFamily={pb.currencyFontFamily} fontWeight="900">R$</text>
+          <text x={-badgeW / 2 + (pb.valueOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.valueOffsetY / 100) * badgeH + pb.valueFontSize * sf * 0.15} fill={pb.valueColor} textAnchor="middle" fontSize={pb.valueFontSize * sf} fontFamily={pb.valueFontFamily} fontWeight="900" letterSpacing="-0.05em">{product.price.replace('R$', '').trim()}</text>
+          {pb.showSuffix && <text x={-badgeW / 2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.suffixOffsetY / 100) * badgeH + pb.suffixFontSize * sf * 0.5} fill={pb.suffixColor} textAnchor="middle" fontSize={pb.suffixFontSize * sf} fontWeight="bold">{pb.suffixText}</text>}
         </g>
-        <g>
-          {computeWrappedLines(product.name, nameY, dc.fontSize, sf, slot.width).map((line, i) => (
-            <text key={`txt-${i}`} x={nameX} y={line.y} textAnchor="middle" fill={dc.color} style={{ fontSize: `${dc.fontSize * sf}px`, fontFamily: dc.fontFamily, fontWeight: '900', textTransform: dc.uppercase ? 'uppercase' : 'none', letterSpacing: '-0.02em' }}>
-              {line.text}
-            </text>
-          ))}
-        </g>
+        <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="900" fontFamily={dc.fontFamily} letterSpacing="-0.02em">
+          {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name, nameX, nameY, dc.fontSize, sf, slot.width)}
+        </text>
       </g>
     );
   };
@@ -844,29 +533,33 @@ export const StepFinal = () => {
             <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">{pageCount} telas geradas</p>
           </div>
         </div>
-        <div className="flex-1 max-w-sm flex flex-col gap-2">
-          <input
-            value={exportFilename}
-            onChange={e => setExportFilename(e.target.value)}
-            placeholder="Nome do arquivo..."
-            className="bg-black/60 border border-white/10 rounded-lg h-9 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all"
-          />
-          <button
-            onClick={() => setIsSingleFile(!isSingleFile)}
-            className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest transition-colors w-fit ${isSingleFile ? 'text-primary' : 'text-white/20'}`}
+
+        <div className="flex items-center gap-4">
+          {/* ✅ BOTÃO EDITAR TODAS AS TELAS */}
+          <Button
+            onClick={() => setEditorOpen(true)}
+            className="h-11 px-6 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-[10px] font-black uppercase text-amber-400 tracking-widest transition-all"
           >
-            <div className={`w-3 h-3 rounded-full border ${isSingleFile ? 'bg-primary border-primary' : 'border-white/20'}`} />
-            Arquivo Único (Multi Artboards)
-          </button>
-        </div>
-        <div className="flex gap-3">
-          <Button onClick={() => exportAll('svg')} disabled={isProcessing} className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl h-11 px-6 text-[10px] font-black uppercase tracking-widest">
-            <FileIcon className="w-4 h-4 mr-2" /> Exportar SVG
+            <Edit2 className="w-4 h-4 mr-2" /> Editar Telas
           </Button>
-          <Button onClick={() => exportAll('png')} disabled={isProcessing} className="bg-blue-600 hover:bg-blue-700 rounded-xl h-11 px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">
-            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-            Baixar PNG
-          </Button>
+
+          <div className="flex-1 max-w-sm flex flex-col gap-2">
+            <input value={exportFilename} onChange={e => setExportFilename(e.target.value)} placeholder="Nome do arquivo..." className="bg-black/60 border border-white/10 rounded-lg h-9 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all" />
+            <button onClick={() => setIsSingleFile(!isSingleFile)} className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest transition-colors w-fit ${isSingleFile ? 'text-primary' : 'text-white/20'}`}>
+              <div className={`w-3 h-3 rounded-full border ${isSingleFile ? 'bg-primary border-primary' : 'border-white/20'}`} />
+              Arquivo Único (Multi Artboards)
+            </button>
+          </div>
+
+          <div className="flex gap-3">
+            <Button onClick={() => exportAll('svg')} disabled={isProcessing} className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl h-11 px-6 text-[10px] font-black uppercase tracking-widest">
+              <FileIcon className="w-4 h-4 mr-2" /> Exportar SVG
+            </Button>
+            <Button onClick={() => exportAll('png')} disabled={isProcessing} className="bg-blue-600 hover:bg-blue-700 rounded-xl h-11 px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+              Baixar PNG
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -878,52 +571,35 @@ export const StepFinal = () => {
               <div className="mb-4 flex items-center justify-between w-full px-2">
                 <span className="text-[10px] font-black uppercase text-white/20 tracking-widest">Tela {i + 1}</span>
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setEditingPage(i)}
-                    variant="ghost"
-                    className="h-8 px-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-xl text-[9px] font-black uppercase text-primary tracking-wider transition-all opacity-0 group-hover:opacity-100"
-                  >
-                    <Edit2 className="w-3 h-3 mr-1.5" /> Editar Tela
-                  </Button>
                   <Smartphone className="w-3 h-3 text-white/10" />
                   <Monitor className="w-3 h-3 text-white/10" />
                 </div>
               </div>
-              <div className="relative shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden border border-white/10 group-hover:border-primary/30 transition-all">
-                <svg
-                  ref={el => svgRefs.current[i] = el}
-                  width="100%"
-                  viewBox={`0 0 ${config.width} ${config.height}`}
-                  className="w-full h-auto block bg-white"
-                >
-                  {config.backgroundImageUrl && (
-                    <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />
-                  )}
-                  <defs>
-                    {customFonts.map(f => (
-                      <style key={f.name} type="text/css">
-                        {`@font-face { font-family: "${f.name}"; src: url("${f.url}"); }`}
-                      </style>
-                    ))}
-                  </defs>
-                  {slots.map((slot, sIdx) => {
-                    const globalIndex = i * slots.length + sIdx;
-                    return renderProduct(products[globalIndex], slot, globalIndex);
-                  })}
+              <div
+                className="relative shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden border border-white/10 group-hover:border-primary/30 transition-all cursor-pointer"
+                onClick={() => setEditorOpen(true)}
+                title="Clique para editar"
+              >
+                <svg ref={el => svgRefs.current[i] = el} width="100%" viewBox={`0 0 ${config.width} ${config.height}`} className="w-full h-auto block bg-white">
+                  {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />}
+                  <defs>{customFonts.map(f => <style key={f.name} type="text/css">{`@font-face { font-family: "${f.name}"; src: url("${f.url}"); }`}</style>)}</defs>
+                  {slots.map((slot, sIdx) => renderProduct(products[i * slots.length + sIdx], slot, i * slots.length + sIdx))}
                 </svg>
+                {/* Overlay de editar ao hover */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
+                    <Edit2 className="w-4 h-4 text-white" />
+                    <span className="text-white text-xs font-black uppercase tracking-widest">Editar</span>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {editingPage !== null && (
-        <CanvasEditor
-          pageIndex={editingPage}
-          onClose={() => setEditingPage(null)}
-        />
-      )}
-
+      {/* ✅ EDITOR ABRE COM ABAS */}
+      {editorOpen && <FullEditor onClose={() => setEditorOpen(false)} />}
     </div>
   );
 };

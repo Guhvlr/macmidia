@@ -57,7 +57,6 @@ export const StepReview = () => {
           // low/none → NO image (better empty than wrong)
         }
 
-        // ── PRICE ──
         let price = 'R$ 0,00';
         if (res.price) {
           price = `R$ ${String(res.price).replace('.', ',')}`;
@@ -67,11 +66,21 @@ export const StepReview = () => {
           if (m) price = `R$ ${m[0].replace('.', ',')}`;
         }
 
+        // ── SUFFIX ──
+        let suffix = 'cada';
+        const originalLower = (res.original || '').toLowerCase();
+        if (originalLower.match(/\b(kg|kilo|kilos)\b/i)) {
+          suffix = 'KG';
+        } else if (originalLower.match(/\b(cada|unidade|unid|uni|un)\b/i)) {
+          suffix = 'cada';
+        }
+
         return {
           id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: displayName,
           ean: res.match?.ean || 'N/A',
           price,
+          suffix,
           images,
           brand: res.match?.brand,
           line: res.match?.line,
@@ -328,6 +337,14 @@ export const StepReview = () => {
                   <input value={p.price} onChange={e => {
                     const n = [...products]; n[idx].price = e.target.value; setProducts(n);
                   }} className="bg-transparent border-none p-0 text-red-500 font-black h-auto focus:ring-0 w-24 text-[11px]" />
+                  <div className="w-px h-3 bg-white/10" />
+                  
+                  <select value={p.suffix || 'cada'} onChange={e => {
+                    const n = [...products]; n[idx].suffix = e.target.value; setProducts(n);
+                  }} className="bg-white/5 border border-white/10 rounded h-6 px-2 py-0 text-[10px] text-white/60 font-bold outline-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="cada" className="bg-[#0d0d10]">CADA</option>
+                    <option value="KG" className="bg-[#0d0d10]">KG</option>
+                  </select>
                   <div className="w-px h-3 bg-white/10" />
                   <ConfidenceBadge product={p} />
                   {p.mode && (

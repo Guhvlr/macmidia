@@ -317,7 +317,7 @@ const FullEditor = ({ onClose }: EditorProps) => {
                     }
                     <text x={v.badge.x + v.badge.w * pb.currencyOffsetX / 100} y={v.badge.y + v.badge.h * pb.currencyOffsetY / 100} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>
                     <text x={v.badge.x + v.badge.w * pb.valueOffsetX / 100} y={v.badge.y + v.badge.h * pb.valueOffsetY / 100} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
-                    {pb.showSuffix && <text x={v.badge.x + v.badge.w * pb.suffixOffsetX / 100} y={v.badge.y + v.badge.h * pb.suffixOffsetY / 100} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{pb.suffixText}</text>}
+                    {pb.showSuffix && <text x={v.badge.x + v.badge.w * pb.suffixOffsetX / 100} y={v.badge.y + v.badge.h * pb.suffixOffsetY / 100} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{product.suffix || pb.suffixText}</text>}
                     {isSelected && selectedElem === 'badge' && <rect x={v.badge.x - 2} y={v.badge.y - 2} width={v.badge.w + 4} height={v.badge.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={pb.borderRadius * sf} pointerEvents="none" />}
                   </g>
 
@@ -511,7 +511,7 @@ export const StepFinal = () => {
           {pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} preserveAspectRatio="none" /> : <rect x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sf} />}
           <text x={-badgeW / 2 + (pb.currencyOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.currencyOffsetY / 100) * badgeH} fill={pb.currencyColor} fontSize={pb.currencyFontSize * sf} fontFamily={pb.currencyFontFamily} fontWeight="900">R$</text>
           <text x={-badgeW / 2 + (pb.valueOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.valueOffsetY / 100) * badgeH + pb.valueFontSize * sf * 0.15} fill={pb.valueColor} textAnchor="middle" fontSize={pb.valueFontSize * sf} fontFamily={pb.valueFontFamily} fontWeight="900" letterSpacing="-0.05em">{product.price.replace('R$', '').trim()}</text>
-          {pb.showSuffix && <text x={-badgeW / 2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.suffixOffsetY / 100) * badgeH + pb.suffixFontSize * sf * 0.5} fill={pb.suffixColor} textAnchor="middle" fontSize={pb.suffixFontSize * sf} fontWeight="bold">{pb.suffixText}</text>}
+          {pb.showSuffix && <text x={-badgeW / 2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.suffixOffsetY / 100) * badgeH + pb.suffixFontSize * sf * 0.5} fill={pb.suffixColor} textAnchor="middle" fontSize={pb.suffixFontSize * sf} fontWeight="bold">{product.suffix || pb.suffixText}</text>}
         </g>
         <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="900" fontFamily={dc.fontFamily} letterSpacing="-0.02em">
           {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name, nameX, nameY, dc.fontSize, sf, slot.width)}

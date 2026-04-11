@@ -11,6 +11,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
 
 type ElemId = 'image' | 'name' | 'badge' | 'currency' | 'value' | 'suffix';
@@ -123,6 +133,7 @@ export const StepPriceBadge = () => {
   const [clipboard, setClipboard] = useState<any>(null);
   const [marquee, setMarquee] = useState<{ x1: number, y1: number, x2: number, y2: number } | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
 
   useEffect(() => {
@@ -321,14 +332,7 @@ export const StepPriceBadge = () => {
         
         {/* Sync Button */}
         <button
-          onClick={() => {
-            const sourceIdx = selectedSlotIndex ?? 0;
-            const style = getSlotSettings(sourceIdx);
-            if (confirm('Deseja aplicar o visual (Cores e Fontes) deste produto em TODO o projeto? (Mantendo proporções originais)')) {
-              pushHistory();
-              syncAllSlots(style as any, sourceIdx);
-            }
-          }}
+          onClick={() => setSyncModalOpen(true)}
           className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group border border-indigo-400/30"
         >
           <Zap className="w-5 h-5 text-indigo-200 group-hover:scale-125 transition-transform" />
@@ -521,6 +525,37 @@ export const StepPriceBadge = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
+        <AlertDialogContent className="bg-[#0d0d10] border-white/10 text-white rounded-2xl shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
+               <Zap className="w-5 h-5 text-indigo-500" /> Sincronização Mestre
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/50 text-xs font-bold uppercase tracking-wider">
+               Deseja aplicar o visual Deste produto em TODO o projeto?
+               <br/><br/>
+               <span className="text-indigo-400 font-black">As cores e fontes serão copiadas para todos, mas as proporções e tamanhos originais serão mantidos.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              const sourceIdx = selectedSlotIndex ?? 0;
+              const style = getSlotSettings(sourceIdx);
+              pushHistory();
+              syncAllSlots(style as any, sourceIdx);
+              setSyncModalOpen(false);
+              toast.success('Visual sincronizado para todos!');
+            }} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-900/20">
+              <Zap className="w-4 h-4 mr-2" />
+              Sim, Sincronizar Tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

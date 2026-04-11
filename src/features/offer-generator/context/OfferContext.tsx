@@ -16,6 +16,7 @@ export interface ProductItem {
   confidence?: 'exact' | 'high' | 'medium' | 'low' | 'none';
   confidence_reason?: string;
   warning?: string;
+    suffix?: string;
   mode?: 'barcode' | 'description';
 }
 

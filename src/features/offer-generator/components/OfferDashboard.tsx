@@ -56,7 +56,17 @@ export const OfferDashboard: React.FC<OfferDashboardProps> = ({ onOpenProject, o
     }
     setCreating(true);
     try {
-      onCreateProject(formName.trim(), formDate);
+      // Postgres needs YYYY-MM-DD. Convert user input (DD/MM/YYYY or DD/MM)
+      let isoDate = format(new Date(), 'yyyy-MM-dd');
+      const parts = formDate.split('/');
+      if (parts.length >= 2) {
+        const d = parts[0].padStart(2, '0');
+        const m = parts[1].padStart(2, '0');
+        const y = parts[2] && parts[2].length === 4 ? parts[2] : new Date().getFullYear();
+        isoDate = `${y}-${m}-${d}`;
+      }
+
+      onCreateProject(formName.trim(), isoDate);
       setShowModal(false);
       setFormName('');
     } catch (err: any) {

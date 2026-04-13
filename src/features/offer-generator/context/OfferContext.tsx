@@ -276,8 +276,16 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchPresets = useCallback(async () => {
     try {
-      const { data } = await supabase.from('settings').select('value').eq('key', 'offer_generator_presets').maybeSingle();
-      if (data?.value) setPresetsState(JSON.parse(data.value));
+      const { data } = await supabase.from('offer_presets').select('*').order('created_at', { ascending: true });
+      if (data) {
+        setPresetsState(data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          client: d.client,
+          priceBadge: d.price_badge,
+          descConfig: d.desc_config
+        })));
+      }
     } catch (err) {} finally { setIsLoadingPresets(false); }
   }, []);
 
@@ -309,10 +317,20 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const initData = async () => {
       try {
-        const { data: tData } = await supabase.from('settings').select('value').eq('key', 'offer_generator_page_templates').maybeSingle();
-        if (tData?.value) setPageTemplates(JSON.parse(tData.value));
-        const { data: sData } = await supabase.from('settings').select('value').eq('key', 'offer_generator_slot_settings').maybeSingle();
-        if (sData?.value) setSlotSettings(JSON.parse(sData.value));
+        const { data: tData } = await supabase.from('offer_templates').select('*').order('created_at', { ascending: true });
+        if (tData) {
+          setPageTemplates(tData.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            client: d.client,
+            slots: d.slots,
+            slotSettings: d.slot_settings,
+            priceBadge: d.price_badge,
+            descConfig: d.desc_config,
+            config: d.config
+          })));
+        }
+        // Slot_settings e confs antigas que ficavam no Settings foram convertidas para estado 100% local (anti race condition)
       } catch (e) {} finally { setIsLoadingTemplates(false); }
     };
     initData();
@@ -326,51 +344,34 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const saveProjectTemplate = async (name: string) => {
-    const newTemplate = { id: crypto.randomUUID(), name, slots, slotSettings, priceBadge, descConfig, config, client: selectedClientName };
-    const updated = [...pageTemplates, newTemplate];
-    setPageTemplates(updated);
-    await supabase.from('settings').upsert({ key: 'offer_generator_page_templates', value: JSON.stringify(updated) });
+    const id = crypto.randomUUID();
+    const newTemplate = { id, name, slots, slotSettings, priceBadge, descConfig, config, client: selectedClientName };
+    setPageTemplates(prev => [...prev, newTemplate]);
+    
+    await supabase.from('offer_templates').insert({
+      id,
+      name,
+      client: selectedClientName,
+      slots,
+      slot_settings: slotSettings,
+      price_badge: priceBadge,
+      desc_config: descConfig,
+      config
+    });
     toast.success('Template salvo!');
   };
 
   const deleteProjectTemplate = async (templateToDelete: { id?: string; name: string }) => {
-    console.log('[DEBUG-DEEP] deleteProjectTemplate called with:', templateToDelete);
-    console.log('[DEBUG-DEEP] current pageTemplates:', JSON.stringify(pageTemplates));
     try {
-      let updated;
-      if (templateToDelete.id) {
-        console.log('[DEBUG-DEEP] Filtering by ID:', templateToDelete.id);
-        updated = pageTemplates.filter(t => t.id !== templateToDelete.id);
-      } else {
-        console.log('[DEBUG-DEEP] Filtering by Name fallback:', templateToDelete.name);
-        updated = pageTemplates.filter(t => t.name !== templateToDelete.name);
-      }
-
-      console.log('[DEBUG-DEEP] Comparison check for first item:', pageTemplates[0]?.id === templateToDelete.id, 'IDs:', pageTemplates[0]?.id, templateToDelete.id);
-      console.log('[DEBUG-DEEP] New count:', updated.length, 'Old count:', pageTemplates.length);
-
-      if (updated.length === pageTemplates.length) {
-        console.warn('[DEBUG-DEEP] Warning: Filtered array length is the same as before. Deletion failed to match any item!');
-        toast.error('Nenhum template correspondente encontrado para exclusão.');
+      if (!templateToDelete.id) {
+        toast.error('O template não possui ID para deleção.');
         return;
       }
-
-      const { error } = await supabase.from('settings').upsert({ 
-        key: 'offer_generator_page_templates', 
-        value: JSON.stringify(updated) 
-      });
-      
-      if (error) {
-        console.error('[DEBUG-DEEP] Supabase error:', error);
-        throw error;
-      }
-      
-      console.log('[DEBUG-DEEP] Supabase success. Updating local state.');
-      setPageTemplates(updated);
+      setPageTemplates(prev => prev.filter(t => t.id !== templateToDelete.id));
+      await supabase.from('offer_templates').delete().eq('id', templateToDelete.id);
       toast.success('Template removido!');
     } catch (err: any) {
-      console.error('[DEBUG-DEEP] Catch block error:', err);
-      toast.error('Erro ao excluir template: ' + (err.message || 'Erro desconhecido'));
+      toast.error('Erro ao excluir template.');
     }
   };
 
@@ -398,13 +399,13 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } 
     };
     setSlotSettings(updated);
-    await supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(updated) });
+    // REMOVIDO: A atualização no DB global "settings" causava race condition brutal para múltiplos usuários
   };
 
   const replaceSlotSettings = async (index: number, settings: any) => {
     const updated = { ...slotSettings, [index]: settings };
     setSlotSettings(updated);
-    await supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(updated) });
+    // REMOVIDO: A atualização global foi inibida
   };
 
   const getSlotSettings = (index: number) => {
@@ -430,7 +431,6 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const newSettings: Record<number, any> = {};
       for (let i = 0; i < totalSlots; i++) {
           const slotIndex = i % (slots.length || 1);
-          // Mirror the style of the corresponding slot from the current page to all pages
           newSettings[i] = JSON.parse(JSON.stringify(pTemplates[slotIndex] || sourceStyle));
       }
       
@@ -438,12 +438,6 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setPriceBadge(JSON.parse(JSON.stringify(sourceStyle.priceBadge)));
       setDescConfig(JSON.parse(JSON.stringify(sourceStyle.descConfig)));
       
-      await Promise.all([
-        supabase.from('settings').upsert({ key: 'offer_generator_slot_settings', value: JSON.stringify(newSettings) }),
-        supabase.from('settings').upsert({ key: 'offer_generator_price_badge', value: JSON.stringify(sourceStyle.priceBadge) }),
-        supabase.from('settings').upsert({ key: 'offer_generator_desc_config', value: JSON.stringify(sourceStyle.descConfig) })
-      ]);
-
       toast.success('Visual sincronizado em todas as telas!');
     } catch (err) {
       console.error('Sync Error:', err);
@@ -452,12 +446,28 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const setPresets = async (newPresets: any[] | ((prev: any[]) => any[])) => {
-    let updated = typeof newPresets === 'function' ? newPresets(presets) : newPresets;
-    // For newly added presets, attach client
+    const current = presets;
+    let updated = typeof newPresets === 'function' ? newPresets(current) : newPresets;
     updated = updated.map(p => p.client === undefined ? { ...p, client: selectedClientName } : p);
     
     setPresetsState(updated);
-    await supabase.from('settings').upsert({ key: 'offer_generator_presets', value: JSON.stringify(updated) });
+    
+    // Sincronização inteligente sem stringify geral
+    const deletedIds = current.filter(cb => !updated.some(ub => ub.id === cb.id)).map(b => b.id);
+    const addedItems = updated.filter(ub => !current.some(cb => cb.id === ub.id));
+
+    if (deletedIds.length > 0) {
+      await supabase.from('offer_presets').delete().in('id', deletedIds);
+    }
+    for (const item of addedItems) {
+      await supabase.from('offer_presets').insert({
+        id: item.id,
+        name: item.name,
+        client: item.client,
+        price_badge: item.priceBadge,
+        desc_config: item.descConfig
+      });
+    }
   };
 
   const updateConfig = (p: Partial<ArtBoardConfig>) => setConfig(prev => ({ ...prev, ...p }));

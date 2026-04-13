@@ -35,7 +35,7 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 async function runMigration() {
-  const sqlPath = join(__dirname, 'migrations', '20260402210000_whatsapp_ai_integration.sql');
+  const sqlPath = join(__dirname, 'migrations', '20260413120000_offer_generator_scalability.sql');
   const sql = readFileSync(sqlPath, 'utf-8');
 
   console.log('🔄 Executando migration...');

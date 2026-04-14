@@ -140,7 +140,7 @@ serve(async (req) => {
               content: `Você é um parser de listas de supermercado. Analise CADA LINHA da entrada.
 
 REGRA DE DETECÇÃO:
-- Se a linha começa com um número de 7 a 14 dígitos seguido opcionalmente de preço → modo "barcode"
+- Se a linha começa com um número de 1 a 14 dígitos (apenas dígitos) seguido opcionalmente de preço → modo "barcode"
 - Caso contrário → modo "description"
 
 Para CADA linha, retorne um objeto com:
@@ -180,7 +180,7 @@ Retorne JSON: { "items": [...] }`
       // ── FALLBACK: parse without AI ──
       parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => {
         const trimmed = line.trim();
-        const isBarcode = /^\d{7,14}\b/.test(trimmed);
+        const isBarcode = /^\d{1,14}\b/.test(trimmed);
         const priceMatch = trimmed.match(/R?\$?\s*(\d+[,.]\d{2})/);
         const price = priceMatch ? priceMatch[1] : null;
         const cleanName = trimmed
@@ -188,7 +188,7 @@ Retorne JSON: { "items": [...] }`
           .trim();
 
         if (isBarcode) {
-          const barcodeMatch = trimmed.match(/^(\d{7,14})/);
+          const barcodeMatch = trimmed.match(/^(\d{1,14})/);
           return {
             original: trimmed, mode: 'barcode',
             barcode: barcodeMatch ? barcodeMatch[1] : trimmed,

@@ -34,7 +34,14 @@ export const StepReview = () => {
       
       const results: ProductItem[] = (data.results || []).map((res: any) => {
         const found = !!(res.found && res.match);
-        const isBarcode = res.mode === 'barcode';
+        let isBarcode = res.mode === 'barcode';
+        
+        // Verifica se a primeira "palavra" digitada é puramente numérica (mesmo se for um código pequeno como 102116)
+        const firstWord = (res.original || '').trim().split(/\s+/)[0];
+        if (/^\d+$/.test(firstWord)) {
+          isBarcode = true;
+        }
+
         const confidence = res.confidence || 'none';
         
         // ── DISPLAY NAME ──
@@ -49,9 +56,8 @@ export const StepReview = () => {
         // ── EAN LOGIC ──
         let extractedEan = res.match?.ean;
         if (!extractedEan && isBarcode) {
-          // Força a extração de dígitos para tentar carregar a imagem, mesmo se o produto não estiver no banco
-          const digits = (res.original || '').replace(/\D/g, '');
-          if (digits) extractedEan = digits;
+          // Força o código ser a primeira palavra numérica encontrada
+          extractedEan = firstWord;
         }
 
         // ── IMAGE LOGIC ──

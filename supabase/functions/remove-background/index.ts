@@ -80,7 +80,14 @@ serve(async (req) => {
 
     const cutBlob = await phResponse.blob();
     const arrayBuffer = await cutBlob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    // Chunking to avoid Maximum call stack size exceeded
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
 
     return new Response(JSON.stringify({ 
       success: true, 

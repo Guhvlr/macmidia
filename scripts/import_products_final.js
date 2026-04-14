@@ -7,8 +7,7 @@ const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const supabase = createClient(supabaseUrl, anonKey);
 
 const files = [
-  { path: resolve('C:/Users/gusta/Desktop/produtos QR/Lista Brasil .xlsx'), type: 'brasil' },
-  { path: resolve('C:/Users/gusta/Desktop/produtos QR/PRODUTOS MARINHO .xlsx'), type: 'marinho' }
+  { path: resolve('C:/Users/USER/Desktop/Lista total de produtos - ATUALIZADA.xlsx'), type: 'nova_lista' }
 ];
 
 async function importProducts() {
@@ -24,22 +23,10 @@ async function importProducts() {
 
       console.log(`📊 Linhas encontradas: ${raw.length}`);
 
-      if (file.type === 'brasil') {
-        // Formato: [0] EAN, [1] Nome, [2] Categoria
-        raw.forEach(row => {
-          if (row[0] && row[1]) {
-            allProducts.push({
-              ean: String(row[0]).trim(),
-              name: String(row[1]).trim(),
-              category: String(row[2] || '').trim(),
-              brand: '' // Extrair depois se necessário
-            });
-          }
-        });
-      } else if (file.type === 'marinho') {
-        // Formato: [0] CODIGO, [1] Nome (Geralmente pula a primeira linha se for header)
+      if (file.type === 'nova_lista') {
+        // Formato: [0] Codigo Barra, [1] Nome
         raw.forEach((row, i) => {
-          if (i === 0 && String(row[0]).toLowerCase().includes('cod')) return;
+          if (i === 0 && String(row[0]).toLowerCase().includes('cod')) return; // Pula cabeçalho
           if (row[0] && row[1]) {
             allProducts.push({
               ean: String(row[0]).trim(),
@@ -55,13 +42,18 @@ async function importProducts() {
     }
   }
 
-  console.log(`\n💎 Total de produtos processados: ${allProducts.length}`);
+  // Deduplicar produtos baseados no EAN (evita erro do Postgres de onConflictUpdate na mesma transação)
+  const uniqueMap = new Map();
+  allProducts.forEach(p => uniqueMap.set(p.ean, p));
+  const uniqueProducts = Array.from(uniqueMap.values());
+
+  console.log(`\n💎 Total lido: ${allProducts.length} | Total únicos para envio: ${uniqueProducts.length}`);
   console.log('⏳ Enviando para o Supabase em pedaços (chunks)...');
 
   // Enviar em blocos de 500 para evitar timeout
   const chunkSize = 500;
-  for (let i = 0; i < allProducts.length; i += chunkSize) {
-    const chunk = allProducts.slice(i, i + chunkSize);
+  for (let i = 0; i < uniqueProducts.length; i += chunkSize) {
+    const chunk = uniqueProducts.slice(i, i + chunkSize);
     const { error } = await supabase
       .from('products')
       .upsert(chunk, { onConflict: 'ean' });

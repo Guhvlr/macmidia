@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useOffer, ProductItem } from '../context/OfferContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText } from 'lucide-react';
+import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { ProductImageWithFormat } from './ProductImageWithFormat';
 
 export const StepReview = () => {
   const { products, setProducts, setStep, slots, pageCount } = useOffer();
@@ -16,6 +17,169 @@ export const StepReview = () => {
   const [manualSearch, setManualSearch] = useState('');
   const [manualResults, setManualResults] = useState<ProductItem[]>([]);
   const [isSearchingManual, setIsSearchingManual] = useState(false);
+
+  // Background Removal State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [imageFormats, setImageFormats] = useState<Record<string, string>>({});
+  const [processingBg, setProcessingBg] = useState<Set<string>>(new Set());
+  const [bgPreviews, setBgPreviews] = useState<Record<string, string>>({});
+
+  const handleFormatChange = (id: string, format: string) => {
+    setImageFormats(prev => ({ ...prev, [id]: format }));
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === products.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(products.map(p => p.id)));
+  };
+
+  const handleSelectJpgs = () => {
+    const jpgs = products.filter(p => imageFormats[p.id] === 'JPG').map(p => p.id);
+    setSelectedIds(new Set(jpgs));
+    if (jpgs.length > 0) toast.success(`${jpgs.length} imagens JPG selecionadas.`);
+    else toast.info('Nenhuma imagem JPG encontrada na tela atual.');
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  const handleRemoveBackground = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const newProcessing = new Set(processingBg);
+    ids.forEach(id => newProcessing.add(id));
+    setProcessingBg(newProcessing);
+
+    const newPreviews = { ...bgPreviews };
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of ids) {
+      const product = products.find(p => p.id === id);
+      if (!product || !product.images[0]) {
+        failCount++;
+        continue;
+      }
+      
+      const imageUrl = `${product.images[0].split('?')[0].replace(/\.(png|jpg|jpeg)$/i, '')}.jpg`;
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('remove-background', {
+          body: { imageUrl }
+        });
+        if (error) throw error;
+        if (data?.base64) {
+          newPreviews[id] = data.base64;
+          successCount++;
+        } else {
+          throw new Error('Retorno inválido da API Photoroom');
+        }
+      } catch (e: any) {
+         console.error('Photoroom Error', e);
+         failCount++;
+      }
+    }
+
+    setBgPreviews(newPreviews);
+    setProcessingBg(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.delete(id));
+      return next;
+    });
+
+    if (successCount > 0) toast.success(`${successCount} fundos removidos com sucesso. Aprove a prévia para salvar.`);
+    if (failCount > 0) toast.error(`${failCount} falharam ao remover fundo.`);
+  };
+
+  const handleApprovePreviews = async (ids: string[]) => {
+    setProcessingBg(prev => new Set([...prev, ...ids]));
+    let successCount = 0;
+
+    for (const id of ids) {
+      const preview = bgPreviews[id];
+      const product = products.find(p => p.id === id);
+      if (!preview || !product) continue;
+
+      try {
+        const cleanEan = product.ean.replace(/[^a-zA-Z0-9]/g, '');
+        const res = await fetch(preview);
+        const blob = await res.blob();
+        
+        const { error } = await supabase.storage
+          .from('product-images')
+          .upload(`${cleanEan}.png`, blob, { upsert: true, contentType: 'image/png' });
+          
+        if (error) throw error;
+        
+        // Remove from previews to show official PNG
+        const newPreviews = { ...bgPreviews };
+        delete newPreviews[id];
+        setBgPreviews(newPreviews);
+        
+        // Update product to force re-render with new timestamp
+        setProducts(prev => prev.map(p => p.id === id ? {
+            ...p, images: [`https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png?t=${Date.now()}`]
+        } : p));
+        
+        successCount++;
+      } catch (e: any) {
+        toast.error(`Erro ao salvar ${product.name}: ${e.message}`);
+      }
+    }
+
+    setProcessingBg(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.delete(id));
+      return next;
+    });
+    
+    if (successCount > 0) toast.success(`${successCount} imagens salvas como oficiais no banco!`);
+  };
+
+  const handleRestoreOriginals = async (ids: string[]) => {
+    setProcessingBg(prev => new Set([...prev, ...ids]));
+    let successCount = 0;
+
+    for (const id of ids) {
+      const product = products.find(p => p.id === id);
+      if (!product) continue;
+      
+      const preview = bgPreviews[id];
+      if (preview) {
+        // Just cancel preview
+        const newPreviews = { ...bgPreviews };
+        delete newPreviews[id];
+        setBgPreviews(newPreviews);
+        successCount++;
+        continue;
+      }
+
+      // Or delete .png to restore .jpg
+      try {
+        const cleanEan = product.ean.replace(/[^a-zA-Z0-9]/g, '');
+        const { error } = await supabase.storage.from('product-images').remove([`${cleanEan}.png`]);
+        if (error) throw error;
+        
+        setProducts(prev => prev.map(p => p.id === id ? {
+            ...p, images: [`https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png?t=${Date.now()}`]
+        } : p));
+        successCount++;
+      } catch (e: any) {
+        toast.error(`Falha ao restaurar: ${e.message}`);
+      }
+    }
+
+    setProcessingBg(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.delete(id));
+      return next;
+    });
+    
+    if (successCount > 0) toast.info(`${successCount} imagens restauradas.`);
+  };
 
   const getImageUrl = (ean: string) => {
     if (!ean || ean === 'N/A') return '';
@@ -302,23 +466,45 @@ export const StepReview = () => {
       <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
         <div className="max-w-6xl mx-auto space-y-4">
           <div className="flex items-center justify-between mb-4">
-             <h2 className="text-sm font-black uppercase tracking-tighter text-white/60 flex items-center gap-2">
-               <CheckCircle2 className="w-4 h-4 text-green-500" /> Revisão de Produtos ({products.length})
-             </h2>
+             <div className="flex items-center gap-3">
+               <Button onClick={handleSelectAll} variant="outline" className={`h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-widest ${selectedIds.size === products.length && products.length > 0 ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/5 text-white/40 hover:text-white'}`}>
+                 {selectedIds.size === products.length && products.length > 0 ? <CheckSquare className="w-3.5 h-3.5 mr-1" /> : <div className="w-3.5 h-3.5 mr-1 border-2 border-current rounded-sm opacity-50" />}
+                 Todos
+               </Button>
+               <Button onClick={handleSelectJpgs} variant="outline" className="h-8 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors">
+                 <ImageIcon className="w-3.5 h-3.5 mr-1" /> Filtrar apenas JPG
+               </Button>
+               
+               <h2 className="ml-2 text-sm font-black uppercase tracking-tighter text-white/60 flex items-center gap-2">
+                 <CheckCircle2 className="w-4 h-4 text-green-500" /> Revisão ({products.length})
+               </h2>
+             </div>
+             
              <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full">
                Total Telas: {Math.ceil(products.length / (slots.length || 1))}
              </span>
           </div>
 
           {products.map((p, idx) => (
-            <div key={p.id} className={`bg-[#121214] border rounded-2xl p-4 flex gap-6 items-center group hover:border-white/10 transition-all ${
-              p.warning ? 'border-amber-500/20' : 'border-white/5'
+            <div key={p.id} className={`bg-[#121214] border rounded-2xl p-4 flex gap-4 items-center group transition-all relative ${
+              p.warning ? 'border-amber-500/20' : selectedIds.has(p.id) ? 'border-primary/50 bg-primary/5 shadow-[0_0_20px_rgba(217,37,75,0.1)]' : 'border-white/5 hover:border-white/10'
             }`}>
-              <div className="w-6 text-[10px] font-black text-white/10">{idx + 1}</div>
+              {/* Checkbox Overlay */}
+              <div 
+                className={`w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors border ${selectedIds.has(p.id) ? 'bg-primary border-primary text-white' : 'border-white/20 bg-white/5 text-transparent hover:border-white/40'}`}
+                onClick={() => toggleSelect(p.id)}
+              >
+                <CheckSquare className="w-4 h-4" />
+              </div>
+              <div className="w-4 text-[10px] font-black text-white/10 text-center">{idx + 1}</div>
               
               {/* Stack Preview / No Image Placeholder */}
               <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
-                {p.images.length === 0 ? (
+                {processingBg.has(p.id) ? (
+                  <div className="w-full h-full bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                  </div>
+                ) : p.images.length === 0 ? (
                   <div className="w-16 h-16 bg-white/5 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-1">
                     <AlertTriangle className="w-4 h-4 text-amber-500/40" />
                     <span className="text-[6px] font-bold text-white/15 uppercase">Sem foto</span>
@@ -332,7 +518,11 @@ export const StepReview = () => {
                         zIndex: 10 - i,
                         opacity: 1 - i * 0.2
                       }}>
-                      <img src={img} className="w-full h-full object-contain p-1" />
+                      <ProductImageWithFormat 
+                        src={img} 
+                        previewBase64={i === 0 ? bgPreviews[p.id] : undefined}
+                        onFormatChange={(fmt) => { if(i === 0) handleFormatChange(p.id, fmt); }}
+                      />
                     </div>
                   ))
                 )}
@@ -384,13 +574,28 @@ export const StepReview = () => {
 
               {/* Actions */}
               <div className="flex items-center gap-2">
-                <Button onClick={() => loadVariations(p)} variant="outline" className="h-9 px-4 bg-white/5 border-white/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white group-hover:border-blue-500/30">
+                {imageFormats[p.id] === 'JPG' && !bgPreviews[p.id] && (
+                  <Button onClick={() => handleRemoveBackground([p.id])} disabled={processingBg.has(p.id)} variant="outline" className="h-9 px-3 bg-purple-500/10 border-purple-500/20 text-purple-400 hover:bg-purple-500/20 rounded-xl text-[9px] font-black uppercase">
+                    <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Remover Fundo
+                  </Button>
+                )}
+                {bgPreviews[p.id] && (
+                  <div className="flex items-center gap-1">
+                    <Button onClick={() => handleApprovePreviews([p.id])} disabled={processingBg.has(p.id)} className="h-9 px-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[9px] font-black uppercase">
+                       Aprovar
+                    </Button>
+                    <Button onClick={() => handleRestoreOriginals([p.id])} disabled={processingBg.has(p.id)} variant="outline" className="h-9 w-9 p-0 bg-white/5 border-white/10 text-white/40 hover:text-white rounded-xl">
+                       <Undo2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+                <Button onClick={() => loadVariations(p)} variant="outline" className="h-9 px-3 bg-white/5 border-white/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white group-hover:border-blue-500/30">
                   <Layers className="w-3.5 h-3.5 mr-2" /> Variações
                 </Button>
-                <Button onClick={() => handleManualImageUpload(p.id)} variant="outline" className="h-9 px-4 bg-white/5 border-white/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white group-hover:border-green-500/30">
+                <Button onClick={() => handleManualImageUpload(p.id)} variant="outline" className="h-9 px-3 bg-white/5 border-white/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white group-hover:border-green-500/30">
                   <PlusCircle className="w-3.5 h-3.5 mr-2" /> Add Foto
                 </Button>
-                <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 text-white/10 hover:text-red-500 transition-colors">
+                <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -504,13 +709,33 @@ export const StepReview = () => {
       </div>
 
       {/* Floating Action Bar */}
-      {products.length > 0 && (
+      {selectedIds.size > 0 ? (
+        <div className="p-4 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50">
+          <div className="flex items-center gap-4 pl-4">
+            <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-black text-xs">
+              {selectedIds.size}
+            </div>
+            <span className="text-[11px] font-bold tracking-widest uppercase text-white/60">Itens Selecionados</span>
+          </div>
+          <div className="flex items-center gap-3 pr-4">
+            <Button onClick={() => handleRemoveBackground(Array.from(selectedIds))} variant="outline" className="h-12 border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 font-black uppercase tracking-widest rounded-xl text-[10px]">
+              <Sparkles className="w-4 h-4 mr-2" /> Recortar Fundo em Lote
+            </Button>
+            <Button onClick={() => handleApprovePreviews(Array.from(selectedIds))} className="h-12 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-widest rounded-xl text-[10px]">
+              <CheckSquare className="w-4 h-4 mr-2" /> Aprovar Lote
+            </Button>
+            <Button onClick={() => handleRestoreOriginals(Array.from(selectedIds))} variant="outline" className="h-12 border-white/10 text-white/40 hover:text-white bg-white/5 font-black uppercase tracking-widest rounded-xl text-[10px]">
+              <Undo2 className="w-4 h-4 mr-2" /> Restaurar Originais
+            </Button>
+          </div>
+        </div>
+      ) : products.length > 0 ? (
         <div className="p-6 bg-[#0d0d10] border-t border-white/5 flex items-center justify-center gap-4">
           <Button onClick={() => setStep(6)} className="px-12 h-14 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-[0.2em] text-[11px] rounded-2xl shadow-[0_0_30px_rgba(217,37,75,0.2)] transition-all transform hover:scale-105 active:scale-95 group">
              Gerar Tabloide Agora <ChevronRight className="w-4 h-4 ml-3 group-hover:translate-x-1 transition-transform" />
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

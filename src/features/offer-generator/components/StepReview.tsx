@@ -60,7 +60,7 @@ export const StepReview = () => {
 
     for (const id of ids) {
       const resolvedUrl = resolvedUrls[id];
-      if (!product || !resolvedUrl) {
+      if (!resolvedUrl) {
         failCount++;
         continue;
       }

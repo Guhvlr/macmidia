@@ -23,6 +23,7 @@ export const StepReview = () => {
   const [imageFormats, setImageFormats] = useState<Record<string, string>>({});
   const [processingBg, setProcessingBg] = useState<Set<string>>(new Set());
   const [bgPreviews, setBgPreviews] = useState<Record<string, string>>({});
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
 
   const handleFormatChange = (id: string, format: string) => {
     setImageFormats(prev => ({ ...prev, [id]: format }));
@@ -58,17 +59,15 @@ export const StepReview = () => {
     let failCount = 0;
 
     for (const id of ids) {
-      const product = products.find(p => p.id === id);
-      if (!product || !product.images[0]) {
+      const resolvedUrl = resolvedUrls[id];
+      if (!product || !resolvedUrl) {
         failCount++;
         continue;
       }
       
-      const imageUrl = `${product.images[0].split('?')[0].replace(/\.(png|jpg|jpeg)$/i, '')}.jpg`;
-      
       try {
         const { data, error } = await supabase.functions.invoke('remove-background', {
-          body: { imageUrl }
+          body: { imageUrl: resolvedUrl }
         });
         if (error) throw error;
         if (data?.base64) {
@@ -522,6 +521,7 @@ export const StepReview = () => {
                         src={img} 
                         previewBase64={i === 0 ? bgPreviews[p.id] : undefined}
                         onFormatChange={(fmt) => { if(i === 0) handleFormatChange(p.id, fmt); }}
+                        onUrlResolved={(url) => { if(i === 0) setResolvedUrls(prev => ({ ...prev, [p.id]: url })); }}
                       />
                     </div>
                   ))

@@ -31,11 +31,33 @@ serve(async (req) => {
       throw new Error('Chave da API do Photoroom não está configurada no banco (tabela settings: photoroom_api_key).')
     }
 
-    // 1. Baixar a imagem original (isso previne erros caso a URL do Supabase recuse conexões diretas do Photoroom)
-    console.log('Downloading original image:', imageUrl);
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) throw new Error(`Erro ao baixar imagem: ${imgResponse.statusText}`);
-    const imgBlob = await imgResponse.blob();
+    // 1. Baixar a imagem original
+    // Tentamos baixar primeiro via Storage API interna (mais confiável) se for uma URL do próprio projeto
+    let imgBlob: Blob;
+    
+    if (imageUrl.includes(Deno.env.get('SUPABASE_URL') ?? '')) {
+      console.log('Internal project URL detected. Using Storage API download.');
+      const pathParts = imageUrl.split('/public/product-images/');
+      const fileName = pathParts[1]?.split('?')[0]; // Remove timestamp
+      
+      const { data: downloadData, error: downloadError } = await supabase.storage
+        .from('product-images')
+        .download(fileName);
+        
+      if (downloadError) {
+        console.warn('Storage API download failed, falling back to fetch:', downloadError.message);
+        const imgResponse = await fetch(imageUrl);
+        if (!imgResponse.ok) throw new Error(`Erro ao baixar imagem: ${imgResponse.statusText}`);
+        imgBlob = await imgResponse.blob();
+      } else {
+        imgBlob = downloadData;
+      }
+    } else {
+      console.log('External URL detected. Using fetch:', imageUrl);
+      const imgResponse = await fetch(imageUrl);
+      if (!imgResponse.ok) throw new Error(`Erro ao baixar imagem: ${imgResponse.statusText}`);
+      imgBlob = await imgResponse.blob();
+    }
 
     // 2. Enviar para Photoroom
     console.log('Sending to Photoroom...');

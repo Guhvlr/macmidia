@@ -5,6 +5,7 @@ export interface ProductImageWithFormatProps {
   src: string;
   className?: string;
   onFormatChange?: (format: 'PNG' | 'JPG' | 'ERROR' | 'MANUAL') => void;
+  onUrlResolved?: (url: string) => void;
   previewBase64?: string;
 }
 
@@ -12,6 +13,7 @@ export const ProductImageWithFormat = ({
   src,
   className = "w-full h-full object-contain p-1",
   onFormatChange,
+  onUrlResolved,
   previewBase64
 }: ProductImageWithFormatProps) => {
   const isManual = src.startsWith('blob:') || src.startsWith('data:');
@@ -34,6 +36,12 @@ export const ProductImageWithFormat = ({
   useEffect(() => {
     if (onFormatChange) onFormatChange(format);
   }, [format, onFormatChange]);
+
+  useEffect(() => {
+    if (onUrlResolved && format !== 'ERROR') {
+      onUrlResolved(currentUrl);
+    }
+  }, [currentUrl, format, onUrlResolved]);
 
   const handleError = () => {
     if (format === 'PNG' && !isManual) {

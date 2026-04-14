@@ -46,6 +46,14 @@ export const StepReview = () => {
         displayName = displayName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
         displayName = displayName.trim();
 
+        // ── EAN LOGIC ──
+        let extractedEan = res.match?.ean;
+        if (!extractedEan && isBarcode) {
+          // Força a extração de dígitos para tentar carregar a imagem, mesmo se o produto não estiver no banco
+          const digits = (res.original || '').replace(/\D/g, '');
+          if (digits) extractedEan = digits;
+        }
+
         // ── IMAGE LOGIC ──
         // Barcode mode (exact): always use image if found
         // Description mode: only use image if confidence is HIGH or MEDIUM
@@ -55,6 +63,9 @@ export const StepReview = () => {
             images = [getImageUrl(res.match.ean)];
           }
           // low/none → NO image (better empty than wrong)
+        } else if (isBarcode && extractedEan) {
+          // Tenta puxar a imagem do bucket usando o código digitado
+          images = [getImageUrl(extractedEan)];
         }
 
         let price = 'R$ 0,00';
@@ -78,7 +89,7 @@ export const StepReview = () => {
         return {
           id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: displayName,
-          ean: res.match?.ean || 'N/A',
+          ean: extractedEan || 'N/A',
           price,
           suffix,
           images,

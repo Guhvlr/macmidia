@@ -140,7 +140,7 @@ serve(async (req) => {
               content: `Você é um parser de listas de supermercado. Analise CADA LINHA da entrada.
 
 REGRA DE DETECÇÃO:
-- Se a linha começa com um número de 1 a 14 dígitos (apenas dígitos) seguido opcionalmente de preço → modo "barcode"
+- Se a linha começa com um número de exatamente 13 dígitos (apenas dígitos) seguido opcionalmente de preço → modo "barcode"
 - Caso contrário → modo "description"
 
 Para CADA linha, retorne um objeto com:
@@ -180,7 +180,7 @@ Retorne JSON: { "items": [...] }`
       // ── FALLBACK: parse without AI ──
       parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => {
         const trimmed = line.trim();
-        const isBarcode = /^\d{1,14}\b/.test(trimmed);
+        const isBarcode = /^\d{13}\b/.test(trimmed);
         const priceMatch = trimmed.match(/R?\$?\s*(\d+[,.]\d{2})/);
         const price = priceMatch ? priceMatch[1] : null;
         const cleanName = trimmed
@@ -188,7 +188,7 @@ Retorne JSON: { "items": [...] }`
           .trim();
 
         if (isBarcode) {
-          const barcodeMatch = trimmed.match(/^(\d{1,14})/);
+          const barcodeMatch = trimmed.match(/^(\d{13})/);
           return {
             original: trimmed, mode: 'barcode',
             barcode: barcodeMatch ? barcodeMatch[1] : trimmed,
@@ -215,18 +215,20 @@ Retorne JSON: { "items": [...] }`
       if (item.mode === 'barcode') {
         const ean = String(item.barcode || '').replace(/[^0-9]/g, '');
         
-        // Try exact EAN
+        let searchEan = ean.replace(/^0+/, ''); // Remove zero padding from the left
+        if (searchEan === '') searchEan = '0';
+
+        // Try stripped EAN first (handles short codes in DB like 1234)
         let { data } = await supabase
           .from('products')
           .select('*')
-          .eq('ean', ean)
+          .eq('ean', searchEan)
           .maybeSingle();
 
-        // Try zero-padded EAN
-        if (!data && ean.length < 13) {
-          const padded = ean.padStart(13, '0');
-          const res2 = await supabase.from('products').select('*').eq('ean', padded).maybeSingle();
-          data = res2.data;
+        // If not found, try the exact ean (handles edge cases where zeros might have been saved)
+        if (!data && ean !== searchEan) {
+           const res2 = await supabase.from('products').select('*').eq('ean', ean).maybeSingle();
+           data = res2.data;
         }
 
         if (!data) {

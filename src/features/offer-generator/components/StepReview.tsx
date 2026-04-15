@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOffer, ProductItem } from '../context/OfferContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon, ZoomIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ export const StepReview = () => {
   const [manualSearch, setManualSearch] = useState('');
   const [manualResults, setManualResults] = useState<ProductItem[]>([]);
   const [isSearchingManual, setIsSearchingManual] = useState(false);
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   // Background Removal State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -199,9 +200,9 @@ export const StepReview = () => {
         const found = !!(res.found && res.match);
         let isBarcode = res.mode === 'barcode';
         
-        // Verifica se a primeira "palavra" digitada é puramente numérica (mesmo se for um código pequeno como 102116)
+        // Verifica se a primeira "palavra" digitada é um código EAN de 13 dígitos
         const firstWord = (res.original || '').trim().split(/\s+/)[0];
-        if (/^\d+$/.test(firstWord)) {
+        if (/^\d{13}$/.test(firstWord)) {
           isBarcode = true;
         }
 
@@ -385,6 +386,49 @@ export const StepReview = () => {
     }));
   };
 
+  const handleOfficialImageUpload = async (productId: string, file: File) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    let ean = product.ean.replace(/[^a-zA-Z0-9]/g, '');
+    if (!ean || ean === 'NA') {
+      toast.error('Este produto não tem um EAN válido para associar a imagem.');
+      return;
+    }
+
+    try {
+      setProcessingBg(prev => new Set([...prev, productId]));
+      const toastId = toast.loading('Fazendo upload da imagem oficial...');
+
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      const fileName = `${ean}.${ext === 'png' ? 'png' : 'jpg'}`;
+
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, file, { upsert: true, contentType: file.type });
+
+      if (error) throw error;
+      toast.success('Imagem salva como oficial com sucesso!', { id: toastId });
+
+      const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${fileName}?t=${Date.now()}`;
+      
+      setProducts(prev => prev.map(p => {
+        if (p.id === productId) {
+           return { ...p, images: [publicUrl, ...p.images], confidence: 'high' as const, warning: undefined };
+        }
+        return p;
+      }));
+    } catch (e: any) {
+      toast.error(`Falha no upload: ${e.message}`);
+    } finally {
+      setProcessingBg(prev => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  };
+
   const handleManualImageUpload = (productId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -392,8 +436,7 @@ export const StepReview = () => {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        const url = URL.createObjectURL(file);
-        addVariation(productId, url);
+        handleOfficialImageUpload(productId, file);
       }
     };
     input.click();
@@ -504,19 +547,27 @@ export const StepReview = () => {
                     <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
                   </div>
                 ) : p.images.length === 0 ? (
-                  <div className="w-16 h-16 bg-white/5 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-1">
-                    <AlertTriangle className="w-4 h-4 text-amber-500/40" />
-                    <span className="text-[6px] font-bold text-white/15 uppercase">Sem foto</span>
-                  </div>
+                  <label className="w-16 h-16 bg-white/5 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/10 hover:border-white/30 transition-all">
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleOfficialImageUpload(p.id, file);
+                    }} />
+                    <PlusCircle className="w-4 h-4 text-primary/60" />
+                    <span className="text-[6px] font-bold text-primary/80 uppercase text-center leading-tight">Subir<br/>Imagem</span>
+                  </label>
                 ) : (
                   p.images.slice(0, 3).map((img, i) => (
-                    <div key={i} className="absolute transition-transform bg-[#09090b] rounded-xl border border-white/10 shadow-xl overflow-hidden"
+                    <div key={i} className="absolute transition-transform bg-[#09090b] rounded-xl border border-white/10 shadow-xl overflow-hidden group/thumb cursor-zoom-in"
+                      onClick={() => setExpandedImage(i === 0 && bgPreviews[p.id] ? bgPreviews[p.id] : img)}
                       style={{ 
                         width: '64px', height: '64px',
                         transform: `translateX(${i * 8}px) translateY(${-i * 4}px)`,
                         zIndex: 10 - i,
                         opacity: 1 - i * 0.2
                       }}>
+                      <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/40 transition-colors z-[100] flex items-center justify-center p-[1px]">
+                        <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
+                      </div>
                       <ProductImageWithFormat 
                         src={img} 
                         previewBase64={i === 0 ? bgPreviews[p.id] : undefined}
@@ -539,7 +590,9 @@ export const StepReview = () => {
                   const n = [...products]; n[idx].name = e.target.value; setProducts(n);
                 }} className="bg-transparent border-none p-0 text-sm font-black uppercase tracking-tight h-auto focus:ring-0 text-white" />
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <span className="text-[10px] font-mono text-white/20">{p.ean}</span>
+                  <input value={p.ean !== 'N/A' ? p.ean : ''} placeholder="EAN" onChange={e => {
+                    const n = [...products]; n[idx].ean = e.target.value || 'N/A'; setProducts(n);
+                  }} className="bg-transparent border-none p-0 text-[10px] font-mono text-white/50 focus:text-white focus:ring-0 w-24 h-auto" />
                   <div className="w-px h-3 bg-white/10" />
                   <input value={p.price} onChange={e => {
                     const n = [...products]; n[idx].price = e.target.value; setProducts(n);
@@ -736,6 +789,16 @@ export const StepReview = () => {
           </Button>
         </div>
       ) : null}
+
+      {/* Expanded Image Modal */}
+      {expandedImage && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setExpandedImage(null)}>
+          <button className="absolute top-6 right-6 bg-white/10 hover:bg-white/20 p-3 rounded-full text-white transition-colors" onClick={() => setExpandedImage(null)}>
+            <X className="w-5 h-5" />
+          </button>
+          <img src={expandedImage} className="max-w-full max-h-full object-contain select-none cursor-zoom-out animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 };

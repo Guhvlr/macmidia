@@ -423,20 +423,22 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const sourceStyle = getSlotSettings(sourceIdx);
       
       const pTemplates: Record<number, any> = {};
-      for (let i = 0; i < slots.length; i++) {
-          const globalIdx = activePage * slots.length + i;
-          pTemplates[i] = JSON.parse(JSON.stringify(getSlotSettings(globalIdx)));
+      const pageSlotCount = slots.length || 1;
+      
+      for (let i = 0; i < pageSlotCount; i++) {
+          const globalIdx = activePage * pageSlotCount + i;
+          pTemplates[i] = { ...getSlotSettings(globalIdx) };
       }
 
       const newSettings: Record<number, any> = {};
       for (let i = 0; i < totalSlots; i++) {
-          const slotIndex = i % (slots.length || 1);
-          newSettings[i] = JSON.parse(JSON.stringify(pTemplates[slotIndex] || sourceStyle));
+          const slotIndex = i % pageSlotCount;
+          newSettings[i] = { ...(pTemplates[slotIndex] || sourceStyle) };
       }
       
       setSlotSettings(newSettings);
-      setPriceBadge(JSON.parse(JSON.stringify(sourceStyle.priceBadge)));
-      setDescConfig(JSON.parse(JSON.stringify(sourceStyle.descConfig)));
+      setPriceBadge({ ...sourceStyle.priceBadge });
+      setDescConfig({ ...sourceStyle.descConfig });
       
       toast.success('Visual sincronizado em todas as telas!');
     } catch (err) {
@@ -571,33 +573,45 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setActiveProjectName(null);
   }, [resetToDefaults]);
 
+  const contextValue = useMemo(() => ({
+    step, setStep, config, setConfig, updateConfig,
+    slots, setSlots, selectedSlotId, setSelectedSlotId,
+    pageCount, setPageCount,
+    priceBadge, setPriceBadge, updatePriceBadge,
+    descConfig, setDescConfig, updateDescConfig,
+    imageConfig, setImageConfig, updateImageConfig,
+    products, setProducts, layouts, setLayouts,
+    customFonts, setCustomFonts,
+    presets, setPresets, isLoadingPresets,
+    slotSettings, setSlotSettings, 
+    selectedSlotIndex, setSelectedSlotIndex,
+    selectedSlotIndices, setSelectedSlotIndices,
+    zoom, setZoom,
+    panOffset, setPanOffset,
+    pageTemplates, saveProjectTemplate, deleteProjectTemplate, loadProjectTemplate, isLoadingTemplates,
+    getSlotSettings,
+    updateSlotSettings,
+    replaceSlotSettings,
+    syncAllSlots,
+    activePage, setActivePage,
+    undo, pushHistory,
+    selectedClientName, setSelectedClientName, clients,
+    activeProjectId, activeProjectName,
+    openProject, saveProject, closeProject, createAndOpenProject, resetToDefaults,
+  }), [
+    step, config, slots, selectedSlotId, pageCount, priceBadge, descConfig, 
+    imageConfig, products, layouts, customFonts, presets, isLoadingPresets, 
+    slotSettings, selectedSlotIndex, selectedSlotIndices, zoom, panOffset, 
+    pageTemplates, isLoadingTemplates, activePage, activeProjectId, 
+    activeProjectName, selectedClientName, clients, undo, pushHistory,
+    updateConfig, updatePriceBadge, updateDescConfig, updateImageConfig, 
+    saveProjectTemplate, deleteProjectTemplate, loadProjectTemplate, 
+    getSlotSettings, updateSlotSettings, replaceSlotSettings, syncAllSlots, 
+    openProject, saveProject, closeProject, createAndOpenProject, resetToDefaults
+  ]);
+
   return (
-    <OfferContext.Provider value={{
-      step, setStep, config, setConfig, updateConfig,
-      slots, setSlots, selectedSlotId, setSelectedSlotId,
-      pageCount, setPageCount,
-      priceBadge, setPriceBadge, updatePriceBadge,
-      descConfig, setDescConfig, updateDescConfig,
-      imageConfig, setImageConfig, updateImageConfig,
-      products, setProducts, layouts, setLayouts,
-      customFonts, setCustomFonts,
-      presets, setPresets, isLoadingPresets,
-      slotSettings, setSlotSettings, 
-      selectedSlotIndex, setSelectedSlotIndex,
-      selectedSlotIndices, setSelectedSlotIndices,
-      zoom, setZoom,
-      panOffset, setPanOffset,
-      pageTemplates, saveProjectTemplate, deleteProjectTemplate, loadProjectTemplate, isLoadingTemplates,
-      getSlotSettings,
-      updateSlotSettings,
-      replaceSlotSettings,
-      syncAllSlots,
-      activePage, setActivePage,
-      undo, pushHistory,
-      selectedClientName, setSelectedClientName, clients,
-      activeProjectId, activeProjectName,
-      openProject, saveProject, closeProject, createAndOpenProject, resetToDefaults,
-    }}>
+    <OfferContext.Provider value={contextValue}>
       {children}
     </OfferContext.Provider>
   );

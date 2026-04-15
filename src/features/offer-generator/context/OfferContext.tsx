@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { OfferProject } from '../components/OfferDashboard';
@@ -126,7 +126,6 @@ interface OfferContextType {
   loadProjectTemplate: (id: string) => void;
   isLoadingTemplates: boolean;
   getSlotSettings: (index: number) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
-  updateSlotSettings: (index: number, p: any) => void;
   replaceSlotSettings: (index: number, settings: any) => void;
   activePage: number;
   setActivePage: React.Dispatch<React.SetStateAction<number>>;
@@ -200,6 +199,7 @@ const OfferContext = createContext<OfferContextType | undefined>(undefined);
 
 export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [step, setStep] = useState(1);
+  const [activePage, setActivePage] = useState(0);
   const [config, setConfig] = useState<ArtBoardConfig>(defaultConfig);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
@@ -224,6 +224,9 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
 
+  // Undo History
+  const historyRef = useRef<any[]>([]);
+
   useEffect(() => {
     const fetchClients = async () => {
       const { data } = await supabase.from('calendar_clients').select('id, name').order('name');
@@ -236,10 +239,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (selectedClientName) localStorage.setItem('offer_generator_client', selectedClientName);
     else localStorage.removeItem('offer_generator_client');
   }, [selectedClientName]);
-  const [activePage, setActivePage] = useState(0);
 
-  // Undo History
-  const historyRef = useRef<any[]>([]);
   const pushHistory = useCallback(() => {
     const snap = JSON.stringify({ slots, slotSettings, priceBadge, descConfig, imageConfig, config });
     if (historyRef.current[historyRef.current.length - 1] === snap) return;
@@ -429,7 +429,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const globalIdx = activePage * pageSlotCount + i;
           pTemplates[i] = { ...getSlotSettings(globalIdx) };
       }
-
+ 
       const newSettings: Record<number, any> = {};
       for (let i = 0; i < totalSlots; i++) {
           const slotIndex = i % pageSlotCount;
@@ -467,7 +467,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         name: item.name,
         client: item.client,
         price_badge: item.priceBadge,
-        desc_config: item.descConfig
+        desc_config: item.desc_config
       });
     }
   };

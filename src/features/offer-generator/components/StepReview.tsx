@@ -19,6 +19,11 @@ export const StepReview = () => {
   const [isSearchingManual, setIsSearchingManual] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
+  // Manual Create State
+  const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null);
+  const [createData, setCreateData] = useState({ name: '', ean: '', file: null as File | null });
+  const [isCreating, setIsCreating] = useState(false);
+
   // Background Removal State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [imageFormats, setImageFormats] = useState<Record<string, string>>({});
@@ -442,6 +447,62 @@ export const StepReview = () => {
     input.click();
   };
 
+  const handleCreateProduct = async (productId: string) => {
+    if (!createData.name || !createData.ean || !createData.file) {
+      toast.error('Preencha a descrição, EAN e selecione uma imagem.');
+      return;
+    }
+
+    setIsCreating(true);
+    const toastId = toast.loading('Cadastrando produto...', { duration: 10000 });
+
+    try {
+      const ext = createData.file.name.split('.').pop()?.toLowerCase();
+      const cleanEan = createData.ean.replace(/[^a-zA-Z0-9]/g, '');
+      const fileName = `${cleanEan}.${ext === 'png' ? 'png' : 'jpg'}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, createData.file, { upsert: true, contentType: createData.file.type });
+
+      if (uploadError) throw uploadError;
+
+      const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${fileName}?t=${Date.now()}`;
+
+      const { error: dbError } = await supabase.from('products').insert({
+         ean: cleanEan,
+         name: createData.name.toUpperCase(),
+      });
+
+      if (dbError) {
+         console.error('DB Insert Error (might already exist):', dbError);
+      }
+
+      setProducts(prev => prev.map(p => {
+        if (p.id === productId) {
+           return { 
+             ...p, 
+             name: createData.name.toUpperCase(),
+             ean: cleanEan,
+             images: [publicUrl], 
+             confidence: 'high' as const, 
+             warning: undefined 
+           };
+        }
+        return p;
+      }));
+
+      toast.success('Produto cadastrado e associado com sucesso!', { id: toastId });
+      setCreatingProductFor(null);
+      setCreateData({ name: '', ean: '', file: null });
+
+    } catch (e: any) {
+      toast.error(`Falha ao cadastrar: ${e.message}`, { id: toastId });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   // ── Confidence badge renderer ──
   const ConfidenceBadge = ({ product }: { product: ProductItem }) => {
     const c = product.confidence;
@@ -528,6 +589,67 @@ export const StepReview = () => {
           </div>
 
           {products.map((p, idx) => (
+            p.confidence === 'none' ? (
+               <div key={p.id} className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 flex flex-col gap-4 group transition-all relative">
+                  <div className="flex gap-4 items-center">
+                    <div className="w-4 text-[10px] font-black text-white/10 text-center">{idx + 1}</div>
+                    <div className="w-20 h-20 bg-red-500/10 rounded-xl border border-dashed border-red-500/30 flex items-center justify-center">
+                       <AlertTriangle className="w-6 h-6 text-red-500/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black uppercase tracking-tight text-white/80 line-through decoration-red-500/50">{p.name}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-red-500 font-black text-[11px]">{p.price}</span>
+                        <div className="w-px h-3 bg-white/10" />
+                        <span className="text-[10px] font-bold text-red-400">PRODUTO NÃO ENCONTRADO</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={() => setCreatingProductFor(creatingProductFor === p.id ? null : p.id)} className="h-9 px-4 bg-red-600 hover:bg-red-700 text-[10px] font-black uppercase tracking-widest text-white rounded-xl">
+                        Cadastrar Produto
+                      </Button>
+                      <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors">
+                         <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {creatingProductFor === p.id && (
+                     <div className="mt-2 p-4 bg-black/40 rounded-xl border border-red-500/10 animate-in fade-in slide-in-from-top-2">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-4 flex items-center gap-2">
+                           <PlusCircle className="w-3.5 h-3.5" /> Novo Cadastro Manual
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                           <div>
+                              <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Descrição Oficial (Maiúscula)</label>
+                              <Input disabled={isCreating} value={createData.name} onChange={e => setCreateData({...createData, name: e.target.value})} placeholder="Ex: LEITE CONDENSADO ITALAC 395G" className="bg-black/40 border-white/10 h-10 text-xs" />
+                           </div>
+                           <div>
+                              <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Código de Barras (EAN 13)</label>
+                              <Input disabled={isCreating} value={createData.ean} onChange={e => setCreateData({...createData, ean: e.target.value.replace(/\D/g, '')})} placeholder="789..." className="bg-black/40 border-white/10 h-10 text-xs font-mono" maxLength={13} />
+                           </div>
+                           <div>
+                              <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Imagem Principal (JPG/PNG)</label>
+                              <input disabled={isCreating} type="file" accept="image/png, image/jpeg" className="text-xs w-full file:bg-white/5 file:border-none file:text-white/60 file:px-3 file:py-1.5 file:rounded-md file:text-[10px] file:uppercase file:font-bold file:mr-3 text-white/40" 
+                                 onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                       setCreateData({...createData, file: e.target.files[0]});
+                                    }
+                                 }}
+                              />
+                           </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-white/5">
+                           <Button disabled={isCreating} onClick={() => setCreatingProductFor(null)} variant="outline" className="h-8 px-4 bg-white/5 text-[9px] font-black uppercase text-white/40 border-transparent">Cancelar</Button>
+                           <Button disabled={isCreating} onClick={() => handleCreateProduct(p.id)} className="h-8 px-6 bg-red-600 hover:bg-red-700 text-[10px] font-black uppercase text-white rounded-lg">
+                              {isCreating ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-2" />}
+                              Salvar no Banco
+                           </Button>
+                        </div>
+                     </div>
+                  )}
+               </div>
+            ) : (
             <div key={p.id} className={`bg-[#121214] border rounded-2xl p-4 flex gap-4 items-center group transition-all relative ${
               p.warning ? 'border-amber-500/20' : selectedIds.has(p.id) ? 'border-primary/50 bg-primary/5 shadow-[0_0_20px_rgba(217,37,75,0.1)]' : 'border-white/5 hover:border-white/10'
             }`}>
@@ -745,6 +867,7 @@ export const StepReview = () => {
                 </div>
               )}
             </div>
+            )
           ))}
 
           {products.length === 0 && (

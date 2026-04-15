@@ -78,21 +78,40 @@ function assessConfidence(
   // Word overlap between user input and DB match
   const overlap = wordOverlap(displayName, matchName);
 
+  // REJEIÇÃO 1: Conflito claro de marca.
+  // Se a IA extraiu uma marca e o banco de dados tem uma marca cadastrada, e elas não correspondem: Risco Altíssimo.
+  const hasBrandConflict = !brandMatch && normBrand.length >= 2 && normMatchBrand.length >= 2;
+  if (hasBrandConflict) {
+    return { level: 'low', reason: `Conflito de marcas: Solicitado '${brandHint}', encontrado '${matchBrand}'` };
+  }
+
+  // REJEIÇÃO 2: Marca exigida mas ignorada.
+  // Se a IA exigiu uma marca, o banco não tinha campo marca cadastrada, e a marca não aparece nem no nome do produto:
+  if (!brandMatch && normBrand.length >= 2) {
+    // Nós perdoamos apenas se a sobreposição for virtualmente perfeita (>= 0.8)
+    if (overlap >= 0.8) {
+      return { level: 'medium', reason: 'Extrema similaridade de texto superou ausência da marca' };
+    }
+    return { level: 'low', reason: `Marca '${brandHint}' não localizada no nome do produto` };
+  }
+
   // ── HIGH: brand + (type OR strong overlap) ──
-  if (brandMatch && (typeMatch || overlap >= 0.5)) {
-    return { level: 'high', reason: 'Marca e tipo de produto correspondem' };
+  if (brandMatch && (typeMatch || overlap >= 0.4)) {
+    return { level: 'high', reason: 'Marca e descritor principal batem com o banco' };
   }
 
   // ── MEDIUM: brand only, or high overlap without brand ──
   if (brandMatch) {
-    return { level: 'medium', reason: 'Marca corresponde, mas variedade/tamanho não confirmados' };
+    return { level: 'medium', reason: 'Marca exata, mas sem tipo/variedade clara' };
   }
-  if (overlap >= 0.6) {
-    return { level: 'medium', reason: 'Palavras-chave correspondem parcialmente' };
+  
+  // Se nenhuma marca foi citada pela IA e pelo input, exigimos um parentesco maior nas palavras
+  if (overlap >= 0.7) {
+    return { level: 'medium', reason: 'Textos muito semelhantes, sem marca especificada' };
   }
 
   // ── LOW ──
-  return { level: 'low', reason: 'Baixa correspondência com o banco' };
+  return { level: 'low', reason: 'Baixo índice de palavras em comum' };
 }
 
 // ═══════════════════════════════════════════════
@@ -156,13 +175,16 @@ Para CADA linha, retorne um objeto com:
 }
 
 REGRAS CRÍTICAS:
-1. display_name deve preservar EXATAMENTE o texto do usuário, apenas removendo o preço e símbolos de moeda
+1. display_name deve preservar EXATAMENTE o texto do usuário (INCLUINDO pesos e medidas como 1,02KG, 500G, etc), APENAS removendo o preço final e símbolos de moeda.
 2. NÃO corrija erros de escrita no display_name
 3. NÃO substitua marcas ou nomes
 4. NÃO resuma nem abrevie
 5. search_name pode ser mais flexível/simplificado para melhorar a busca
 6. brand_hint deve conter APENAS a marca principal (uma palavra ou nome composto)
 7. type_hint deve conter APENAS o tipo genérico do produto
+8. REGRA DE PREÇO: Identifique como preço SOMENTE valores com contexto monetário (precedidos por R$, após separadores como '-' ou '|', ou o último valor numérico isolado).
+9. REGRA DE PREÇO: NUNCA trate números seguidos de unidades de medida (KG, G, MG, ML, L, LT, UN, CX, FD, PCT) como preço. Exemplo: "1,02KG" é medida, não preço.
+10. REGRA DE PREÇO: Em caso de múltiplos números, sempre priorize o ÚLTIMO valor da linha como preço oficial.
 
 Retorne JSON: { "items": [...] }`
             },
@@ -181,11 +203,18 @@ Retorne JSON: { "items": [...] }`
       parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => {
         const trimmed = line.trim();
         const isBarcode = /^\d{13}\b/.test(trimmed);
-        const priceMatch = trimmed.match(/R?\$?\s*(\d+[,.]\d{2})/);
-        const price = priceMatch ? priceMatch[1] : null;
-        const cleanName = trimmed
-          .replace(/\s*[-–—]?\s*R?\$?\s*\d+[,.]\d{2}/gi, '')
-          .trim();
+        
+        // Pega todos os números formatados como preço que NÃO são seguidos por medidas
+        const priceMatches = [...trimmed.matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})(?!\s*(?:KG|G|MG|ML|L|LT|UN|CX|FD|PCT)\b)/gi)];
+        // Prioriza o último match como preço
+        const price = priceMatches.length > 0 ? priceMatches[priceMatches.length - 1][1] : null;
+
+        // Limpa apenas a ocorrência que virou o preço
+        let cleanName = trimmed;
+        if (price) {
+          const priceRegex = new RegExp(`\\s*[-–—|]?\\s*(?:R\\$\\s*)?${price.replace('.', '\\.')}\\s*$`, 'i');
+          cleanName = cleanName.replace(priceRegex, '').trim();
+        }
 
         if (isBarcode) {
           const barcodeMatch = trimmed.match(/^(\d{13})/);
@@ -267,7 +296,7 @@ Retorne JSON: { "items": [...] }`
 
       const { data: matches, error: rpcErr } = await supabase.rpc('search_products_fuzzy', {
         search_text: searchText,
-        match_threshold: 0.1,
+        match_threshold: 0.5,
       });
 
       if (rpcErr || !matches || matches.length === 0) {
@@ -280,19 +309,41 @@ Retorne JSON: { "items": [...] }`
           match: null,
           confidence: 'none',
           confidence_reason: 'Nenhum produto encontrado no banco',
-          warning: 'Imagem não encontrada no banco',
         });
         continue;
       }
 
-      const bestMatch = matches[0];
-      const conf = assessConfidence(
-        item.brand_hint || '',
-        item.type_hint || '',
-        userDisplayName,
-        bestMatch.name || '',
-        bestMatch.brand || ''
-      );
+      let bestMatch = null;
+      let bestConf = { level: 'low', reason: 'Baixa correspondência' };
+
+      for (const m of matches) {
+        const conf = assessConfidence(
+          item.brand_hint || '',
+          item.type_hint || '',
+          userDisplayName,
+          m.name || '',
+          m.brand || ''
+        );
+        if (conf.level === 'high' || conf.level === 'medium') {
+          bestMatch = m;
+          bestConf = conf;
+          break;
+        }
+      }
+
+      if (!bestMatch) {
+        results.push({
+          original: item.original,
+          mode: 'description',
+          display_name: userDisplayName,  // ← preserve user text ALWAYS
+          price: item.price || null,
+          found: false,
+          match: null,
+          confidence: 'none',
+          confidence_reason: 'Nenhum contato com similaridade aceitável encontrado (Medium/High)',
+        });
+        continue;
+      }
 
       results.push({
         original: item.original,
@@ -301,9 +352,9 @@ Retorne JSON: { "items": [...] }`
         price: item.price || null,
         found: true,
         match: bestMatch,
-        confidence: conf.level,
-        confidence_reason: conf.reason,
-        warning: (conf.level === 'high' || conf.level === 'medium') ? undefined : 'Imagem não encontrada com confiança',
+        confidence: bestConf.level,
+        confidence_reason: bestConf.reason,
+        warning: undefined,
       });
     }
 

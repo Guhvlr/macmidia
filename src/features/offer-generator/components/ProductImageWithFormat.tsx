@@ -7,6 +7,7 @@ export interface ProductImageWithFormatProps {
   onFormatChange?: (format: 'PNG' | 'JPG' | 'ERROR' | 'MANUAL') => void;
   onUrlResolved?: (url: string) => void;
   previewBase64?: string;
+  isFallback?: boolean;
 }
 
 export const ProductImageWithFormat = ({
@@ -14,15 +15,20 @@ export const ProductImageWithFormat = ({
   className = "w-full h-full object-contain p-1",
   onFormatChange,
   onUrlResolved,
-  previewBase64
+  previewBase64,
+  isFallback
 }: ProductImageWithFormatProps) => {
-  const isManual = src.startsWith('blob:') || src.startsWith('data:');
-  const baseSrc = !isManual ? src.split('?')[0].replace(/\.(png|jpg|jpeg)$/i, '') : src;
+  const isManual = src?.startsWith('blob:') || src?.startsWith('data:');
+  const baseSrc = (src && !isManual) ? src.split('?')[0].replace(/\.(png|jpg|jpeg)$/i, '') : (src || '');
   
-  const [currentUrl, setCurrentUrl] = useState<string>(src);
-  const [format, setFormat] = useState<'PNG' | 'JPG' | 'ERROR' | 'MANUAL'>(isManual ? 'MANUAL' : 'PNG');
+  const [currentUrl, setCurrentUrl] = useState<string>(src || '');
+  const [format, setFormat] = useState<'PNG' | 'JPG' | 'ERROR' | 'MANUAL'>(isManual ? 'MANUAL' : (src ? 'PNG' : 'ERROR'));
 
   useEffect(() => {
+    if (!src) {
+      setFormat('ERROR');
+      return;
+    }
     if (isManual) {
       setCurrentUrl(src);
       setFormat('MANUAL');
@@ -33,22 +39,45 @@ export const ProductImageWithFormat = ({
     }
   }, [src, isManual, baseSrc]);
 
-  useEffect(() => {
-    if (onFormatChange) onFormatChange(format);
-  }, [format, onFormatChange]);
+  const onFormatChangeRef = React.useRef(onFormatChange);
+  const onUrlResolvedRef = React.useRef(onUrlResolved);
 
   useEffect(() => {
-    if (onUrlResolved && format !== 'ERROR') {
-      onUrlResolved(currentUrl);
+    onFormatChangeRef.current = onFormatChange;
+  }, [onFormatChange]);
+
+  useEffect(() => {
+    onUrlResolvedRef.current = onUrlResolved;
+  }, [onUrlResolved]);
+
+  useEffect(() => {
+    if (onFormatChangeRef.current) onFormatChangeRef.current(format);
+  }, [format]);
+
+  useEffect(() => {
+    if (onUrlResolvedRef.current && format !== 'ERROR') {
+      onUrlResolvedRef.current(currentUrl);
     }
-  }, [currentUrl, format, onUrlResolved]);
+  }, [currentUrl, format]);
 
   const handleError = () => {
-    if (format === 'PNG' && !isManual) {
-      // Se falhou o PNG, tenta o JPG
-      setCurrentUrl(`${baseSrc}.jpg?t=${Date.now()}`);
-      setFormat('JPG');
-    } else if (format === 'JPG' && !isManual) {
+    if (isManual) {
+      setFormat('ERROR');
+      return;
+    }
+
+    const formats = ['PNG', 'JPG', 'WEBP', 'JPEG', 'PNG_UPPER', 'JPG_UPPER'];
+    const currentIndex = formats.indexOf(format);
+    const nextFormat = formats[currentIndex + 1];
+
+    if (nextFormat) {
+      let ext = nextFormat.toLowerCase().replace('_upper', '');
+      if (nextFormat.includes('_upper')) {
+        ext = ext.toUpperCase();
+      }
+      setCurrentUrl(`${baseSrc}.${ext}?t=${Date.now()}`);
+      setFormat(nextFormat as any);
+    } else {
       setFormat('ERROR');
     }
   };
@@ -67,8 +96,17 @@ export const ProductImageWithFormat = ({
   if (format === 'ERROR') {
     return (
        <div className={`bg-white/5 flex flex-col items-center justify-center gap-1 border border-dashed border-white/10 ${className}`}>
-         <AlertTriangle className="w-4 h-4 text-amber-500/40" />
-         <span className="text-[6px] font-bold text-white/15 uppercase text-center leading-tight">Link Quebrado</span>
+         {isFallback ? (
+           <>
+             <ImageIcon className="w-5 h-5 text-white/10" />
+             <span className="text-[6px] font-bold text-white/20 uppercase text-center leading-tight tracking-widest">Sem Foto</span>
+           </>
+         ) : (
+           <>
+             <AlertTriangle className="w-4 h-4 text-amber-500/40" />
+             <span className="text-[6px] font-bold text-white/15 uppercase text-center leading-tight">Link Quebrado</span>
+           </>
+         )}
        </div>
     );
   }

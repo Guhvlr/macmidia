@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOffer, ProductItem } from '../context/OfferContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon, ZoomIn } from 'lucide-react';
+import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, ShieldCheck, ShieldAlert, ShieldX, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon, ZoomIn, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ export const StepReview = () => {
   const [manualResults, setManualResults] = useState<ProductItem[]>([]);
   const [isSearchingManual, setIsSearchingManual] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [loadingVariationsId, setLoadingVariationsId] = useState<string | null>(null);
 
   // Manual Create State
   const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null);
@@ -186,9 +187,16 @@ export const StepReview = () => {
     if (successCount > 0) toast.info(`${successCount} imagens restauradas.`);
   };
 
+  const padEan = (ean: string) => {
+    const clean = (ean || '').replace(/[^0-9]/g, '');
+    if (clean.length > 1 && clean.length < 13) return clean.padStart(13, '0');
+    return clean;
+  };
+
   const getImageUrl = (ean: string) => {
     if (!ean || ean === 'N/A') return '';
-    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${ean.replace(/[^a-zA-Z0-9]/g, '')}.png?t=${Date.now()}`;
+    const cleanEan = padEan(ean);
+    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png?t=${Date.now()}`;
   };
 
   // ═══════════════════════════════════════════
@@ -201,7 +209,7 @@ export const StepReview = () => {
       const { data, error } = await supabase.functions.invoke('process-products', { body: { bulkInput } });
       if (error) throw error;
       
-      const results: ProductItem[] = (data.results || []).map((res: any) => {
+      const results: ProductItem[] = (data.results || []).map((res: any, idx: number) => {
         const found = !!(res.found && res.match);
         let isBarcode = res.mode === 'barcode';
         
@@ -230,16 +238,15 @@ export const StepReview = () => {
         }
 
         // ── IMAGE LOGIC ──
-        // Barcode mode (exact): always use image if found
-        // Description mode: only use image if confidence is HIGH or MEDIUM
+        // O usuário quer "cair automático", então carregamos a foto para QUALQUER match encontrado
+        // marcando apenas com banner visual se for baixa confiança.
         let images: string[] = [];
         if (found) {
-          if (isBarcode || confidence === 'exact' || confidence === 'high' || confidence === 'medium') {
+          // Carregar sempre se houver um EAN no match
+          if (res.match.ean) {
             images = [getImageUrl(res.match.ean)];
           }
-          // low/none → NO image (better empty than wrong)
         } else if (isBarcode && extractedEan) {
-          // Tenta puxar a imagem do bucket usando o código digitado
           images = [getImageUrl(extractedEan)];
         }
 
@@ -247,9 +254,12 @@ export const StepReview = () => {
         if (res.price) {
           price = `R$ ${String(res.price).replace('.', ',')}`;
         } else {
-          // Fallback: extract from original text
-          const m = (res.original || '').match(/(\d+[,.]\d{2})/);
-          if (m) price = `R$ ${m[0].replace('.', ',')}`;
+          // Fallback: extração ultra-tolerante do texto original
+          // Procura pelo último número que se pareça com preço (X.XX ou X,XX) que não seja medida
+          const priceMatches = [...(res.original || '').matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})(?!\s*(?:KG|G|MG|ML|L|LT|UN|CX|FD|PCT)\b)/gi)];
+          if (priceMatches.length > 0) {
+             price = `R$ ${priceMatches[priceMatches.length - 1][1].replace('.', ',')}`;
+          }
         }
 
         // ── SUFFIX ──
@@ -262,9 +272,9 @@ export const StepReview = () => {
         }
 
         return {
-          id: res.match?.id || `prod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: res.match?.id || `nf-${(res.original || '').toLowerCase().replace(/[^a-z0-9]/g, '-')}-${idx}`,
           name: displayName,
-          ean: extractedEan || 'N/A',
+          ean: extractedEan || (isBarcode ? firstWord : 'N/A'),
           price,
           suffix,
           images,
@@ -300,6 +310,7 @@ export const StepReview = () => {
   };
 
   const loadVariations = async (product: ProductItem) => {
+    setLoadingVariationsId(product.id);
     setIsProcessing(true);
     try {
       let query = (supabase.from('products') as any).select('*');
@@ -313,6 +324,7 @@ export const StepReview = () => {
         if (searchTerm.length < 3) {
           toast.error('Nome muito curto para busca inteligente.');
           setIsProcessing(false);
+          setLoadingVariationsId(null);
           return;
         }
         query = query.ilike('name', `%${searchTerm}%`);
@@ -335,6 +347,7 @@ export const StepReview = () => {
       toast.error(e.message);
     } finally {
       setIsProcessing(false);
+      setLoadingVariationsId(null);
     }
   };
 
@@ -395,8 +408,10 @@ export const StepReview = () => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
-    let ean = product.ean.replace(/[^a-zA-Z0-9]/g, '');
-    if (!ean || ean === 'NA') {
+    let rawEan = product.ean.replace(/[^0-9]/g, '');
+    let ean = padEan(rawEan);
+
+    if (!ean || ean === '0000000000000' || ean === 'NA') {
       toast.error('Este produto não tem um EAN válido para associar a imagem.');
       return;
     }
@@ -406,20 +421,33 @@ export const StepReview = () => {
       const toastId = toast.loading('Fazendo upload da imagem oficial...');
 
       const ext = file.name.split('.').pop()?.toLowerCase();
+      // Sempre salvar como .png ou .jpg baseado no arquivo, mas preferencialmente .png se for fundo removido futuramente
       const fileName = `${ean}.${ext === 'png' ? 'png' : 'jpg'}`;
 
+      // 1. Upload para Storage
       const { data, error } = await supabase.storage
         .from('product-images')
         .upload(fileName, file, { upsert: true, contentType: file.type });
 
       if (error) throw error;
-      toast.success('Imagem salva como oficial com sucesso!', { id: toastId });
+
+      // 2. Sincronizar com Tabela de Produtos (Permanente)
+      const { error: dbError } = await supabase.from('products').upsert({
+        ean: ean,
+        name: product.name.toUpperCase(),
+      }, { onConflict: 'ean' });
+
+      if (dbError) {
+        console.error('Erro ao sincronizar produto no banco:', dbError);
+      }
+
+      toast.success('Imagem salva e vinculada ao código com sucesso!', { id: toastId });
 
       const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${fileName}?t=${Date.now()}`;
       
       setProducts(prev => prev.map(p => {
         if (p.id === productId) {
-           return { ...p, images: [publicUrl, ...p.images], confidence: 'high' as const, warning: undefined };
+           return { ...p, ean, images: [publicUrl, ...p.images], confidence: 'high' as const, warning: undefined };
         }
         return p;
       }));
@@ -434,17 +462,58 @@ export const StepReview = () => {
     }
   };
 
-  const handleManualImageUpload = (productId: string) => {
+  const handleManualImageUpload = (id: string) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        handleOfficialImageUpload(productId, file);
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      const p = products.find(x => x.id === id);
+      if (!p) return;
+
+      const toastId = toast.loading('Processando imagem...');
+      try {
+        // Se tiver qualquer código numérico, tentamos salvar como oficial para vincular no banco
+        const cleanEan = p.ean?.replace(/[^0-9]/g, '');
+        if (cleanEan && cleanEan !== '' && cleanEan !== '0' && p.ean !== 'N/A' && p.ean !== 'NA') {
+          await handleOfficialImageUpload(id, file);
+          toast.dismiss(toastId);
+          return;
+        }
+
+        // Caso contrário, upload genérico apenas para esta oferta
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        const filePath = `product-manual/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+
+        setProducts(prev => prev.map(old => old.id === id ? { ...old, images: [publicUrl, ...old.images] } : old));
+        toast.success('Foto adicionada à oferta!', { id: toastId });
+      } catch (err: any) {
+        toast.error('Erro no upload: ' + err.message, { id: toastId });
       }
     };
     input.click();
+  };
+
+  const toggleSuffix = (id: string) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id === id) {
+        return { ...p, suffix: p.suffix === 'KG' ? 'cada' : 'KG' };
+      }
+      return p;
+    }));
   };
 
   const handleCreateProduct = async (productId: string) => {
@@ -521,9 +590,9 @@ export const StepReview = () => {
         <ShieldAlert className="w-2.5 h-2.5" /> MÉDIA
       </span>
     );
-    if (c === 'low') return (
-      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full border border-red-500/20">
-        <ShieldX className="w-2.5 h-2.5" /> BAIXA
+    if (c === 'low' || c === 'none') return (
+      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+        <ShieldAlert className="w-2.5 h-2.5" /> CONFERIR
       </span>
     );
     return (
@@ -588,289 +657,7 @@ export const StepReview = () => {
              </span>
           </div>
 
-          {products.map((p, idx) => (
-            p.confidence === 'none' ? (
-               <div key={p.id} className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 flex flex-col gap-4 group transition-all relative">
-                  <div className="flex gap-4 items-center">
-                    <div className="w-4 text-[10px] font-black text-white/10 text-center">{idx + 1}</div>
-                    <div className="w-20 h-20 bg-red-500/10 rounded-xl border border-dashed border-red-500/30 flex items-center justify-center">
-                       <AlertTriangle className="w-6 h-6 text-red-500/50" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black uppercase tracking-tight text-white/80 line-through decoration-red-500/50">{p.name}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-red-500 font-black text-[11px]">{p.price}</span>
-                        <div className="w-px h-3 bg-white/10" />
-                        <span className="text-[10px] font-bold text-red-400">PRODUTO NÃO ENCONTRADO</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button onClick={() => setCreatingProductFor(creatingProductFor === p.id ? null : p.id)} className="h-9 px-4 bg-red-600 hover:bg-red-700 text-[10px] font-black uppercase tracking-widest text-white rounded-xl">
-                        Cadastrar Produto
-                      </Button>
-                      <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors">
-                         <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {creatingProductFor === p.id && (
-                     <div className="mt-2 p-4 bg-black/40 rounded-xl border border-red-500/10 animate-in fade-in slide-in-from-top-2">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-4 flex items-center gap-2">
-                           <PlusCircle className="w-3.5 h-3.5" /> Novo Cadastro Manual
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                           <div>
-                              <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Descrição Oficial (Maiúscula)</label>
-                              <Input disabled={isCreating} value={createData.name} onChange={e => setCreateData({...createData, name: e.target.value})} placeholder="Ex: LEITE CONDENSADO ITALAC 395G" className="bg-black/40 border-white/10 h-10 text-xs" />
-                           </div>
-                           <div>
-                              <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Código de Barras (EAN 13)</label>
-                              <Input disabled={isCreating} value={createData.ean} onChange={e => setCreateData({...createData, ean: e.target.value.replace(/\D/g, '')})} placeholder="789..." className="bg-black/40 border-white/10 h-10 text-xs font-mono" maxLength={13} />
-                           </div>
-                           <div>
-                              <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Imagem Principal (JPG/PNG)</label>
-                              <input disabled={isCreating} type="file" accept="image/png, image/jpeg" className="text-xs w-full file:bg-white/5 file:border-none file:text-white/60 file:px-3 file:py-1.5 file:rounded-md file:text-[10px] file:uppercase file:font-bold file:mr-3 text-white/40" 
-                                 onChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) {
-                                       setCreateData({...createData, file: e.target.files[0]});
-                                    }
-                                 }}
-                              />
-                           </div>
-                        </div>
-                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-white/5">
-                           <Button disabled={isCreating} onClick={() => setCreatingProductFor(null)} variant="outline" className="h-8 px-4 bg-white/5 text-[9px] font-black uppercase text-white/40 border-transparent">Cancelar</Button>
-                           <Button disabled={isCreating} onClick={() => handleCreateProduct(p.id)} className="h-8 px-6 bg-red-600 hover:bg-red-700 text-[10px] font-black uppercase text-white rounded-lg">
-                              {isCreating ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-2" />}
-                              Salvar no Banco
-                           </Button>
-                        </div>
-                     </div>
-                  )}
-               </div>
-            ) : (
-            <div key={p.id} className={`bg-[#121214] border rounded-2xl p-4 flex gap-4 items-center group transition-all relative ${
-              p.warning ? 'border-amber-500/20' : selectedIds.has(p.id) ? 'border-primary/50 bg-primary/5 shadow-[0_0_20px_rgba(217,37,75,0.1)]' : 'border-white/5 hover:border-white/10'
-            }`}>
-              {/* Checkbox Overlay */}
-              <div 
-                className={`w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors border ${selectedIds.has(p.id) ? 'bg-primary border-primary text-white' : 'border-white/20 bg-white/5 text-transparent hover:border-white/40'}`}
-                onClick={() => toggleSelect(p.id)}
-              >
-                <CheckSquare className="w-4 h-4" />
-              </div>
-              <div className="w-4 text-[10px] font-black text-white/10 text-center">{idx + 1}</div>
-              
-              {/* Stack Preview / No Image Placeholder */}
-              <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
-                {processingBg.has(p.id) ? (
-                  <div className="w-full h-full bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center gap-2">
-                    <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
-                  </div>
-                ) : p.images.length === 0 ? (
-                  <label className="w-16 h-16 bg-white/5 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/10 hover:border-white/30 transition-all">
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleOfficialImageUpload(p.id, file);
-                    }} />
-                    <PlusCircle className="w-4 h-4 text-primary/60" />
-                    <span className="text-[6px] font-bold text-primary/80 uppercase text-center leading-tight">Subir<br/>Imagem</span>
-                  </label>
-                ) : (
-                  p.images.slice(0, 3).map((img, i) => (
-                    <div key={i} className="absolute transition-transform bg-[#09090b] rounded-xl border border-white/10 shadow-xl overflow-hidden group/thumb cursor-zoom-in"
-                      onClick={() => setExpandedImage(i === 0 && bgPreviews[p.id] ? bgPreviews[p.id] : img)}
-                      style={{ 
-                        width: '64px', height: '64px',
-                        transform: `translateX(${i * 8}px) translateY(${-i * 4}px)`,
-                        zIndex: 10 - i,
-                        opacity: 1 - i * 0.2
-                      }}>
-                      <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/40 transition-colors z-[100] flex items-center justify-center p-[1px]">
-                        <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
-                      </div>
-                      <ProductImageWithFormat 
-                        src={img} 
-                        previewBase64={i === 0 ? bgPreviews[p.id] : undefined}
-                        onFormatChange={(fmt) => { if(i === 0) handleFormatChange(p.id, fmt); }}
-                        onUrlResolved={(url) => { if(i === 0) setResolvedUrls(prev => ({ ...prev, [p.id]: url })); }}
-                      />
-                    </div>
-                  ))
-                )}
-                {p.images.length > 3 && (
-                  <div className="absolute right-0 bottom-0 bg-primary rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-black z-20 border-2 border-[#121214]">
-                    +{p.images.length - 3}
-                  </div>
-                )}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <Input value={p.name} onChange={e => {
-                  const n = [...products]; n[idx].name = e.target.value; setProducts(n);
-                }} className="bg-transparent border-none p-0 text-sm font-black uppercase tracking-tight h-auto focus:ring-0 text-white" />
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <input value={p.ean !== 'N/A' ? p.ean : ''} placeholder="EAN" onChange={e => {
-                    const n = [...products]; n[idx].ean = e.target.value || 'N/A'; setProducts(n);
-                  }} className="bg-transparent border-none p-0 text-[10px] font-mono text-white/50 focus:text-white focus:ring-0 w-24 h-auto" />
-                  <div className="w-px h-3 bg-white/10" />
-                  <input value={p.price} onChange={e => {
-                    const n = [...products]; n[idx].price = e.target.value; setProducts(n);
-                  }} className="bg-transparent border-none p-0 text-red-500 font-black h-auto focus:ring-0 w-24 text-[11px]" />
-                  <div className="w-px h-3 bg-white/10" />
-                  
-                  <select value={p.suffix || 'cada'} onChange={e => {
-                    const n = [...products]; n[idx].suffix = e.target.value; setProducts(n);
-                  }} className="bg-white/5 border border-white/10 rounded h-6 px-2 py-0 text-[10px] text-white/60 font-bold outline-none cursor-pointer hover:bg-white/10 transition-colors">
-                    <option value="cada" className="bg-[#0d0d10]">CADA</option>
-                    <option value="KG" className="bg-[#0d0d10]">KG</option>
-                  </select>
-                  <div className="w-px h-3 bg-white/10" />
-                  <ConfidenceBadge product={p} />
-                  {p.mode && (
-                    <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                      p.mode === 'barcode' 
-                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                        : 'bg-white/5 text-white/25 border-white/10'
-                    }`}>
-                      {p.mode === 'barcode' ? 'EAN' : 'DESC'}
-                    </span>
-                  )}
-                </div>
-                {/* Warning message */}
-                {p.warning && (
-                  <p className="text-[9px] text-amber-400/70 mt-1 flex items-center gap-1 font-bold">
-                    <AlertTriangle className="w-3 h-3 shrink-0" /> {p.warning}
-                  </p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                {imageFormats[p.id] === 'JPG' && !bgPreviews[p.id] && (
-                  <Button onClick={() => handleRemoveBackground([p.id])} disabled={processingBg.has(p.id)} variant="outline" className="h-9 px-3 bg-purple-500/10 border-purple-500/20 text-purple-400 hover:bg-purple-500/20 rounded-xl text-[9px] font-black uppercase">
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Remover Fundo
-                  </Button>
-                )}
-                {bgPreviews[p.id] && (
-                  <div className="flex items-center gap-1">
-                    <Button onClick={() => handleApprovePreviews([p.id])} disabled={processingBg.has(p.id)} className="h-9 px-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[9px] font-black uppercase">
-                       Aprovar
-                    </Button>
-                    <Button onClick={() => handleRestoreOriginals([p.id])} disabled={processingBg.has(p.id)} variant="outline" className="h-9 w-9 p-0 bg-white/5 border-white/10 text-white/40 hover:text-white rounded-xl">
-                       <Undo2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-                <Button onClick={() => loadVariations(p)} variant="outline" className="h-9 px-3 bg-white/5 border-white/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white group-hover:border-blue-500/30">
-                  <Layers className="w-3.5 h-3.5 mr-2" /> Variações
-                </Button>
-                <Button onClick={() => handleManualImageUpload(p.id)} variant="outline" className="h-9 px-3 bg-white/5 border-white/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white group-hover:border-green-500/30">
-                  <PlusCircle className="w-3.5 h-3.5 mr-2" /> Add Foto
-                </Button>
-                <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Variations UI specific to item */}
-              {showVariationsFor === p.id && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                  <div className="bg-[#121214] border border-white/10 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                    <div className="p-6 border-b border-white/5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-sm font-black uppercase tracking-widest text-white">Gerenciar Variações</h3>
-                          <p className="text-[10px] text-white/40 font-bold uppercase">{p.name}</p>
-                        </div>
-                        <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 p-2 rounded-xl text-white/40 hover:text-white">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Manual Search Input */}
-                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                        <Input 
-                          value={manualSearch}
-                          onChange={e => handleManualSearch(e.target.value, p)}
-                          placeholder="Pesquisar outra variação no banco (nome ou EAN)..."
-                          className="bg-black/40 border-white/10 pl-12 h-12 rounded-xl text-xs placeholder:text-white/10"
-                        />
-                        {isSearchingManual && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />}
-                      </div>
-                    </div>
-                    
-                    <div className="p-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '60vh' }}>
-                      {/* Manual Search Results */}
-                      {manualResults.length > 0 && (
-                        <div className="mb-8 animate-in fade-in slide-in-from-top-2">
-                           <h4 className="text-[9px] font-black uppercase tracking-widest text-blue-500 mb-4 flex items-center gap-2">
-                             <Search className="w-3 h-3" /> Resultados da Pesquisa Manual
-                           </h4>
-                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                              {manualResults.map(v => (
-                                <div key={v.ean} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-3 flex flex-col items-center gap-2 group relative">
-                                  <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
-                                  <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
-                                  <div className="flex gap-1 mt-2">
-                                     <Button onClick={() => {
-                                       setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]], confidence: 'high' as const, warning: undefined } : old));
-                                       setShowVariationsFor(null);
-                                       toast.success('Produto substituído!');
-                                     }} className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Substituir</Button>
-                                     <Button onClick={() => addVariation(p.id, v.images[0])} className="h-7 px-3 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
-                                  </div>
-                                </div>
-                              ))}
-                           </div>
-                        </div>
-                      )}
-
-                      {/* Automatic Suggestions */}
-                      <h4 className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-4 flex items-center gap-2">
-                        <Sparkles className="w-3 h-3" /> Sugestões Inteligentes (Marca/Linha)
-                      </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {/* Current Images in stack */}
-                        {p.images.map((img, i) => (
-                          <div key={`cur-${i}`} className="relative bg-primary/10 border-2 border-primary/40 rounded-2xl p-3 flex flex-col items-center gap-2 group">
-                            <img src={img} className="w-full h-20 object-contain" />
-                            <span className="text-[8px] font-black uppercase text-primary">Na Pilha atual</span>
-                            <button onClick={() => removeVariation(p.id, i)} className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-
-                        {/* Suggestions */}
-                        {variations.length > 0 ? variations.map(v => (
-                          <div key={v.ean} onClick={() => addVariation(p.id, v.images[0])} 
-                            className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col items-center gap-2 hover:border-blue-500/50 cursor-pointer transition-all group">
-                            <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
-                            <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
-                          </div>
-                        )) : !isSearchingManual && manualResults.length === 0 && (
-                          <div className="col-span-full py-8 text-center text-white/20 text-[10px] uppercase font-bold tracking-widest italic">
-                            Nenhuma sugestão automática encontrada
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-black/40 border-t border-white/5 flex justify-end">
-                      <Button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest">Fechar</Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            )
-          ))}
-
-          {products.length === 0 && (
+          {products.length === 0 ? (
             <div className="py-20 text-center bg-[#121214] border-2 border-dashed border-white/5 rounded-[2rem]">
               <div className="w-16 h-16 bg-red-600/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <Search className="w-8 h-8 text-red-600" />
@@ -880,6 +667,143 @@ export const StepReview = () => {
                 Aceita descrição + preço ou código de barras + preço
               </p>
             </div>
+          ) : (
+            products.map((p, idx) => {
+              const isLowConfidence = ['low', 'none'].includes(p.confidence || '');
+              
+              return (
+              <div key={p.id} className={`group relative bg-[#121214] border ${isLowConfidence ? 'border-amber-500/30' : 'border-white/[0.03]'} hover:border-blue-500/30 rounded-[2rem] p-5 transition-all duration-500 hover:bg-blue-500/[0.02]`}>
+                {isLowConfidence && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[9px] font-black px-4 py-1 rounded-full uppercase tracking-widest z-10 shadow-lg animate-pulse">
+                     ⚠️ Verifique se o produto está correto
+                  </div>
+                )}
+                <div className="flex gap-6 items-center">
+                  <div className="w-4 text-[10px] font-black text-white/10 text-center">{idx + 1}</div>
+                  {/* Selection checkbox */}
+                  <div 
+                    onClick={() => toggleSelect(p.id)}
+                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${
+                      selectedIds.has(p.id) ? 'bg-primary border-primary' : 'bg-white/5 border-white/10 '
+                    }`}
+                  >
+                    {selectedIds.has(p.id) && <CheckSquare className="w-4 h-4 text-white" />}
+                  </div>
+
+                  {/* Product Image section */}
+                  <div className="relative group/img">
+                    <div className="w-24 h-24 bg-white/[0.02] rounded-3xl p-2 border border-white/5 group-hover/img:border-blue-500/20 transition-colors">
+                      <ProductImageWithFormat 
+                        src={p.images[0]} 
+                        previewBase64={bgPreviews[p.id]}
+                        onFormatChange={(f) => handleFormatChange(p.id, f)}
+                        onUrlResolved={(url) => setResolvedUrls(prev => ({ ...prev, [p.id]: url }))}
+                        isFallback={!p.images[0]}
+                      />
+                    </div>
+                    <button 
+                      onClick={() => setExpandedImage(bgPreviews[p.id] || resolvedUrls[p.id] || p.images[0])}
+                      className="absolute -top-2 -right-2 w-8 h-8 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity z-10 hover:bg-primary"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                    {/* Format badge */}
+                    <div className="absolute -bottom-2 -left-2 flex gap-1">
+                      <button onClick={() => handleFormatChange(p.id, 'JPG')} className={`px-2 py-0.5 rounded-lg text-[8px] font-black tracking-widest transition-all ${imageFormats[p.id] === 'JPG' ? 'bg-amber-500 text-amber-950 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}>JPG</button>
+                      <button onClick={() => handleFormatChange(p.id, 'PNG')} className={`px-2 py-0.5 rounded-lg text-[8px] font-black tracking-widest transition-all ${imageFormats[p.id] === 'PNG' ? 'bg-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}>PNG</button>
+                    </div>
+                  </div>
+
+                  {/* Product Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">
+                      #{p.ean} {p.mode === 'barcode' ? '• B-CODE' : ''}
+                    </p>
+                    <h3 className="text-sm font-black text-white/90 uppercase tracking-tight truncate leading-tight group-hover:text-white transition-colors">
+                      {p.name}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-primary font-black text-[11px] bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10">
+                        {p.price} <button onClick={() => toggleSuffix(p.id)} className="text-[9px] text-white/40 hover:text-primary transition-colors cursor-pointer ml-1 py-0.5 px-1 bg-white/5 rounded border border-white/10">/ {p.suffix}</button>
+                      </span>
+                      <div className="w-px h-3 bg-white/10" />
+                      <ConfidenceBadge product={p} />
+                    </div>
+                    {p.confidence_reason && (
+                      <p className="text-[9px] text-white/30 mt-1 font-bold uppercase tracking-tight italic line-clamp-1">
+                        {p.confidence_reason}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    {isLowConfidence && (
+                      <Button 
+                        onClick={() => {
+                          setCreateData({ name: p.name, ean: p.ean === 'N/A' || p.ean === 'NA' ? '' : p.ean, file: null });
+                          setCreatingProductFor(creatingProductFor === p.id ? null : p.id)
+                        }} 
+                        className="h-9 px-4 bg-[#1a1a1c] hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
+                      >
+                        Cadastrar
+                      </Button>
+                    )}
+                    <Button 
+                      onClick={() => loadVariations(p)} 
+                      disabled={isProcessing}
+                      className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                    >
+                      {loadingVariationsId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                      Variações
+                    </Button>
+                    <Button 
+                      onClick={() => handleManualImageUpload(p.id)} 
+                      variant="outline" 
+                      className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Add Foto
+                    </Button>
+                    <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline Creation Form */}
+                {creatingProductFor === p.id && (
+                  <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/5 animate-in fade-in slide-in-from-top-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
+                       <PlusCircle className="w-3.5 h-3.5" /> Novo Cadastro Manual
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                       <div>
+                          <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Descrição Oficial</label>
+                          <Input disabled={isCreating} value={createData.name} onChange={e => setCreateData({...createData, name: e.target.value})} placeholder="Ex: ITEM TESTE" className="bg-black/40 border-white/10 h-10 text-xs text-white" />
+                       </div>
+                       <div>
+                          <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">EAN (GTIN)</label>
+                          <Input disabled={isCreating} value={createData.ean} onChange={e => setCreateData({...createData, ean: e.target.value})} placeholder="789..." className="bg-black/40 border-white/10 h-10 text-xs text-white" />
+                       </div>
+                       <div>
+                          <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Foto</label>
+                          <input type="file" id={`file-main-${p.id}`} className="hidden" onChange={e => setCreateData({...createData, file: e.target.files?.[0] || null})} />
+                          <label htmlFor={`file-main-${p.id}`} className="flex items-center justify-between bg-black/40 border border-white/10 h-10 px-4 rounded-md cursor-pointer hover:border-white/20 transition-colors">
+                             <span className="text-[10px] text-white/30 truncate max-w-[120px]">{createData.file ? createData.file.name : 'Selecionar...'}</span>
+                             <ImageIcon className="w-4 h-4 text-white/20" />
+                          </label>
+                       </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                       <Button onClick={() => setCreatingProductFor(null)} variant="outline" className="h-9 px-4 bg-white/5 border-white/5 rounded-xl text-[10px] font-black uppercase text-white/40">Cancelar</Button>
+                       <Button onClick={() => handleCreateProduct(p.id)} disabled={isCreating} className="h-9 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase">Finalizar Cadastro</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              );
+            })
           )}
         </div>
       </div>
@@ -922,6 +846,99 @@ export const StepReview = () => {
           <img src={expandedImage} className="max-w-full max-h-full object-contain select-none cursor-zoom-out animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
+
+      {/* Variations Modal */}
+      {showVariationsFor && (() => {
+        const p = products.find(prod => prod.id === showVariationsFor);
+        if (!p) return null;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-[#121214] border border-white/10 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Gerenciar Variações</h3>
+                    <p className="text-[10px] text-white/40 font-bold uppercase">{p.name}</p>
+                  </div>
+                  <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 p-2 rounded-xl text-white/40 hover:text-white">
+                     <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                  <Input 
+                    value={manualSearch}
+                    onChange={e => handleManualSearch(e.target.value, p)}
+                    placeholder="Pesquisar no banco (nome ou EAN)..."
+                    className="bg-black/40 border-white/10 pl-12 h-12 rounded-xl text-xs placeholder:text-white/10"
+                  />
+                  {isSearchingManual && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />}
+                </div>
+              </div>
+              
+              <div className="p-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '60vh' }}>
+                {manualResults.length > 0 && (
+                  <div className="mb-8 animate-in fade-in slide-in-from-top-2">
+                     <h4 className="text-[9px] font-black uppercase tracking-widest text-blue-500 mb-4 flex items-center gap-2">
+                       <Search className="w-3 h-3" /> Resultados da Pesquisa Manual
+                     </h4>
+                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {manualResults.map(v => (
+                          <div key={v.ean} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-3 flex flex-col items-center gap-2 group relative">
+                            <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
+                            <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
+                            <div className="flex gap-1 mt-2">
+                               <Button onClick={() => {
+                                 setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]], confidence: 'high' as const, warning: undefined } : old));
+                                 setShowVariationsFor(null);
+                                 setManualSearch('');
+                                 setManualResults([]);
+                                 toast.success('Produto substituído!');
+                               }} className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Substituir</Button>
+                               <Button onClick={() => addVariation(p.id, v.images[0])} className="h-7 px-3 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
+                            </div>
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+                )}
+
+                <h4 className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-4 flex items-center gap-2">
+                  <Sparkles className="w-3 h-3" /> Sugestões Inteligentes
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {p.images.map((img, i) => (
+                    <div key={`cur-${i}`} className="relative bg-primary/10 border-2 border-primary/40 rounded-2xl p-3 flex flex-col items-center gap-2 group">
+                      <img src={img} className="w-full h-20 object-contain" />
+                      <span className="text-[8px] font-black uppercase text-primary">Na Pilha</span>
+                      <button onClick={() => removeVariation(p.id, i)} className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {variations.length > 0 ? variations.map(v => (
+                    <div key={v.ean} onClick={() => addVariation(p.id, v.images[0])} 
+                      className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col items-center gap-2 hover:border-blue-500/50 cursor-pointer transition-all group">
+                      <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
+                      <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
+                    </div>
+                  )) : !isSearchingManual && manualResults.length === 0 && (
+                    <div className="col-span-full py-8 text-center text-white/20 text-[10px] uppercase font-bold tracking-widest italic">
+                      Sem sugestões automáticas
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 bg-black/40 border-t border-white/5 flex justify-end">
+                <Button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest">Fechar</Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -28,6 +28,16 @@ function normalize(s: string): string {
 }
 
 // ─────────────────────────────────────────────
+// Remove common units from search text to help trigrams
+// ─────────────────────────────────────────────
+function stripUnits(s: string): string {
+  return s
+    .replace(/\d+([.,]\d+)?\s*(kg|g|mg|ml|l|lt|un|cx|fd|pct|unid|uni)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// ─────────────────────────────────────────────
 // Word-level overlap ratio between two strings
 // ─────────────────────────────────────────────
 function wordOverlap(input: string, match: string): number {
@@ -88,30 +98,37 @@ function assessConfidence(
   // REJEIÇÃO 2: Marca exigida mas ignorada.
   // Se a IA exigiu uma marca, o banco não tinha campo marca cadastrada, e a marca não aparece nem no nome do produto:
   if (!brandMatch && normBrand.length >= 2) {
-    // Nós perdoamos apenas se a sobreposição for virtualmente perfeita (>= 0.8)
-    if (overlap >= 0.8) {
-      return { level: 'medium', reason: 'Extrema similaridade de texto superou ausência da marca' };
+    // Reduzimos o rigor: se houver 65% de overlap, aceitamos como Médio
+    if (overlap >= 0.65) {
+      return { level: 'medium', reason: 'Boa similaridade de texto superou ausência da marca no nome' };
     }
-    return { level: 'low', reason: `Marca '${brandHint}' não localizada no nome do produto` };
+    return { level: 'low', reason: `Marca '${brandHint}' não localizada no nome do produto (Overlap: ${(overlap * 100).toFixed(0)}%)` };
   }
 
   // ── HIGH: brand + (type OR strong overlap) ──
-  if (brandMatch && (typeMatch || overlap >= 0.4)) {
+  if (brandMatch && (typeMatch || overlap >= 0.35)) {
     return { level: 'high', reason: 'Marca e descritor principal batem com o banco' };
   }
 
   // ── MEDIUM: brand only, or high overlap without brand ──
   if (brandMatch) {
-    return { level: 'medium', reason: 'Marca exata, mas sem tipo/variedade clara' };
+    return { level: 'medium', reason: 'Marca exata encontrada no nome do produto' };
   }
   
   // Se nenhuma marca foi citada pela IA e pelo input, exigimos um parentesco maior nas palavras
-  if (overlap >= 0.7) {
-    return { level: 'medium', reason: 'Textos muito semelhantes, sem marca especificada' };
+  // Reduzido para 0.45 para ser mais inclusivo
+  if (overlap >= 0.45) {
+    return { level: 'medium', reason: 'Similaridade de texto aceitável' };
   }
 
   // ── LOW ──
-  return { level: 'low', reason: 'Baixo índice de palavras em comum' };
+  // Reduzido drasticamente para capturar quase qualquer coisa similar como um candidato
+  // Se bater pelo menos uma palavra chave importante (Arroz, Feijão, etc), o overlap será > 0
+  if (overlap >= 0.10) {
+    return { level: 'low', reason: `Vínculo automático sugerido (Similaridade: ${(overlap * 100).toFixed(0)}%)` };
+  }
+
+  return { level: 'none', reason: 'Nenhuma correspondência similar encontrada no banco' };
 }
 
 // ═══════════════════════════════════════════════
@@ -285,11 +302,11 @@ Retorne JSON: { "items": [...] }`
             mode: 'barcode',
             display_name: ean,
             price: item.price || null,
-            found: false,
-            match: null,
+            found: true, // Forçamos found para entrar na lista principal
+            match: { name: ean, ean: ean, images: [] }, // Mock match para permitir Add Foto
             confidence: 'none',
-            confidence_reason: 'Código de barras não encontrado no banco',
-            warning: 'Código de barras não encontrado no banco',
+            confidence_reason: 'Código de barras novo (Cadastro sugerido)',
+            warning: 'Código de barras não encontrado no banco. Adicione uma foto para completar.',
           });
           continue;
         }
@@ -310,13 +327,56 @@ Retorne JSON: { "items": [...] }`
       // ════════════════════════════════════════
       // MODE: DESCRIPTION — fuzzy search + confidence
       // ════════════════════════════════════════
+      // ── Search V2: Multi-Pass Search ──
       const userDisplayName = item.display_name || item.original || '';
-      const searchText = item.search_name || userDisplayName;
-
-      const { data: matches, error: rpcErr } = await supabase.rpc('search_products_fuzzy', {
+      let searchText = (item.search_name || userDisplayName).toLowerCase().trim();
+      
+      // Try 1: Full simplified name
+      let { data: matches, error: rpcErr } = await supabase.rpc('search_products_fuzzy', {
         search_text: searchText,
-        match_threshold: 0.5,
+        match_threshold: 0.10, // Baixíssimo para automação total
       });
+
+      // Try 2: If no matches, strip units and try again (e.g. "Arroz 5kg" -> "Arroz")
+      if ((!matches || matches.length === 0) && searchText !== stripUnits(searchText)) {
+         const cleanSearch = stripUnits(searchText);
+         if (cleanSearch.length > 2) {
+           const res2 = await supabase.rpc('search_products_fuzzy', {
+             search_text: cleanSearch,
+             match_threshold: 0.10,
+           });
+           matches = res2.data;
+           searchText = cleanSearch;
+         }
+      }
+
+      // Try 3: Brand + Type search (Very effective for grocery)
+      if ((!matches || matches.length === 0) && item.brand_hint && item.type_hint) {
+        const brandTypeSearch = `${item.brand_hint} ${item.type_hint}`.toLowerCase();
+        const res3 = await supabase.rpc('search_products_fuzzy', {
+           search_text: brandTypeSearch,
+           match_threshold: 0.10,
+        });
+        if (res3.data && res3.data.length > 0) {
+          matches = res3.data;
+          searchText = brandTypeSearch;
+        }
+      }
+
+      // Try 4: Last Ditch ILIKE Search (Keywords)
+      if (!matches || matches.length === 0) {
+        const keywords = userDisplayName.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !['kg', 'ml', 'un', 'pct'].includes(w)).slice(0, 3);
+        if (keywords.length > 0) {
+          let query = supabase.from('products').select('*');
+          for (const k of keywords) {
+            query = query.ilike('name', `%${k}%`);
+          }
+          const { data: res4 } = await query.limit(3);
+          if (res4 && res4.length > 0) {
+            matches = res4;
+          }
+        }
+      }
 
       if (rpcErr || !matches || matches.length === 0) {
         results.push({
@@ -324,56 +384,64 @@ Retorne JSON: { "items": [...] }`
           mode: 'description',
           display_name: userDisplayName,  // ← preserve user text ALWAYS
           price: item.price || null,
-          found: false,
-          match: null,
+          found: true, // Forçamos found para que o usuário possa associar foto/manual
+          match: { name: userDisplayName, ean: 'NA', images: [] },
           confidence: 'none',
-          confidence_reason: 'Nenhum produto encontrado no banco',
+          confidence_reason: 'Nenhum produto similar no banco',
         });
         continue;
       }
 
-      let bestMatch = null;
-      let bestConf = { level: 'low', reason: 'Baixa correspondência' };
+      // Analyze all candidates (up to 25) with our confidence engine
+      // This will prioritize the ones with matching brands over just text similarity
+      const candidatesWithConfidence = (matches || [])
+        .map((m: any) => ({
+          match: m,
+          confidence: assessConfidence(
+            item.brand_hint || '',
+            item.type_hint || '',
+            userDisplayName,
+            m.name || '',
+            m.brand || ''
+          )
+        }))
+        .sort((a, b) => {
+          // Double score for brand match + high confidence
+          const levels: Record<string, number> = { high: 4, medium: 3, low: 1, none: 0 };
+          return levels[b.confidence.level] - levels[a.confidence.level];
+        });
 
-      for (const m of matches) {
-        const conf = assessConfidence(
-          item.brand_hint || '',
-          item.type_hint || '',
-          userDisplayName,
-          m.name || '',
-          m.brand || ''
-        );
-        if (conf.level === 'high' || conf.level === 'medium') {
-          bestMatch = m;
-          bestConf = conf;
-          break;
-        }
-      }
-
-      if (!bestMatch) {
+      // Se não houver nenhum candidato sequer razoável, fallback para o original (item sem vínculo)
+      if (candidatesWithConfidence.length === 0 || candidatesWithConfidence[0].confidence.level === 'none') {
+        const bestTry = candidatesWithConfidence[0]; // even if none, might have one
         results.push({
           original: item.original,
           mode: 'description',
-          display_name: userDisplayName,  // ← preserve user text ALWAYS
+          display_name: userDisplayName,
           price: item.price || null,
-          found: false,
-          match: null,
-          confidence: 'none',
-          confidence_reason: 'Nenhum contato com similaridade aceitável encontrado (Medium/High)',
+          found: true,
+          match: bestTry ? bestTry.match : { name: userDisplayName, ean: 'NA', images: [] },
+          confidence: bestTry ? bestTry.confidence.level : 'none',
+          confidence_reason: bestTry ? bestTry.confidence.reason : 'Nenhum produto similar no banco',
         });
         continue;
       }
+
+      const bestCandidate = candidatesWithConfidence[0];
+      let bestMatch = bestCandidate.match;
+      let bestConf = bestCandidate.confidence;
 
       results.push({
         original: item.original,
         mode: 'description',
-        display_name: userDisplayName,  // ← preserve user text ALWAYS
+        display_name: userDisplayName,
         price: item.price || null,
         found: true,
         match: bestMatch,
         confidence: bestConf.level,
         confidence_reason: bestConf.reason,
-        warning: undefined,
+        debug: { searchText, brandHint: item.brand_hint, typeHint: item.type_hint, matchesFound: matches?.length || 0 },
+        warning: ['low', 'none'].includes(bestConf.level) ? 'Confira se este produto está correto' : undefined,
       });
     }
 

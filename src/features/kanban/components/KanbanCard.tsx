@@ -58,9 +58,6 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
       e.preventDefault();
       e.stopPropagation();
 
-      const droppedFiles = Array.from(e.dataTransfer.files);
-      console.log('Arquivos detectados no drop:', droppedFiles.map(f => ({ name: f.name, type: f.type })));
-      
       const imagesToUpload = droppedFiles.filter(f => f.type.startsWith('image/'));
 
       if (imagesToUpload.length === 0) {

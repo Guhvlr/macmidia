@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Send, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import KanbanCard from '@/features/kanban/components/KanbanCard';
+import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 
 const POSTING_COLUMNS = [
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
@@ -14,6 +15,7 @@ const POSTING_COLUMNS = [
 const PostingBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
+  const { ref: scrollRef, onMouseDown } = useDraggableScroll();
 
   const activeCards = useMemo(() =>
     kanbanCards.filter(c => {
@@ -84,7 +86,11 @@ const PostingBoard = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar">
+      <main 
+        ref={scrollRef as any}
+        onMouseDown={onMouseDown}
+        className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+      >
         {POSTING_COLUMNS.map(col => {
           const colCards = cardsByColumn[col.key] || [];
           return (

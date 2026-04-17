@@ -7,6 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { ProductImageWithFormat } from './ProductImageWithFormat';
+import { padEan, getImageUrl } from '@/lib/ean';
+import { ReviewCard } from './review/ReviewCard';
+import { BulkSearchArea } from './review/BulkSearchArea';
+import { ConfidenceBadge } from './review/ConfidenceBadge';
 
 export const StepReview = () => {
   const { products, setProducts, setStep, slots, pageCount } = useOffer();
@@ -57,39 +61,43 @@ export const StepReview = () => {
 
   const handleRemoveBackground = async (ids: string[]) => {
     if (ids.length === 0) return;
+    
     const newProcessing = new Set(processingBg);
     ids.forEach(id => newProcessing.add(id));
     setProcessingBg(newProcessing);
 
-    const newPreviews = { ...bgPreviews };
     let successCount = 0;
     let failCount = 0;
+    const chunkSize = 3; // Processar 3 por vez para equilíbrio entre velocidade e estabilidade
 
-    for (const id of ids) {
-      const resolvedUrl = resolvedUrls[id];
-      if (!resolvedUrl) {
-        failCount++;
-        continue;
-      }
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
       
-      try {
-        const { data, error } = await supabase.functions.invoke('remove-background', {
-          body: { imageUrl: resolvedUrl }
-        });
-        if (error) throw error;
-        if (data?.base64) {
-          newPreviews[id] = data.base64;
-          successCount++;
-        } else {
-          throw new Error('Retorno inválido da API Photoroom');
+      await Promise.all(chunk.map(async (id) => {
+        const resolvedUrl = resolvedUrls[id];
+        if (!resolvedUrl) {
+          failCount++;
+          return;
         }
-      } catch (e: any) {
-         console.error('Photoroom Error', e);
-         failCount++;
-      }
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('remove-background', {
+            body: { imageUrl: resolvedUrl }
+          });
+          if (error) throw error;
+          if (data?.base64) {
+            setBgPreviews(prev => ({ ...prev, [id]: data.base64 }));
+            successCount++;
+          } else {
+            throw new Error('Retorno inválido da API Photoroom');
+          }
+        } catch (e: any) {
+          console.error('Photoroom Error', e);
+          failCount++;
+        }
+      }));
     }
 
-    setBgPreviews(newPreviews);
     setProcessingBg(prev => {
       const next = new Set(prev);
       ids.forEach(id => next.delete(id));
@@ -187,17 +195,6 @@ export const StepReview = () => {
     if (successCount > 0) toast.info(`${successCount} imagens restauradas.`);
   };
 
-  const padEan = (ean: string) => {
-    const clean = (ean || '').replace(/[^0-9]/g, '');
-    if (clean.length > 1 && clean.length < 13) return clean.padStart(13, '0');
-    return clean;
-  };
-
-  const getImageUrl = (ean: string) => {
-    if (!ean || ean === 'N/A') return '';
-    const cleanEan = padEan(ean);
-    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png?t=${Date.now()}`;
-  };
 
   // ═══════════════════════════════════════════
   // BULK SEARCH — V2 Dual-Mode Engine
@@ -572,67 +569,15 @@ export const StepReview = () => {
     }
   };
 
-  // ── Confidence badge renderer ──
-  const ConfidenceBadge = ({ product }: { product: ProductItem }) => {
-    const c = product.confidence;
-    if (c === 'exact') return (
-      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20">
-        <ShieldCheck className="w-2.5 h-2.5" /> EXATO
-      </span>
-    );
-    if (c === 'high') return (
-      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20">
-        <ShieldCheck className="w-2.5 h-2.5" /> ALTA
-      </span>
-    );
-    if (c === 'medium') return (
-      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
-        <ShieldAlert className="w-2.5 h-2.5" /> MÉDIA
-      </span>
-    );
-    if (c === 'low' || c === 'none') return (
-      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
-        <ShieldAlert className="w-2.5 h-2.5" /> CONFERIR
-      </span>
-    );
-    return (
-      <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest bg-white/5 text-white/30 px-2 py-0.5 rounded-full border border-white/10">
-        <AlertTriangle className="w-2.5 h-2.5" /> SEM IMAGEM
-      </span>
-    );
-  };
-
   return (
     <div className="h-full flex flex-col bg-[#09090b]">
       {/* Top Search Area */}
-      <div className="p-8 border-b border-white/5 bg-[#0d0d10]">
-        <div className="max-w-5xl mx-auto flex gap-6">
-          <div className="flex-1">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 block mb-3">Entrada de Produtos do Cliente</label>
-            <Textarea 
-              value={bulkInput} 
-              onChange={e => setBulkInput(e.target.value)}
-              placeholder={"Ex: Coca Cola 2L R$ 8.99\nMonster Mango R$ 9.99\n\nOu por código de barras:\n7896004400913 R$ 5.99"}
-              className="bg-black/40 border-white/10 rounded-2xl min-h-[100px] text-sm resize-none custom-scrollbar p-4"
-            />
-            <div className="flex gap-3 mt-2">
-              <span className="flex items-center gap-1.5 text-[9px] text-white/20 font-bold uppercase">
-                <FileText className="w-3 h-3" /> Descrição + Preço
-              </span>
-              <span className="text-white/10">•</span>
-              <span className="flex items-center gap-1.5 text-[9px] text-white/20 font-bold uppercase">
-                <Barcode className="w-3 h-3" /> Código de Barras + Preço
-              </span>
-            </div>
-          </div>
-          <div className="w-[200px] flex flex-col justify-end">
-            <Button onClick={handleBulkSearch} disabled={isProcessing || !bulkInput.trim()} className="h-14 bg-red-600 hover:bg-red-700 rounded-2xl font-black uppercase tracking-widest text-[10px]">
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
-              Localizar Itens
-            </Button>
-          </div>
-        </div>
-      </div>
+      <BulkSearchArea 
+        bulkInput={bulkInput}
+        setBulkInput={setBulkInput}
+        isProcessing={isProcessing}
+        onSearch={handleBulkSearch}
+      />
 
       {/* Manual Review List */}
       <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
@@ -668,142 +613,33 @@ export const StepReview = () => {
               </p>
             </div>
           ) : (
-            products.map((p, idx) => {
-              const isLowConfidence = ['low', 'none'].includes(p.confidence || '');
-              
-              return (
-              <div key={p.id} className={`group relative bg-[#121214] border ${isLowConfidence ? 'border-amber-500/30' : 'border-white/[0.03]'} hover:border-blue-500/30 rounded-[2rem] p-5 transition-all duration-500 hover:bg-blue-500/[0.02]`}>
-                {isLowConfidence && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[9px] font-black px-4 py-1 rounded-full uppercase tracking-widest z-10 shadow-lg animate-pulse">
-                     ⚠️ Verifique se o produto está correto
-                  </div>
-                )}
-                <div className="flex gap-6 items-center">
-                  <div className="w-4 text-[10px] font-black text-white/10 text-center">{idx + 1}</div>
-                  {/* Selection checkbox */}
-                  <div 
-                    onClick={() => toggleSelect(p.id)}
-                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${
-                      selectedIds.has(p.id) ? 'bg-primary border-primary' : 'bg-white/5 border-white/10 '
-                    }`}
-                  >
-                    {selectedIds.has(p.id) && <CheckSquare className="w-4 h-4 text-white" />}
-                  </div>
-
-                  {/* Product Image section */}
-                  <div className="relative group/img">
-                    <div className="w-24 h-24 bg-white/[0.02] rounded-3xl p-2 border border-white/5 group-hover/img:border-blue-500/20 transition-colors">
-                      <ProductImageWithFormat 
-                        src={p.images[0]} 
-                        previewBase64={bgPreviews[p.id]}
-                        onFormatChange={(f) => handleFormatChange(p.id, f)}
-                        onUrlResolved={(url) => setResolvedUrls(prev => ({ ...prev, [p.id]: url }))}
-                        isFallback={!p.images[0]}
-                      />
-                    </div>
-                    <button 
-                      onClick={() => setExpandedImage(bgPreviews[p.id] || resolvedUrls[p.id] || p.images[0])}
-                      className="absolute -top-2 -right-2 w-8 h-8 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity z-10 hover:bg-primary"
-                    >
-                      <ZoomIn className="w-4 h-4" />
-                    </button>
-                    {/* Format badge */}
-                    <div className="absolute -bottom-2 -left-2 flex gap-1">
-                      <button onClick={() => handleFormatChange(p.id, 'JPG')} className={`px-2 py-0.5 rounded-lg text-[8px] font-black tracking-widest transition-all ${imageFormats[p.id] === 'JPG' ? 'bg-amber-500 text-amber-950 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}>JPG</button>
-                      <button onClick={() => handleFormatChange(p.id, 'PNG')} className={`px-2 py-0.5 rounded-lg text-[8px] font-black tracking-widest transition-all ${imageFormats[p.id] === 'PNG' ? 'bg-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}>PNG</button>
-                    </div>
-                  </div>
-
-                  {/* Product Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">
-                      #{p.ean} {p.mode === 'barcode' ? '• B-CODE' : ''}
-                    </p>
-                    <h3 className="text-sm font-black text-white/90 uppercase tracking-tight truncate leading-tight group-hover:text-white transition-colors">
-                      {p.name}
-                    </h3>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-primary font-black text-[11px] bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10">
-                        {p.price} <button onClick={() => toggleSuffix(p.id)} className="text-[9px] text-white/40 hover:text-primary transition-colors cursor-pointer ml-1 py-0.5 px-1 bg-white/5 rounded border border-white/10">/ {p.suffix}</button>
-                      </span>
-                      <div className="w-px h-3 bg-white/10" />
-                      <ConfidenceBadge product={p} />
-                    </div>
-                    {p.confidence_reason && (
-                      <p className="text-[9px] text-white/30 mt-1 font-bold uppercase tracking-tight italic line-clamp-1">
-                        {p.confidence_reason}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    {isLowConfidence && (
-                      <Button 
-                        onClick={() => {
-                          setCreateData({ name: p.name, ean: p.ean === 'N/A' || p.ean === 'NA' ? '' : p.ean, file: null });
-                          setCreatingProductFor(creatingProductFor === p.id ? null : p.id)
-                        }} 
-                        className="h-9 px-4 bg-[#1a1a1c] hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
-                      >
-                        Cadastrar
-                      </Button>
-                    )}
-                    <Button 
-                      onClick={() => loadVariations(p)} 
-                      disabled={isProcessing}
-                      className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
-                    >
-                      {loadingVariationsId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
-                      Variações
-                    </Button>
-                    <Button 
-                      onClick={() => handleManualImageUpload(p.id)} 
-                      variant="outline" 
-                      className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      Add Foto
-                    </Button>
-                    <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Inline Creation Form */}
-                {creatingProductFor === p.id && (
-                  <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/5 animate-in fade-in slide-in-from-top-2">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
-                       <PlusCircle className="w-3.5 h-3.5" /> Novo Cadastro Manual
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                       <div>
-                          <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Descrição Oficial</label>
-                          <Input disabled={isCreating} value={createData.name} onChange={e => setCreateData({...createData, name: e.target.value})} placeholder="Ex: ITEM TESTE" className="bg-black/40 border-white/10 h-10 text-xs text-white" />
-                       </div>
-                       <div>
-                          <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">EAN (GTIN)</label>
-                          <Input disabled={isCreating} value={createData.ean} onChange={e => setCreateData({...createData, ean: e.target.value})} placeholder="789..." className="bg-black/40 border-white/10 h-10 text-xs text-white" />
-                       </div>
-                       <div>
-                          <label className="text-[9px] font-bold uppercase text-white/40 block mb-1">Foto</label>
-                          <input type="file" id={`file-main-${p.id}`} className="hidden" onChange={e => setCreateData({...createData, file: e.target.files?.[0] || null})} />
-                          <label htmlFor={`file-main-${p.id}`} className="flex items-center justify-between bg-black/40 border border-white/10 h-10 px-4 rounded-md cursor-pointer hover:border-white/20 transition-colors">
-                             <span className="text-[10px] text-white/30 truncate max-w-[120px]">{createData.file ? createData.file.name : 'Selecionar...'}</span>
-                             <ImageIcon className="w-4 h-4 text-white/20" />
-                          </label>
-                       </div>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                       <Button onClick={() => setCreatingProductFor(null)} variant="outline" className="h-9 px-4 bg-white/5 border-white/5 rounded-xl text-[10px] font-black uppercase text-white/40">Cancelar</Button>
-                       <Button onClick={() => handleCreateProduct(p.id)} disabled={isCreating} className="h-9 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase">Finalizar Cadastro</Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              );
-            })
+            products.map((p, idx) => (
+              <ReviewCard 
+                key={p.id}
+                product={p}
+                idx={idx}
+                isSelected={selectedIds.has(p.id)}
+                toggleSelect={toggleSelect}
+                bgPreview={bgPreviews[p.id]}
+                resolvedUrl={resolvedUrls[p.id]}
+                setResolvedUrl={(url) => setResolvedUrls(prev => ({ ...prev, [p.id]: url }))}
+                handleFormatChange={handleFormatChange}
+                imageFormat={imageFormats[p.id] || 'JPG'}
+                onExpandImage={setExpandedImage}
+                toggleSuffix={toggleSuffix}
+                onLoadVariations={loadVariations}
+                isLoadingVariations={loadingVariationsId === p.id}
+                onManualImageUpload={handleManualImageUpload}
+                onRemove={(id) => setProducts(products.filter(x => x.id !== id))}
+                isProcessing={isProcessing}
+                isCreatingThis={creatingProductFor === p.id}
+                setCreatingThis={setCreatingProductFor}
+                createData={createData}
+                setCreateData={setCreateData}
+                isCreating={isCreating}
+                onConfirmCreate={handleCreateProduct}
+              />
+            ))
           )}
         </div>
       </div>
@@ -848,97 +684,100 @@ export const StepReview = () => {
       )}
 
       {/* Variations Modal */}
-      {showVariationsFor && (() => {
-        const p = products.find(prod => prod.id === showVariationsFor);
-        if (!p) return null;
-        return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#121214] border border-white/10 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-              <div className="p-6 border-b border-white/5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Gerenciar Variações</h3>
-                    <p className="text-[10px] text-white/40 font-bold uppercase">{p.name}</p>
-                  </div>
-                  <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 p-2 rounded-xl text-white/40 hover:text-white">
-                     <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                  <Input 
-                    value={manualSearch}
-                    onChange={e => handleManualSearch(e.target.value, p)}
-                    placeholder="Pesquisar no banco (nome ou EAN)..."
-                    className="bg-black/40 border-white/10 pl-12 h-12 rounded-xl text-xs placeholder:text-white/10"
-                  />
-                  {isSearchingManual && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />}
-                </div>
-              </div>
-              
-              <div className="p-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '60vh' }}>
-                {manualResults.length > 0 && (
-                  <div className="mb-8 animate-in fade-in slide-in-from-top-2">
-                     <h4 className="text-[9px] font-black uppercase tracking-widest text-blue-500 mb-4 flex items-center gap-2">
-                       <Search className="w-3 h-3" /> Resultados da Pesquisa Manual
-                     </h4>
-                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {manualResults.map(v => (
-                          <div key={v.ean} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-3 flex flex-col items-center gap-2 group relative">
-                            <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
-                            <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
-                            <div className="flex gap-1 mt-2">
-                               <Button onClick={() => {
-                                 setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]], confidence: 'high' as const, warning: undefined } : old));
-                                 setShowVariationsFor(null);
-                                 setManualSearch('');
-                                 setManualResults([]);
-                                 toast.success('Produto substituído!');
-                               }} className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Substituir</Button>
-                               <Button onClick={() => addVariation(p.id, v.images[0])} className="h-7 px-3 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
-                            </div>
-                          </div>
-                        ))}
-                     </div>
-                  </div>
-                )}
-
-                <h4 className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-4 flex items-center gap-2">
-                  <Sparkles className="w-3 h-3" /> Sugestões Inteligentes
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {p.images.map((img, i) => (
-                    <div key={`cur-${i}`} className="relative bg-primary/10 border-2 border-primary/40 rounded-2xl p-3 flex flex-col items-center gap-2 group">
-                      <img src={img} className="w-full h-20 object-contain" />
-                      <span className="text-[8px] font-black uppercase text-primary">Na Pilha</span>
-                      <button onClick={() => removeVariation(p.id, i)} className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Trash2 className="w-3 h-3" />
+      {showVariationsFor && products.find(prod => prod.id === showVariationsFor) && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#121214] border border-white/10 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            {(() => {
+              const p = products.find(prod => prod.id === showVariationsFor)!;
+              return (
+                <>
+                  <div className="p-6 border-b border-white/5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white">Gerenciar Variações</h3>
+                        <p className="text-[10px] text-white/40 font-bold uppercase">{p.name}</p>
+                      </div>
+                      <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 p-2 rounded-xl text-white/40 hover:text-white">
+                         <X className="w-4 h-4" />
                       </button>
                     </div>
-                  ))}
 
-                  {variations.length > 0 ? variations.map(v => (
-                    <div key={v.ean} onClick={() => addVariation(p.id, v.images[0])} 
-                      className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col items-center gap-2 hover:border-blue-500/50 cursor-pointer transition-all group">
-                      <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
-                      <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                      <Input 
+                        value={manualSearch}
+                        onChange={e => handleManualSearch(e.target.value, p)}
+                        placeholder="Pesquisar no banco (nome ou EAN)..."
+                        className="bg-black/40 border-white/10 pl-12 h-12 rounded-xl text-xs placeholder:text-white/10"
+                      />
+                      {isSearchingManual && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />}
                     </div>
-                  )) : !isSearchingManual && manualResults.length === 0 && (
-                    <div className="col-span-full py-8 text-center text-white/20 text-[10px] uppercase font-bold tracking-widest italic">
-                      Sem sugestões automáticas
-                    </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                  
+                  <div className="p-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '60vh' }}>
+                    {manualResults.length > 0 && (
+                      <div className="mb-8 animate-in fade-in slide-in-from-top-2">
+                         <h4 className="text-[9px] font-black uppercase tracking-widest text-blue-500 mb-4 flex items-center gap-2">
+                           <Search className="w-3 h-3" /> Resultados da Pesquisa Manual
+                         </h4>
+                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {manualResults.map(v => (
+                              <div key={v.ean} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-3 flex flex-col items-center gap-2 group relative">
+                                <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
+                                <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
+                                <div className="flex gap-1 mt-2">
+                                   <Button onClick={() => {
+                                     setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]], confidence: 'high' as const, warning: undefined } : old));
+                                     setShowVariationsFor(null);
+                                     setManualSearch('');
+                                     setManualResults([]);
+                                     toast.success('Produto substituído!');
+                                   }} className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Substituir</Button>
+                                   <Button onClick={() => addVariation(p.id, v.images[0])} className="h-7 px-3 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
+                                </div>
+                              </div>
+                            ))}
+                         </div>
+                      </div>
+                    )}
 
-              <div className="p-4 bg-black/40 border-t border-white/5 flex justify-end">
-                <Button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest">Fechar</Button>
-              </div>
-            </div>
+                    <h4 className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-4 flex items-center gap-2">
+                      <Sparkles className="w-3 h-3" /> Sugestões Inteligentes
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {p.images.map((img, i) => (
+                        <div key={`cur-${i}`} className="relative bg-primary/10 border-2 border-primary/40 rounded-2xl p-3 flex flex-col items-center gap-2 group">
+                          <img src={img} className="w-full h-20 object-contain" />
+                          <span className="text-[8px] font-black uppercase text-primary">Na Pilha</span>
+                          <button onClick={() => removeVariation(p.id, i)} className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {variations.length > 0 ? variations.map(v => (
+                        <div key={v.ean} onClick={() => addVariation(p.id, v.images[0])} 
+                          className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col items-center gap-2 hover:border-blue-500/50 cursor-pointer transition-all group">
+                          <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
+                          <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
+                        </div>
+                      )) : !isSearchingManual && manualResults.length === 0 && (
+                        <div className="col-span-full py-8 text-center text-white/20 text-[10px] uppercase font-bold tracking-widest italic">
+                          Sem sugestões automáticas
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-black/40 border-t border-white/5 flex justify-end">
+                    <Button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest">Fechar</Button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
-        );
-      })()}
+        </div>
+      )}
     </div>
   );
 };

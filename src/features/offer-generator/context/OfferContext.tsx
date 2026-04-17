@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { OfferProject } from '../components/OfferDashboard';
@@ -227,13 +228,23 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Undo History
   const historyRef = useRef<any[]>([]);
 
-  useEffect(() => {
-    const fetchClients = async () => {
-      const { data } = await supabase.from('calendar_clients').select('id, name').order('name');
+  const { isAuthenticated } = useApp();
+
+  const fetchClients = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('calendar_clients').select('id, name').order('name');
+      if (error) throw error;
       if (data) setClients(data);
-    };
-    fetchClients();
+    } catch (err) {
+      console.error('Erro ao carregar clientes:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchClients();
+    }
+  }, [isAuthenticated, fetchClients]);
 
   useEffect(() => {
     if (selectedClientName) localStorage.setItem('offer_generator_client', selectedClientName);

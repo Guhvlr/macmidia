@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import { useApp } from '@/contexts/useApp';
+import { monitoring } from '@/lib/monitoring';
 import { 
   Package, 
   Search, 
@@ -41,6 +42,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { padEan, getImageUrl } from "@/lib/ean";
 
 export default function Products() {
   const navigate = useNavigate();
@@ -74,24 +76,13 @@ export default function Products() {
     fetchCount();
   }, []);
 
-  const padEan = (ean: string) => {
-    const clean = (ean || '').replace(/[^0-9]/g, '');
-    if (clean.length > 1 && clean.length < 13) return clean.padStart(13, '0');
-    return clean;
-  };
-
-  const getImageUrl = (ean: string) => {
-    if (!ean || ean === 'Não encontrado') return null;
-    const cleanEan = ean.replace(/[^a-zA-Z0-9]/g, '');
-    // Adiciona timestamp para ignorar o cache do navegador/CDN
-    return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEan}.png?t=${Date.now()}`;
-  };
-
   const handleCopyLink = (ean: string) => {
     if (ean === 'Não encontrado') return;
     const url = getImageUrl(ean);
-    navigator.clipboard.writeText(url);
-    toast.success('Link da imagem copiado!');
+    if (url) {
+      navigator.clipboard.writeText(url);
+      toast.success('Link da imagem copiado!');
+    }
   };
 
   const [uploadingForEan, setUploadingForEan] = useState<string | null>(null);
@@ -119,14 +110,10 @@ export default function Products() {
         });
 
       if (storageErr) {
-        console.error('Erro detalhado do Storage:', storageErr);
+        monitoring.reportError('IMAGE_UPLOAD_STORAGE_FAILED', storageErr, { ean });
         throw new Error(`Falha no Storage: ${storageErr.message}`);
       }
       
-      console.log('Upload concluído com sucesso:', storageData);
-      
-      // ✅ Sincroniza com o Banco de Dados (Upsert)
-      // Agora salvamos explicitamente a nova URL e o caminho no registro do banco
       const productInList = searchResults.find(p => p.ean === ean);
       const storageUrl = getImageUrl(cleanEan);
       
@@ -363,7 +350,7 @@ export default function Products() {
       const noImage = processedResults.length - withImage;
       toast.success(`Busca concluída! ${withImage} com imagem, ${noImage} sem imagem.`);
     } catch (err: any) {
-      console.error('ERRO DETALHADO:', err);
+      monitoring.reportError('BULK_SEARCH_FAILED', err);
       const errorMsg = err.message || err.error_description || JSON.stringify(err);
       toast.error(`Erro: ${errorMsg}`);
     } finally {

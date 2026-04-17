@@ -270,183 +270,167 @@ Retorne JSON: { "items": [...] }`
       });
     }
 
-    // ─── STEP 2: Process each item based on mode ────────
+    // ─── STEP 2: Process items in Parallel Chunks ────────
+    // Processamos em grupos de 5 para não sobrecarregar as conexões do banco
+    const chunkSize = 5;
     const results = [];
 
-    for (const item of parsedItems) {
-      // ════════════════════════════════════════
-      // MODE: BARCODE — exact EAN lookup
-      // ════════════════════════════════════════
-      if (item.mode === 'barcode') {
-        const ean = String(item.barcode || '').replace(/[^0-9]/g, '');
-        
-        let searchEan = ean.replace(/^0+/, ''); // Remove zero padding from the left
-        if (searchEan === '') searchEan = '0';
+    for (let i = 0; i < parsedItems.length; i += chunkSize) {
+      const chunk = parsedItems.slice(i, i + chunkSize);
+      
+      const chunkPromises = chunk.map(async (item) => {
+        // ════════════════════════════════════════
+        // MODE: BARCODE — exact EAN lookup
+        // ════════════════════════════════════════
+        if (item.mode === 'barcode') {
+          const ean = String(item.barcode || '').replace(/[^0-9]/g, '');
+          let searchEan = ean.replace(/^0+/, ''); 
+          if (searchEan === '') searchEan = '0';
 
-        // Try stripped EAN first (handles short codes in DB like 1234)
-        let { data } = await supabase
-          .from('products')
-          .select('*')
-          .eq('ean', searchEan)
-          .maybeSingle();
+          let { data } = await supabase.from('products').select('*').eq('ean', searchEan).maybeSingle();
+          if (!data && ean !== searchEan) {
+             const res2 = await supabase.from('products').select('*').eq('ean', ean).maybeSingle();
+             data = res2.data;
+          }
 
-        // If not found, try the exact ean (handles edge cases where zeros might have been saved)
-        if (!data && ean !== searchEan) {
-           const res2 = await supabase.from('products').select('*').eq('ean', ean).maybeSingle();
-           data = res2.data;
-        }
+          if (!data) {
+            return {
+              original: item.original,
+              mode: 'barcode',
+              display_name: ean,
+              price: item.price || null,
+              found: true,
+              match: { name: ean, ean: ean, images: [] },
+              confidence: 'none',
+              confidence_reason: 'Código de barras novo (Cadastro sugerido)',
+              warning: 'Código de barras não encontrado no banco. Adicione uma foto para completar.',
+            };
+          }
 
-        if (!data) {
-          results.push({
+          return {
             original: item.original,
             mode: 'barcode',
-            display_name: ean,
+            display_name: data.name,
             price: item.price || null,
-            found: true, // Forçamos found para entrar na lista principal
-            match: { name: ean, ean: ean, images: [] }, // Mock match para permitir Add Foto
-            confidence: 'none',
-            confidence_reason: 'Código de barras novo (Cadastro sugerido)',
-            warning: 'Código de barras não encontrado no banco. Adicione uma foto para completar.',
-          });
-          continue;
+            found: true,
+            match: data,
+            confidence: 'exact',
+            confidence_reason: 'Código de barras encontrado',
+          };
         }
 
-        results.push({
-          original: item.original,
-          mode: 'barcode',
-          display_name: data.name,   // ← DB official name for barcode mode
-          price: item.price || null,
-          found: true,
-          match: data,
-          confidence: 'exact',
-          confidence_reason: 'Código de barras encontrado',
+        // ════════════════════════════════════════
+        // MODE: DESCRIPTION — fuzzy search + confidence
+        // ════════════════════════════════════════
+        const userDisplayName = item.display_name || item.original || '';
+        let searchText = (item.search_name || userDisplayName).toLowerCase().trim();
+        
+        let { data: matches, error: rpcErr } = await supabase.rpc('search_products_fuzzy', {
+          search_text: searchText,
+          match_threshold: 0.10,
         });
-        continue;
-      }
 
-      // ════════════════════════════════════════
-      // MODE: DESCRIPTION — fuzzy search + confidence
-      // ════════════════════════════════════════
-      // ── Search V2: Multi-Pass Search ──
-      const userDisplayName = item.display_name || item.original || '';
-      let searchText = (item.search_name || userDisplayName).toLowerCase().trim();
-      
-      // Try 1: Full simplified name
-      let { data: matches, error: rpcErr } = await supabase.rpc('search_products_fuzzy', {
-        search_text: searchText,
-        match_threshold: 0.10, // Baixíssimo para automação total
-      });
+        if ((!matches || matches.length === 0) && searchText !== stripUnits(searchText)) {
+           const cleanSearch = stripUnits(searchText);
+           if (cleanSearch.length > 2) {
+             const res2 = await supabase.rpc('search_products_fuzzy', {
+               search_text: cleanSearch,
+               match_threshold: 0.10,
+             });
+             matches = res2.data;
+             searchText = cleanSearch;
+           }
+        }
 
-      // Try 2: If no matches, strip units and try again (e.g. "Arroz 5kg" -> "Arroz")
-      if ((!matches || matches.length === 0) && searchText !== stripUnits(searchText)) {
-         const cleanSearch = stripUnits(searchText);
-         if (cleanSearch.length > 2) {
-           const res2 = await supabase.rpc('search_products_fuzzy', {
-             search_text: cleanSearch,
+        if ((!matches || matches.length === 0) && item.brand_hint && item.type_hint) {
+          const brandTypeSearch = `${item.brand_hint} ${item.type_hint}`.toLowerCase();
+          const res3 = await supabase.rpc('search_products_fuzzy', {
+             search_text: brandTypeSearch,
              match_threshold: 0.10,
-           });
-           matches = res2.data;
-           searchText = cleanSearch;
-         }
-      }
-
-      // Try 3: Brand + Type search (Very effective for grocery)
-      if ((!matches || matches.length === 0) && item.brand_hint && item.type_hint) {
-        const brandTypeSearch = `${item.brand_hint} ${item.type_hint}`.toLowerCase();
-        const res3 = await supabase.rpc('search_products_fuzzy', {
-           search_text: brandTypeSearch,
-           match_threshold: 0.10,
-        });
-        if (res3.data && res3.data.length > 0) {
-          matches = res3.data;
-          searchText = brandTypeSearch;
-        }
-      }
-
-      // Try 4: Last Ditch ILIKE Search (Keywords)
-      if (!matches || matches.length === 0) {
-        const keywords = userDisplayName.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !['kg', 'ml', 'un', 'pct'].includes(w)).slice(0, 3);
-        if (keywords.length > 0) {
-          let query = supabase.from('products').select('*');
-          for (const k of keywords) {
-            query = query.ilike('name', `%${k}%`);
-          }
-          const { data: res4 } = await query.limit(3);
-          if (res4 && res4.length > 0) {
-            matches = res4;
+          });
+          if (res3.data && res3.data.length > 0) {
+            matches = res3.data;
+            searchText = brandTypeSearch;
           }
         }
-      }
 
-      if (rpcErr || !matches || matches.length === 0) {
-        results.push({
-          original: item.original,
-          mode: 'description',
-          display_name: userDisplayName,  // ← preserve user text ALWAYS
-          price: item.price || null,
-          found: true, // Forçamos found para que o usuário possa associar foto/manual
-          match: { name: userDisplayName, ean: 'NA', images: [] },
-          confidence: 'none',
-          confidence_reason: 'Nenhum produto similar no banco',
-        });
-        continue;
-      }
+        if (!matches || matches.length === 0) {
+          const keywords = userDisplayName.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !['kg', 'ml', 'un', 'pct'].includes(w)).slice(0, 3);
+          if (keywords.length > 0) {
+            let query = supabase.from('products').select('*');
+            for (const k of keywords) { query = query.ilike('name', `%${k}%`); }
+            const { data: res4 } = await query.limit(3);
+            if (res4 && res4.length > 0) { matches = res4; }
+          }
+        }
 
-      // Analyze all candidates (up to 25) with our confidence engine
-      // This will prioritize the ones with matching brands over just text similarity
-      const candidatesWithConfidence = (matches || [])
-        .map((m: any) => ({
-          match: m,
-          confidence: assessConfidence(
-            item.brand_hint || '',
-            item.type_hint || '',
-            userDisplayName,
-            m.name || '',
-            m.brand || ''
-          )
-        }))
-        .sort((a, b) => {
-          // Double score for brand match + high confidence
-          const levels: Record<string, number> = { high: 4, medium: 3, low: 1, none: 0 };
-          return levels[b.confidence.level] - levels[a.confidence.level];
-        });
+        if (rpcErr || !matches || matches.length === 0) {
+          return {
+            original: item.original,
+            mode: 'description',
+            display_name: userDisplayName,
+            price: item.price || null,
+            found: true,
+            match: { name: userDisplayName, ean: 'NA', images: [] },
+            confidence: 'none',
+            confidence_reason: 'Nenhum produto similar no banco',
+          };
+        }
 
-      // Se não houver nenhum candidato sequer razoável, fallback para o original (item sem vínculo)
-      if (candidatesWithConfidence.length === 0 || candidatesWithConfidence[0].confidence.level === 'none') {
-        const bestTry = candidatesWithConfidence[0]; // even if none, might have one
-        results.push({
+        const candidatesWithConfidence = (matches || [])
+          .map((m: any) => ({
+            match: m,
+            confidence: assessConfidence(
+              item.brand_hint || '',
+              item.type_hint || '',
+              userDisplayName,
+              m.name || '',
+              m.brand || ''
+            )
+          }))
+          .sort((a, b) => {
+            const levels: Record<string, number> = { high: 4, medium: 3, low: 1, none: 0 };
+            return levels[b.confidence.level] - levels[a.confidence.level];
+          });
+
+        const bestCandidate = candidatesWithConfidence[0];
+        if (!bestCandidate || bestCandidate.confidence.level === 'none') {
+          return {
+            original: item.original,
+            mode: 'description',
+            display_name: userDisplayName,
+            price: item.price || null,
+            found: true,
+            match: bestCandidate?.match || { name: userDisplayName, ean: 'NA', images: [] },
+            confidence: bestCandidate?.confidence.level || 'none',
+            confidence_reason: bestCandidate?.confidence.reason || 'Nenhum produto similar no banco',
+          };
+        }
+
+        return {
           original: item.original,
           mode: 'description',
           display_name: userDisplayName,
           price: item.price || null,
           found: true,
-          match: bestTry ? bestTry.match : { name: userDisplayName, ean: 'NA', images: [] },
-          confidence: bestTry ? bestTry.confidence.level : 'none',
-          confidence_reason: bestTry ? bestTry.confidence.reason : 'Nenhum produto similar no banco',
-        });
-        continue;
-      }
-
-      const bestCandidate = candidatesWithConfidence[0];
-      let bestMatch = bestCandidate.match;
-      let bestConf = bestCandidate.confidence;
-
-      results.push({
-        original: item.original,
-        mode: 'description',
-        display_name: userDisplayName,
-        price: item.price || null,
-        found: true,
-        match: bestMatch,
-        confidence: bestConf.level,
-        confidence_reason: bestConf.reason,
-        debug: { searchText, brandHint: item.brand_hint, typeHint: item.type_hint, matchesFound: matches?.length || 0 },
-        warning: ['low', 'none'].includes(bestConf.level) ? 'Confira se este produto está correto' : undefined,
+          match: bestCandidate.match,
+          confidence: bestCandidate.confidence.level,
+          confidence_reason: bestCandidate.confidence.reason,
+          warning: ['low', 'none'].includes(bestCandidate.confidence.level) ? 'Confira se este produto está correto' : undefined,
+        };
       });
+
+      const chunkResults = await Promise.all(chunkPromises);
+      results.push(...chunkResults);
     }
 
     console.log('--- Process Products V2 Complete:', results.length, 'items ---');
-    return new Response(JSON.stringify({ results }), {
+    return new Response(JSON.stringify({ 
+      results,
+      meta: {
+        isFallback: parsedItems.some(p => p.mode === 'description' && !p.brand_hint) // Indicador heurístico de que o GPT não refinou os dados
+      }
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 

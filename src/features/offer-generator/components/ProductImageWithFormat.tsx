@@ -33,8 +33,9 @@ export const ProductImageWithFormat = ({
       setCurrentUrl(src);
       setFormat('MANUAL');
     } else {
-      // Começa sempre tentando o PNG
-      setCurrentUrl(`${baseSrc}.png?t=${Date.now()}`);
+      // Tenta o PNG limpo primeiro para permitir cache do navegador.
+      // O timestamp agora é gerido apenas se houver mudança explícita ou erro.
+      setCurrentUrl(`${baseSrc}.png`);
       setFormat('PNG');
     }
   }, [src, isManual, baseSrc]);

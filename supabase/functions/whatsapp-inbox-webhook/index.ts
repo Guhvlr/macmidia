@@ -25,17 +25,33 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json();
+    console.log('[DEBUG] Webhook recebido com sucesso. Evento:', payload.event || payload.type);
+    
+    // Processamos qualquer coisa que chegue para diagnóstico
     const event = payload.event || payload.type;
-
-    if (event !== 'messages.upsert' && event !== 'MESSAGES_UPSERT' && event !== 'messages.update' && event !== 'MESSAGES_UPDATE') {
-      return new Response(JSON.stringify({ status: 'ignored' }), { headers: corsHeaders });
-    }
 
     const messageData = payload.data || payload;
     const message = messageData.message || messageData;
     const key = messageData.key || message.key || {};
     const remoteJid = key.remoteJid || messageData.remoteJid || '';
     const sender = key.participant || key.remoteJid || '';
+    
+    // Extração robusta do ID para desduplicação
+    const whatsappMessageId = (key.id || messageData.id || '').toString() || null;
+
+    // 1️⃣ VERIFICA DUPLICATA (EVITA LOOPS DE MENSAGENS BUGADAS)
+    if (whatsappMessageId) {
+      const { data: existing } = await supabase
+        .from('whatsapp_inbox')
+        .select('id')
+        .eq('whatsapp_message_id', whatsappMessageId)
+        .maybeSingle();
+      
+      if (existing) {
+        console.log(`[DEDUP] Mensagem duplicada ignorada: ${whatsappMessageId}`);
+        return new Response(JSON.stringify({ status: 'ignored', reason: 'duplicate' }), { headers: corsHeaders });
+      }
+    }
 
     // --- 🏆 CHAVES REAIS DO JSON 🏆 ---
     const evoServer = payload.server_url;
@@ -56,7 +72,15 @@ Deno.serve(async (req) => {
     const mediaUrl = mData.url || messageData.mediaUrl || payload.mediaUrl || null;
     const mediaMimeType = mData.mimetype || messageData.mimeType || null;
 
-    let messageText = message.conversation || message.extendedTextMessage?.text || messageData.body || mData.caption || '';
+    let messageText = message.conversation || 
+                      message.extendedTextMessage?.text || 
+                      message.text || 
+                      messageData.body || 
+                      messageData.content || 
+                      messageData.text || 
+                      mData.caption || 
+                      '';
+    
     messageText = messageText.replace(/\[(image|video|document|audio|sticker|imagem|áudio|vídeo)\]/gi, '').trim();
 
     // 🏆 LÓGICA DE NOME (FOCADA NO GRUPO) 🏆
@@ -89,19 +113,79 @@ Deno.serve(async (req) => {
             .maybeSingle();
           if (prevMsg?.sender_name) finalSenderName = prevMsg.sender_name;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('[GROUP-FIX ERROR]:', e.message);
       }
     }
 
-    // --- 🏆 EXTRAÇÃO DE DOCUMENTOS ULTRA-RESILIENTE 🏆 ---
-    if (messageType === 'document') {
-      try {
-        // 1. Busca profunda pela URL (Evolution v1, v2 e mData)
-        const finalUrl = mediaUrl || mData.url || payload.data?.message?.documentMessage?.url || payload.data?.message?.url;
+    // 2️⃣ SANITIZAÇÃO DO PAYLOAD (ECONOMIA DE MEMÓRIA)
+    const sanitize = (obj: any): any => {
+      if (!obj || typeof obj !== 'object') return obj;
+      const newObj = Array.isArray(obj) ? [...obj] : { ...obj };
+      for (const k in newObj) {
+        if (typeof newObj[k] === 'string' && (newObj[k].length > 1000 || newObj[k].startsWith('data:'))) {
+          newObj[k] = '[HIDDEN-BY-CLEANUP]';
+        } else if (typeof newObj[k] === 'object') {
+          newObj[k] = sanitize(newObj[k]);
+        }
+      }
+      return newObj;
+    };
+    const cleanPayload = sanitize(payload);
+
+    // 3️⃣ SALVA IMEDIATAMENTE (GARANTE O RECEBIMENTO)
+    const messageDataToInsert: any = {
+      remote_jid: remoteJid,
+      sender: sender,
+      sender_name: finalSenderName,
+      message_text: messageText,
+      message_type: messageType,
+      media_url: mediaUrl,
+      media_mime_type: mediaMimeType,
+      raw_payload: cleanPayload,
+      status: 'pending',
+    };
+
+    if (whatsappMessageId) {
+      messageDataToInsert.whatsapp_message_id = whatsappMessageId;
+    }
+
+    const { data: savedMsg, error: saveError } = await supabase
+      .from('whatsapp_inbox')
+      .insert(messageDataToInsert)
+      .select()
+      .single();
+
+    if (saveError) {
+      console.error('[DATABASE SAVE ERROR]:', saveError.message);
+      
+      // Se a coluna ainda não existir no banco, tentamos salvar sem ela
+      if (saveError.message.includes('whatsapp_message_id')) {
+        delete messageDataToInsert.whatsapp_message_id;
+        const { data: retryMsg, error: retryError } = await supabase
+          .from('whatsapp_inbox')
+          .insert(messageDataToInsert)
+          .select()
+          .single();
         
-        // 2. Busca pelo nome do arquivo para identificar Excel/Word
-        const rawFileName = mData.fileName || mData.caption || payload.data?.message?.documentMessage?.fileName || '';
+        if (retryError) throw retryError;
+        return new Response(JSON.stringify({ status: 'saved-without-id', id: retryMsg?.id }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Para qualquer outro erro (ex: duplicado), respondemos 200 para parar o loop
+      return new Response(JSON.stringify({ status: 'ignored', error: saveError.message }), { 
+        status: 200, headers: corsHeaders 
+      });
+    }
+
+    // 4️⃣ EXTRAÇÃO DE DOCUMENTOS (APENAS SE SOLICITADO MANUALMENTE)
+    // Isso evita que o Supabase baixe arquivos sozinho e encha a memória.
+    if (payload.force_extract && messageType === 'document' && savedMsg) {
+      try {
+        const finalUrl = mediaUrl || mData.url || payload.data?.message?.documentMessage?.url;
+        const rawFileName = mData.fileName || mData.caption || '';
         const fileName = (rawFileName || '').toLowerCase();
         const mime = (mediaMimeType || '').toLowerCase();
         
@@ -109,7 +193,6 @@ Deno.serve(async (req) => {
         const isWord = mime.includes('word') || mime.includes('officedocument.wordprocessingml') || fileName.includes('.doc') || fileName.includes('.docx');
 
         if (finalUrl && (isExcel || isWord)) {
-          // Se reconheceu, tenta baixar e ler
           const fileResp = await fetch(finalUrl, { 
             headers: { 'apikey': evoApiKey || '' },
             signal: AbortSignal.timeout(15000)
@@ -117,52 +200,41 @@ Deno.serve(async (req) => {
 
           if (fileResp.ok) {
             const arrayBuffer = await fileResp.arrayBuffer();
+            let extractedText = '';
+            
             if (isExcel) {
               const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
-              let extractedText = '';
               workbook.SheetNames.forEach(sheet => {
                 const txt = XLSX.utils.sheet_to_txt(workbook.Sheets[sheet]);
                 if (txt.trim()) extractedText += `--- Planilha: ${sheet} ---\n${txt}\n\n`;
               });
-              if (extractedText.trim()) messageText = `✅ [CONTEÚDO EXCEL]:\n${extractedText.trim()}`;
             } else if (isWord) {
               const res = await mammoth.extractRawText({ arrayBuffer });
-              if (res.value.trim()) messageText = `✅ [CONTEÚDO WORD]:\n${res.value.trim()}`;
+              extractedText = res.value;
             }
-          } else {
-             console.error(`[DOC-EXTRACT] Erro download: ${fileResp.status}`);
+
+            if (extractedText.trim()) {
+              const cleanText = isExcel ? `✅ [CONTEÚDO EXCEL]:\n${extractedText.trim()}` : `✅ [CONTEÚDO WORD]:\n${extractedText.trim()}`;
+              await supabase
+                .from('whatsapp_inbox')
+                .update({ message_text: cleanText })
+                .eq('id', savedMsg.id);
+            }
           }
         }
-      } catch (err) {
-        console.error('[DOC-EXTRACT ERROR]:', err.message);
+      } catch (err: any) {
+        console.error('[MANUAL-EXTRACT ERROR]:', err.message);
       }
     }
 
-    const { data: savedMsg, error: saveError } = await supabase
-      .from('whatsapp_inbox')
-      .insert({
-        remote_jid: remoteJid,
-        sender: sender,
-        sender_name: finalSenderName,
-        message_text: messageText,
-        message_type: messageType,
-        media_url: mediaUrl,
-        media_mime_type: mediaMimeType,
-        raw_payload: payload,
-        status: 'pending',
-      })
-      .select()
-      .single();
-
-    if (saveError) throw saveError;
-    return new Response(JSON.stringify({ status: 'saved', id: savedMsg.id }), {
+    return new Response(JSON.stringify({ status: 'saved', id: savedMsg?.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error: any) {
     console.error('Webhook Runtime Error:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    return new Response(JSON.stringify({ error: error.message, status: 'fail-safe' }), {
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });

@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import KanbanCard from '@/features/kanban/components/KanbanCard';
 import AddCardDialog from '@/features/kanban/components/AddCardDialog';
+import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 
 const CORRECTION_COLUMNS = [
   { key: 'para-producao', title: 'Para Produção', color: 'bg-info' },
@@ -18,6 +19,7 @@ const CORRECTION_COLUMNS = [
 const CorrectionBoard = () => {
   const navigate = useNavigate();
   const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
+  const { ref: scrollRef, onMouseDown } = useDraggableScroll();
 
   const activeCards = useMemo(() => kanbanCards.filter(c => !c.archivedAt && CORRECTION_COLUMNS.some(col => col.key === c.column)), [kanbanCards]);
 
@@ -68,7 +70,11 @@ const CorrectionBoard = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar">
+      <main 
+        ref={scrollRef as any}
+        onMouseDown={onMouseDown}
+        className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+      >
         {CORRECTION_COLUMNS.map(col => {
           const colCards = cardsByColumn[col.key] || [];
           return (

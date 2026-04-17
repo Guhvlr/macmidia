@@ -55,6 +55,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isTod
 import { ptBR } from 'date-fns/locale';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 import { toast } from 'sonner';
+import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 
 // Metric Card Component
 interface MetricCardProps {
@@ -101,6 +102,7 @@ const Index = () => {
     loggedUserClientLink
   } = useApp();
   
+  const { ref: scrollRef, onMouseDown } = useDraggableScroll();
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
@@ -421,7 +423,11 @@ const Index = () => {
               <button onClick={() => setShowAdd(true)} className="h-9 w-9 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all border border-white/10 text-white/40 shadow-lg hover:text-white hover:border-primary/40"><UserPlus className="w-4 h-4" /></button>
             )}
           </div>
-          <div className="p-6 pb-2 overflow-x-auto trello-scrollbar w-full">
+          <div 
+            ref={scrollRef as any}
+            onMouseDown={onMouseDown}
+            className="p-6 pb-2 overflow-x-auto trello-scrollbar w-full cursor-grab active:cursor-grabbing select-none"
+          >
             <div className="flex flex-nowrap items-center gap-8 min-w-max pb-4 px-1">
               {employees.slice(0, 15).map((emp, idx) => (
                 <div 

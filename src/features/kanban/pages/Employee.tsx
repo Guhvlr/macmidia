@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 
 const COLUMN_COLORS = [
   { value: 'bg-info', label: 'Azul' },
@@ -24,6 +25,7 @@ const Employee = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employees, kanbanCards, updateEmployee, getColumnsForEmployee, addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, loading } = useApp();
+  const { ref: scrollRef, onMouseDown } = useDraggableScroll();
 
   const [showAddCol, setShowAddCol] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
@@ -142,7 +144,11 @@ const Employee = () => {
         </div>
 
         {/* Kanban board */}
-        <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start min-h-0 custom-scrollbar">
+        <div 
+          ref={scrollRef as any}
+          onMouseDown={onMouseDown}
+          className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start min-h-0 custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+        >
           {columns.map(col => (
             <KanbanColumn
               key={col.id}

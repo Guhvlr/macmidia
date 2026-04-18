@@ -14,7 +14,8 @@ import {
   ChevronLeft, 
   ChevronRight, 
   LucideIcon,
-  Zap
+  Zap,
+  BrainCircuit
 } from 'lucide-react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
@@ -169,6 +170,20 @@ const AppSidebar = ({ collapsed, onToggle, teamOpen, onTeamToggle }: Props) => {
             >
               <Shield className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive('/usuarios') ? 'text-white' : 'text-white/40 group-hover:text-white'}`} />
               {!collapsed && <span className="animate-fade-in truncate">Membros / Acessos</span>}
+            </button>
+
+            <button
+              onClick={() => navigate('/admin/inteligencia')}
+              className={`relative w-full flex items-center gap-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 group mt-1
+                ${collapsed ? 'justify-center px-0 py-2.5' : 'px-4 py-3'}
+                ${isActive('/admin/inteligencia')
+                  ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+                }`}
+              title={collapsed ? 'IA Central' : undefined}
+            >
+              <BrainCircuit className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive('/admin/inteligencia') ? 'text-black' : 'text-white/40 group-hover:text-white'}`} />
+              {!collapsed && <span className="animate-fade-in truncate">Centro de IA</span>}
             </button>
           </>
         )}

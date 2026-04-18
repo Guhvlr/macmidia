@@ -43,8 +43,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { padEan, getImageUrl } from "@/lib/ean";
+import { useIntelligence } from '@/features/intelligence/context/IntelligenceContext';
 
 export default function Products() {
+  const { trackEvent } = useIntelligence();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const catalogInputRef = useRef<HTMLInputElement>(null);
@@ -143,6 +145,7 @@ export default function Products() {
       ));
 
       toast.success(`Imagem para ${ean} atualizada!`);
+      trackEvent('insight', 'products', `Banco de imagens aprimorado: Arquivo adicionado manualmente para o produto ${cleanEan}`);
     } catch (err: any) {
       console.error(err);
       toast.error('Erro no upload: ' + err.message);
@@ -348,6 +351,14 @@ export default function Products() {
       
       const withImage = processedResults.filter((r: any) => r.images.length > 0).length;
       const noImage = processedResults.length - withImage;
+      const lowConfidenceCount = processedResults.filter((r: any) => r.confidence === 'low').length;
+      
+      trackEvent('observation', 'products', `Busca via IA executada: ${processedResults.length} itens interpretados (${lowConfidenceCount} de baixa confiança).`);
+      
+      if (lowConfidenceCount > 0) {
+        trackEvent('alert', 'products', `Atenção: ${lowConfidenceCount} itens com confiança baixa na última busca. Podem requerer correção manual.`);
+      }
+
       toast.success(`Busca concluída! ${withImage} com imagem, ${noImage} sem imagem.`);
     } catch (err: any) {
       monitoring.reportError('BULK_SEARCH_FAILED', err);
@@ -389,6 +400,8 @@ export default function Products() {
   };
 
   const swapProduct = (oldEan: string, newProd: any) => {
+    const originalItem = searchResults.find(i => i.ean === oldEan);
+    
     setSearchResults(prev => prev.map(item => 
       item.ean === oldEan ? { 
         ...item, 
@@ -402,6 +415,12 @@ export default function Products() {
     ));
     setShowVariationsFor(null);
     toast.success('Produto substituído!');
+    
+    if (originalItem && originalItem.name !== newProd.name && originalItem.name !== 'Não encontrado') {
+      trackEvent('correction', 'products', `Fricção de Busca: IA errou na previsão. Usuário corrigiu de [${originalItem.name}] para [${newProd.name}]`);
+    } else {
+      trackEvent('correction', 'products', `Base enriquecida: Usuário vinculou manualmente ao EAN ${newProd.ean}`);
+    }
   };
 
   const addToStack = (ean: string, imageUrl: string) => {

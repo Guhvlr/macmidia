@@ -4,15 +4,19 @@ import { UIProvider } from './UIContext';
 import { KanbanProvider } from './KanbanContext';
 import { AutomationProvider } from './AutomationContext';
 
+import { IntelligenceProvider } from '@/features/intelligence/context/IntelligenceContext';
+
 export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <UIProvider>
-        <KanbanProvider>
-          <AutomationProvider>
-            {children}
-          </AutomationProvider>
-        </KanbanProvider>
+        <IntelligenceProvider>
+          <KanbanProvider>
+            <AutomationProvider>
+              {children}
+            </AutomationProvider>
+          </KanbanProvider>
+        </IntelligenceProvider>
       </UIProvider>
     </AuthProvider>
   );

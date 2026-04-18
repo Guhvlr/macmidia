@@ -25,6 +25,7 @@ const WhatsAppInbox = lazy(() => import("@/features/automation/pages/WhatsAppInb
 const Products = lazy(() => import("@/features/products/pages/Products"));
 const OfferStudio = lazy(() => import("@/features/offer-generator/pages/OfferStudio"));
 const Report = lazy(() => import("@/features/reports/pages/Report"));
+const IntelligenceCenter = lazy(() => import("@/features/intelligence/pages/IntelligenceCenter"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -62,6 +63,7 @@ const AppRoutes = () => (
       <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
       <Route path="/gerador-artes" element={<ProtectedRoute><OfferStudio /></ProtectedRoute>} />
       <Route path="/relatorio" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+      <Route path="/admin/inteligencia" element={<ProtectedRoute><IntelligenceCenter /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>

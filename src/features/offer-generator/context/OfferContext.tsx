@@ -3,6 +3,7 @@ import { useApp } from '@/contexts/useApp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { OfferProject } from '../components/OfferDashboard';
+import { useIntelligence } from '@/features/intelligence/context/IntelligenceContext';
 
 export interface ProductItem {
   id: string;
@@ -229,6 +230,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const historyRef = useRef<any[]>([]);
 
   const { isAuthenticated } = useApp();
+  const { trackEvent } = useIntelligence();
 
   const fetchClients = useCallback(async () => {
     try {
@@ -546,6 +548,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveProjectId(data.id);
       setActiveProjectName(data.name);
       toast.success(`Oferta "${name}" criada!`);
+      trackEvent('observation', 'offer_studio', `Nova Arte/Projeto gerado: "${name}" (${slots.length * pageCount} telas)`);
     } catch (err: any) {
       toast.error('Erro ao criar oferta: ' + (err.message || ''));
       throw err;
@@ -573,6 +576,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .eq('id', activeProjectId);
       if (error) throw error;
       toast.success('Alterações salvas!');
+      trackEvent('observation', 'offer_studio', `Projeto salvo: Ajustes de design aplicados em "${activeProjectName}"`);
     } catch (err: any) {
       toast.error('Erro ao salvar: ' + (err.message || ''));
     }

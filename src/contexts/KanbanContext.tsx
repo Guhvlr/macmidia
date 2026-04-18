@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { monitoring } from '@/lib/monitoring';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
+import { useIntelligence } from '@/features/intelligence/context/IntelligenceContext';
 import type {
   CalendarClient,
   CalendarTask,
@@ -123,6 +124,7 @@ function createDebouncedRefetch(fn: () => void, delayMs = 2000) {
 export function KanbanProvider({ children }: { children: ReactNode }) {
   const { loggedUserId, loggedUserName, isAuthenticated } = useAuth();
   const { setLoading } = useUI();
+  const { trackEvent } = useIntelligence();
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
@@ -382,6 +384,8 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     if (actionDescription) {
       const hist = [createHistoryAction('edit', actionDescription), ...(existing.history || [])];
       db.history = hist; op.history = hist;
+      
+      trackEvent('correction', 'kanban', `Modificação do card "${existing.clientName}": ${actionDescription}`);
     }
     pendingOpsRef.current.add(id);
     setKanbanCards(prev => prev.map(c => c.id === id ? { ...c, ...op } : c));
@@ -413,7 +417,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     } finally {
       setTimeout(() => pendingOpsRef.current.delete(id), 1500);
     }
-  }, [kanbanCards, createHistoryAction, debouncedRefetchCards]);
+  }, [kanbanCards, createHistoryAction, debouncedRefetchCards, trackEvent]);
 
   const deleteKanbanCard = useCallback(async (id: string) => {
     try {
@@ -439,6 +443,10 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     const op: Partial<KanbanCard> = { column, history: hist };
     const db: any = { column, history: hist };
 
+    if (colDef && card.column !== column) {
+      trackEvent('observation', 'kanban', `Fluxo Operacional: Job "${card.clientName}" movido para etapa: [${colDef.title}]`);
+    }
+
     if (column === 'em-producao' && card.column !== 'em-producao') {
       db.timer_running = true; db.timer_start = now; op.timerRunning = true; op.timerStart = now;
     } else if (column !== 'em-producao' && card.column === 'em-producao' && card.timerRunning) {
@@ -458,7 +466,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     }, { id, from: card.column, to: column });
 
     setTimeout(() => pendingOpsRef.current.delete(id), 1500);
-  }, [kanbanCards, kanbanColumns, createHistoryAction]);
+  }, [kanbanCards, kanbanColumns, createHistoryAction, trackEvent]);
 
   const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
     await supabase.from('kanban_columns').insert({ employee_id: employeeId, title, color, column_key: title.toLowerCase().replace(/ /g, '-'), position: kanbanColumns.length });

@@ -131,8 +131,11 @@ interface OfferContextType {
   replaceSlotSettings: (index: number, settings: any) => void;
   activePage: number;
   setActivePage: React.Dispatch<React.SetStateAction<number>>;
+  customCanvasElements: Record<number, any[]>;
+  setCustomCanvasElements: React.Dispatch<React.SetStateAction<Record<number, any[]>>>;
   syncAllSlots: (settings: any, sourceIdx: number) => void;
   undo: () => void;
+  redo: () => void;
   pushHistory: () => void;
   selectedClientName: string | null;
   setSelectedClientName: (name: string | null) => void;
@@ -213,6 +216,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [layouts, setLayouts] = useState<any[]>([]);
   const [customFonts, setCustomFonts] = useState<{ name: string; url: string }[]>([]);
   const [slotSettings, setSlotSettings] = useState<Record<number, any>>({});
+  const [customCanvasElements, setCustomCanvasElements] = useState<Record<number, any[]>>({});
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedSlotIndices, setSelectedSlotIndices] = useState<number[]>([]);
   const [zoom, setZoom] = useState(0.8);
@@ -226,8 +230,9 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
 
-  // Undo History
-  const historyRef = useRef<any[]>([]);
+  // ── Undo/Redo History (index-based) ──
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
 
   const { isAuthenticated } = useApp();
   const { trackEvent } = useIntelligence();
@@ -254,38 +259,58 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [selectedClientName]);
 
   const pushHistory = useCallback(() => {
-    const snap = JSON.stringify({ slots, slotSettings, priceBadge, descConfig, imageConfig, config });
-    if (historyRef.current[historyRef.current.length - 1] === snap) return;
+    const snap = JSON.stringify({ slots, slotSettings, priceBadge, descConfig, imageConfig, config, customCanvasElements, products });
+    // Don't push if identical to current
+    if (historyIndexRef.current >= 0 && historyRef.current[historyIndexRef.current] === snap) return;
+    // Truncate any future states (discard redo stack when new action occurs)
+    historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
     historyRef.current.push(snap);
-    if (historyRef.current.length > 30) historyRef.current.shift();
-  }, [slots, slotSettings, priceBadge, descConfig, imageConfig, config]);
+    historyIndexRef.current = historyRef.current.length - 1;
+    // Limit history size
+    if (historyRef.current.length > 50) {
+      historyRef.current.shift();
+      historyIndexRef.current--;
+    }
+  }, [slots, slotSettings, priceBadge, descConfig, imageConfig, config, customCanvasElements, products]);
+
+  const applySnapshot = useCallback((snap: string) => {
+    try {
+      const last = JSON.parse(snap);
+      if (last.slots) setSlots(last.slots);
+      if (last.slotSettings) setSlotSettings(last.slotSettings);
+      if (last.priceBadge) setPriceBadge(last.priceBadge);
+      if (last.descConfig) setDescConfig(last.descConfig);
+      if (last.imageConfig) setImageConfig(last.imageConfig);
+      if (last.config) setConfig(last.config);
+      if (last.customCanvasElements !== undefined) setCustomCanvasElements(last.customCanvasElements);
+      if (last.products !== undefined) setProducts(last.products);
+    } catch (e) {
+      console.error('Error applying snapshot:', e);
+    }
+  }, []);
 
   const undo = useCallback(() => {
-    if (historyRef.current.length <= 1) {
+    if (historyIndexRef.current <= 0) {
       toast.info('Nada para desfazer');
       return;
     }
-    historyRef.current.pop(); // Remove current
-    const last = JSON.parse(historyRef.current[historyRef.current.length - 1]);
-    setSlots(last.slots);
-    setSlotSettings(last.slotSettings);
-    setPriceBadge(last.priceBadge);
-    setDescConfig(last.descConfig);
-    setImageConfig(last.imageConfig);
-    setConfig(last.config);
+    historyIndexRef.current--;
+    applySnapshot(historyRef.current[historyIndexRef.current]);
     toast.success('Desfeito!');
-  }, []);
+  }, [applySnapshot]);
 
-  useEffect(() => {
-    const handleUndoKeys = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        undo();
-      }
-    };
-    window.addEventListener('keydown', handleUndoKeys);
-    return () => window.removeEventListener('keydown', handleUndoKeys);
-  }, [undo]);
+  const redo = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) {
+      toast.info('Nada para refazer');
+      return;
+    }
+    historyIndexRef.current++;
+    applySnapshot(historyRef.current[historyIndexRef.current]);
+    toast.success('Refeito!');
+  }, [applySnapshot]);
+
+  // NOTE: Ctrl+Z / Ctrl+Shift+Z are now handled ONLY in OfferEditorPage
+  // to avoid conflicts. No global listener here.
 
   const fetchPresets = useCallback(async () => {
     try {
@@ -421,14 +446,48 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // REMOVIDO: A atualização global foi inibida
   };
 
-  const getSlotSettings = (index: number) => {
+  // Handle cross-tab loading for OfferEditorPage
+  useEffect(() => {
+    const isEditorTab = window.location.pathname.includes('/offer-editor');
+    if (isEditorTab) {
+      try {
+        let data: any = null;
+        if (window.opener && (window.opener as any).__MACMIDIA_EDITOR_DATA__) {
+          data = (window.opener as any).__MACMIDIA_EDITOR_DATA__;
+        } else {
+          const stored = localStorage.getItem('macmidia_offer_editor_data');
+          if (stored) data = JSON.parse(stored);
+        }
+
+        if (data) {
+          if (data.config) setConfig(data.config);
+          if (data.slots) setSlots(data.slots);
+          if (data.products) setProducts(data.products);
+          if (data.customFonts) setCustomFonts(data.customFonts);
+          if (data.pageCount) setPageCount(data.pageCount);
+          if (data.slotSettings) setSlotSettings(data.slotSettings);
+          if (data.customCanvasElements) setCustomCanvasElements(data.customCanvasElements);
+          // Push initial history after data loads so undo has a baseline
+          setTimeout(() => {
+            historyRef.current = [];
+            historyIndexRef.current = -1;
+            pushHistory();
+          }, 100);
+        }
+      } catch (e) {
+        console.error('Failed to load state in new tab:', e);
+      }
+    }
+  }, []);
+
+  const getSlotSettings = useCallback((index: number) => {
     const s = slotSettings[index] || {};
     return {
       priceBadge: { ...priceBadge, ...(s.priceBadge || {}) },
       descConfig: { ...descConfig, ...(s.descConfig || {}) },
       imageConfig: { ...imageConfig, ...(s.imageConfig || {}) },
     };
-  };
+  }, [slotSettings, priceBadge, descConfig, imageConfig]);
 
   const syncAllSlots = async (unused: any, sourceIdx: number) => {
     try {
@@ -508,7 +567,9 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setZoom(0.8);
     setPanOffset({ x: 0, y: 0 });
     setActivePage(0);
+    setCustomCanvasElements({});
     historyRef.current = [];
+    historyIndexRef.current = -1;
   }, []);
 
   const getProjectStateSnapshot = useCallback(() => {
@@ -533,6 +594,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (state.activePage != null) setActivePage(state.activePage);
     if (state.selectedClientName !== undefined) setSelectedClientName(state.selectedClientName);
     historyRef.current = [];
+    historyIndexRef.current = -1;
     setTimeout(() => pushHistory(), 50);
   }, [pushHistory]);
 
@@ -609,7 +671,8 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     replaceSlotSettings,
     syncAllSlots,
     activePage, setActivePage,
-    undo, pushHistory,
+    customCanvasElements, setCustomCanvasElements,
+    undo, redo, pushHistory,
     selectedClientName, setSelectedClientName, clients,
     activeProjectId, activeProjectName,
     openProject, saveProject, closeProject, createAndOpenProject, resetToDefaults,
@@ -618,7 +681,7 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     imageConfig, products, layouts, customFonts, presets, isLoadingPresets, 
     slotSettings, selectedSlotIndex, selectedSlotIndices, zoom, panOffset, 
     pageTemplates, isLoadingTemplates, activePage, activeProjectId, 
-    activeProjectName, selectedClientName, clients, undo, pushHistory,
+    activeProjectName, selectedClientName, clients, undo, redo, pushHistory,
     updateConfig, updatePriceBadge, updateDescConfig, updateImageConfig, 
     saveProjectTemplate, deleteProjectTemplate, loadProjectTemplate, 
     getSlotSettings, updateSlotSettings, replaceSlotSettings, syncAllSlots, 

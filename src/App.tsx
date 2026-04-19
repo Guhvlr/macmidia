@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { OfferProvider } from './features/offer-generator/context/OfferContext';
+import { OfferEditorPage } from '@/features/offer-generator/components/OfferEditorPage';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -38,6 +39,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <MainLayout>{children}</MainLayout>;
 }
 
+function FullScreenProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isAuthLoading } = useApp();
+  if (isAuthLoading) return <PageLoader />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isAuthLoading } = useApp();
   if (isAuthLoading) return <PageLoader />;
@@ -64,6 +72,7 @@ const AppRoutes = () => (
       <Route path="/gerador-artes" element={<ProtectedRoute><OfferStudio /></ProtectedRoute>} />
       <Route path="/relatorio" element={<ProtectedRoute><Report /></ProtectedRoute>} />
       <Route path="/admin/inteligencia" element={<ProtectedRoute><IntelligenceCenter /></ProtectedRoute>} />
+      <Route path="/offer-editor" element={<FullScreenProtectedRoute><OfferEditorPage /></FullScreenProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>

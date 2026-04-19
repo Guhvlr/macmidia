@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useOffer, ProductItem } from '../context/OfferContext';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
@@ -18,7 +19,7 @@ const renderWrappedText = (
   fontSize: number, sFactor: number, slotWidth: number
 ) => {
   const scaledFs = fontSize * sFactor;
-  const charsPerLine = 18; // Fixo para bater com a tela 4
+  const charsPerLine = 18;
   const words = (text || '').split(' ');
   const lines: string[] = [];
   let cur = '';
@@ -29,8 +30,8 @@ const renderWrappedText = (
   if (cur.trim()) lines.push(cur.trim());
   const lh = scaledFs * 1.1;
   const startY = y - (lines.length * lh) / 2 + lh / 2;
-  return lines.map((l, i) => i === 0 
-    ? <tspan key={i} x={x} y={startY}>{l}</tspan> 
+  return lines.map((l, i) => i === 0
+    ? <tspan key={i} x={x} y={startY}>{l}</tspan>
     : <tspan key={i} x={x} dy={lh}>{l}</tspan>
   );
 };
@@ -40,7 +41,7 @@ interface EditorProps {
   onClose: () => void;
 }
 
-const FullEditor = ({ onClose }: EditorProps) => {
+export const FullEditor = ({ onClose }: EditorProps) => {
   const {
     config, slots, products, setProducts, customFonts,
     getSlotSettings, updateSlotSettings, pageCount
@@ -61,7 +62,6 @@ const FullEditor = ({ onClose }: EditorProps) => {
   const [editingProduct, setEditingProduct] = useState<{ id: string; name: string; price: string } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Salva snapshot no histórico
   const pushHistory = useCallback(() => {
     const snap = JSON.stringify(products.map(p => ({ ...p })));
     setHistory(prev => {
@@ -88,7 +88,6 @@ const FullEditor = ({ onClose }: EditorProps) => {
     return () => window.removeEventListener('keydown', handleKeys);
   }, [undo, onClose, editingProduct]);
 
-  // Inicializa histórico
   useEffect(() => {
     const snap = JSON.stringify(products.map(p => ({ ...p })));
     setHistory([snap]);
@@ -393,12 +392,12 @@ const FullEditor = ({ onClose }: EditorProps) => {
 
 // ─── StepFinal Principal ───────────────────────────────────────────────────────
 export const StepFinal = () => {
-  const { config, slots, products, pageCount, customFonts, getSlotSettings } = useOffer();
+  const { config, slots, products, pageCount, customFonts, getSlotSettings, customCanvasElements, slotSettings } = useOffer();
+  const navigate = useNavigate(); // ← MUDANÇA: substituiu useState(editorOpen)
   const svgRefs = useRef<(SVGSVGElement | null)[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [exportFilename, setExportFilename] = useState('tabloide_macmidia');
   const [isSingleFile, setIsSingleFile] = useState(true);
-  const [editorOpen, setEditorOpen] = useState(false);
 
   const toBase64 = async (url: string): Promise<string> => {
     if (!url) return '';
@@ -416,9 +415,42 @@ export const StepFinal = () => {
 
   const processSvgForExport = async (svg: SVGSVGElement, format: 'svg' | 'png') => {
     const clone = svg.cloneNode(true) as SVGSVGElement;
+    // Set proper SVG namespace attributes for Illustrator compatibility
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     clone.setAttribute('width', config.width.toString());
     clone.setAttribute('height', config.height.toString());
-    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    clone.setAttribute('viewBox', `0 0 ${config.width} ${config.height}`);
+    clone.removeAttribute('class');
+
+    // Remove @import CSS styles (Illustrator doesn't support them)
+    clone.querySelectorAll('style').forEach(s => {
+      const text = s.textContent || '';
+      if (text.includes('@import')) s.remove();
+    });
+
+    // Clean all elements: remove class, data-* attributes, non-visual styles
+    clone.querySelectorAll('*').forEach(el => {
+      el.removeAttribute('class');
+      Array.from(el.attributes).forEach(attr => {
+        if (attr.name.startsWith('data-')) el.removeAttribute(attr.name);
+      });
+      const style = el.getAttribute('style');
+      if (style) {
+        const cleaned = style
+          .replace(/pointer-events:[^;]+;?/gi, '')
+          .replace(/cursor:[^;]+;?/gi, '')
+          .replace(/user-select:[^;]+;?/gi, '')
+          .trim();
+        if (cleaned) el.setAttribute('style', cleaned);
+        else el.removeAttribute('style');
+      }
+    });
+
+    // Remove foreignObject (not supported in Illustrator)
+    clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
+
+    // Convert all images to base64
     for (const img of Array.from(clone.querySelectorAll('image'))) {
       const href = img.getAttribute('href') || img.getAttribute('xlink:href');
       if (!href) continue;
@@ -436,46 +468,63 @@ export const StepFinal = () => {
   const exportAll = async (format: 'svg' | 'png') => {
     setIsProcessing(true);
     try {
-      if (format === 'svg' && isSingleFile) {
-        const spacing = 100;
-        const totalW = pageCount * (config.width + spacing);
+      if (format === 'svg') {
+        // SVG: Always generate a SINGLE file with all pages side by side
+        const spacing = 80;
+        const totalW = pageCount * config.width + Math.max(0, pageCount - 1) * spacing;
         const combinedSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        combinedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        combinedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
         combinedSvg.setAttribute('width', totalW.toString());
         combinedSvg.setAttribute('height', config.height.toString());
         combinedSvg.setAttribute('viewBox', `0 0 ${totalW} ${config.height}`);
-        combinedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        combinedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+        // Master background
+        const masterBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        masterBg.setAttribute('x', '0'); masterBg.setAttribute('y', '0');
+        masterBg.setAttribute('width', totalW.toString());
+        masterBg.setAttribute('height', config.height.toString());
+        masterBg.setAttribute('fill', '#e0e0e0');
+        combinedSvg.appendChild(masterBg);
+
         for (let i = 0; i < pageCount; i++) {
           const svg = svgRefs.current[i];
           if (!svg) continue;
           const processed = await processSvgForExport(svg, format);
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.setAttribute('id', `tela-${i + 1}`);
           g.setAttribute('transform', `translate(${i * (config.width + spacing)}, 0)`);
+
+          // Add white background for this artboard
+          const pageBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          pageBg.setAttribute('x', '0'); pageBg.setAttribute('y', '0');
+          pageBg.setAttribute('width', config.width.toString());
+          pageBg.setAttribute('height', config.height.toString());
+          pageBg.setAttribute('fill', '#ffffff');
+          g.appendChild(pageBg);
+
           Array.from(processed.childNodes).forEach(n => g.appendChild(n.cloneNode(true)));
           combinedSvg.appendChild(g);
         }
         saveAs(new Blob([new XMLSerializer().serializeToString(combinedSvg)], { type: 'image/svg+xml' }), `${exportFilename}.svg`);
       } else {
+        // PNG: ZIP for multiple pages
         const zip = new JSZip();
         for (let i = 0; i < pageCount; i++) {
           const svg = svgRefs.current[i];
           if (!svg) continue;
           const processedClone = await processSvgForExport(svg, format);
           const svgData = new XMLSerializer().serializeToString(processedClone);
-          if (format === 'svg') {
-            zip.file(`tela_${i + 1}.svg`, svgData);
-          } else {
-            const canvas = document.createElement('canvas');
-            canvas.width = config.width; canvas.height = config.height;
-            const ctx = canvas.getContext('2d')!;
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            const url = URL.createObjectURL(new Blob([svgData], { type: 'image/svg+xml' }));
-            await new Promise<void>(r => { img.onload = () => { ctx.drawImage(img, 0, 0); URL.revokeObjectURL(url); r(); }; img.src = url; });
-            zip.file(`tela_${i + 1}.png`, canvas.toDataURL('image/png').split(',')[1], { base64: true });
-          }
+          const canvas = document.createElement('canvas');
+          canvas.width = config.width; canvas.height = config.height;
+          const ctx = canvas.getContext('2d')!;
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          const url = URL.createObjectURL(new Blob([svgData], { type: 'image/svg+xml' }));
+          await new Promise<void>(r => { img.onload = () => { ctx.drawImage(img, 0, 0); URL.revokeObjectURL(url); r(); }; img.src = url; });
+          zip.file(`tela_${i + 1}.png`, canvas.toDataURL('image/png').split(',')[1], { base64: true });
         }
-        saveAs(await zip.generateAsync({ type: 'blob' }), `${exportFilename}_${format}.zip`);
+        saveAs(await zip.generateAsync({ type: 'blob' }), `${exportFilename}_png.zip`);
       }
       toast.success('Download concluído!');
     } catch (e) {
@@ -520,6 +569,24 @@ export const StepFinal = () => {
     );
   };
 
+  const handleOpenEditor = () => {
+    try {
+      const editorData = { config, slots, products, customFonts, pageCount, slotSettings, customCanvasElements };
+      // Inject to window object for direct access by the new tab
+      (window as any).__MACMIDIA_EDITOR_DATA__ = editorData;
+      
+      try {
+        localStorage.setItem('macmidia_offer_editor_data', JSON.stringify(editorData));
+      } catch (e) {
+        console.warn('Payload too large for localStorage, using window.opener fallback');
+      }
+
+      window.open('/offer-editor', '_blank');
+    } catch (e: any) {
+      toast.error('Erro ao abrir editor: ' + e.message);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-[#09090b]">
       {/* Header */}
@@ -535,20 +602,31 @@ export const StepFinal = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* ✅ BOTÃO EDITAR TODAS AS TELAS */}
-          <Button
-            onClick={() => setEditorOpen(true)}
-            className="h-11 px-6 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-[10px] font-black uppercase text-amber-400 tracking-widest transition-all"
+          {/* ✅ BOTÃO EDITAR — abre em nova página */}
+          <style>{`
+            @keyframes btn-shine { 0% { left: -100%; } 50%, 100% { left: 120%; } }
+          `}</style>
+          <button
+            onClick={handleOpenEditor}
+            className="group relative h-11 px-7 rounded-2xl font-black uppercase text-[11px] tracking-[0.15em] text-white overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_rgba(234,179,8,0.25)] active:scale-[0.98]"
+            style={{
+              background: 'linear-gradient(135deg, #b45309 0%, #d97706 40%, #f59e0b 100%)',
+              boxShadow: '0 4px 20px rgba(245,158,11,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+            }}
           >
-            <Edit2 className="w-4 h-4 mr-2" /> Editar Telas
-          </Button>
+            {/* Shine sweep */}
+            <span className="absolute inset-0 pointer-events-none" style={{ animation: 'btn-shine 3s ease-in-out infinite' }}>
+              <span className="absolute top-0 left-0 w-[60%] h-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)', transform: 'skewX(-20deg)' }} />
+            </span>
+            <span className="relative flex items-center gap-2.5">
+              <Edit2 className="w-4 h-4 drop-shadow-sm" />
+              <span>Editar Telas</span>
+            </span>
+          </button>
 
           <div className="flex-1 max-w-sm flex flex-col gap-2">
             <input value={exportFilename} onChange={e => setExportFilename(e.target.value)} placeholder="Nome do arquivo..." className="bg-black/60 border border-white/10 rounded-lg h-9 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all" />
-            <button onClick={() => setIsSingleFile(!isSingleFile)} className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest transition-colors w-fit ${isSingleFile ? 'text-primary' : 'text-white/20'}`}>
-              <div className={`w-3 h-3 rounded-full border ${isSingleFile ? 'bg-primary border-primary' : 'border-white/20'}`} />
-              Arquivo Único (Multi Artboards)
-            </button>
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary/60">SVG: Arquivo único • PNG: ZIP</span>
           </div>
 
           <div className="flex gap-3">
@@ -563,11 +641,11 @@ export const StepFinal = () => {
         </div>
       </div>
 
-      {/* Grade de artes */}
+      {/* Grade de artes — SEM clique individual nas telas */}
       <div className="flex-1 overflow-y-auto p-12 bg-black/40 custom-scrollbar">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
           {Array.from({ length: pageCount }).map((_, i) => (
-            <div key={i} className="group flex flex-col items-center">
+            <div key={i} className="flex flex-col items-center">
               <div className="mb-4 flex items-center justify-between w-full px-2">
                 <span className="text-[10px] font-black uppercase text-white/20 tracking-widest">Tela {i + 1}</span>
                 <div className="flex items-center gap-2">
@@ -575,31 +653,44 @@ export const StepFinal = () => {
                   <Monitor className="w-3 h-3 text-white/10" />
                 </div>
               </div>
-              <div
-                className="relative shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden border border-white/10 group-hover:border-primary/30 transition-all cursor-pointer"
-                onClick={() => setEditorOpen(true)}
-                title="Clique para editar"
-              >
+              {/* ✅ Removido: onClick, cursor-pointer, overlay de hover */}
+              <div className="relative shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden border border-white/10 transition-all">
                 <svg ref={el => svgRefs.current[i] = el} width="100%" viewBox={`0 0 ${config.width} ${config.height}`} className="w-full h-auto block bg-white">
                   {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />}
                   <defs>{customFonts.map(f => <style key={f.name} type="text/css">{`@font-face { font-family: "${f.name}"; src: url("${f.url}"); }`}</style>)}</defs>
                   {slots.map((slot, sIdx) => renderProduct(products[i * slots.length + sIdx], slot, i * slots.length + sIdx))}
+                  
+                  {/* Custom Canvas Elements */}
+                  {(customCanvasElements[i] || []).map(el => {
+                    const s = el.style;
+                    let shape = null;
+                    if (el.type === 'rect') shape = <rect x={0} y={0} width={el.w} height={el.h} fill={s.bgColor} stroke={s.borderColor} strokeWidth={s.borderWidth} rx={s.borderRadius} />;
+                    else if (el.type === 'circle') shape = <ellipse cx={el.w/2} cy={el.h/2} rx={el.w/2} ry={el.h/2} fill={s.bgColor} />;
+                    else if (el.type === 'divider') shape = <rect x={0} y={0} width={el.w} height={el.h} fill={s.bgColor} rx={4} />;
+                    else if (el.type === 'text' || el.type === 'title') {
+                      const textAnchor = s.align === 'left' ? 'start' : s.align === 'right' ? 'end' : 'middle';
+                      const tX = s.align === 'left' ? 8 : s.align === 'right' ? el.w - 8 : el.w/2;
+                      shape = (
+                        <g>
+                          {s.bgColor && s.bgColor !== 'transparent' && <rect x={0} y={0} width={el.w} height={el.h} fill={s.bgColor} rx={4} />}
+                          <text x={tX} y={el.h/2} fontFamily={s.fontFamily} fontSize={s.fontSize} fontWeight={s.fontWeight} fill={s.color} textAnchor={textAnchor} dominantBaseline="middle" pointerEvents="none">{el.data.text}</text>
+                        </g>
+                      );
+                    }
+                    return (
+                      <g key={el.id} transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
+                        {shape}
+                      </g>
+                    );
+                  })}
                 </svg>
-                {/* Overlay de editar ao hover */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
-                    <Edit2 className="w-4 h-4 text-white" />
-                    <span className="text-white text-xs font-black uppercase tracking-widest">Editar</span>
-                  </div>
-                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ✅ EDITOR ABRE COM ABAS */}
-      {editorOpen && <FullEditor onClose={() => setEditorOpen(false)} />}
+      {/* ✅ Removido: {editorOpen && <FullEditor onClose={...} />} — agora é página separada */}
     </div>
   );
 };

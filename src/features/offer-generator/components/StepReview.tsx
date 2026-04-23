@@ -84,15 +84,22 @@ export const StepReview = () => {
           const { data, error } = await supabase.functions.invoke('remove-background', {
             body: { imageUrl: resolvedUrl }
           });
-          if (error) throw error;
+          
+          if (error) {
+            // Error from Supabase Invoke
+            const errorBody = await error.context?.json().catch(() => ({}));
+            throw new Error(errorBody?.error || error.message || 'Erro desconhecido na Edge Function');
+          }
+
           if (data?.base64) {
             setBgPreviews(prev => ({ ...prev, [id]: data.base64 }));
             successCount++;
           } else {
-            throw new Error('Retorno inválido da API Photoroom');
+            throw new Error(data?.error || 'Retorno inválido da API Photoroom');
           }
         } catch (e: any) {
           console.error('Photoroom Error', e);
+          toast.error(`Falha em um item: ${e.message}`);
           failCount++;
         }
       }));
@@ -512,6 +519,11 @@ export const StepReview = () => {
       return p;
     }));
   };
+  
+  const handleUpdateProduct = (id: string, updates: Partial<ProductItem>) => {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    toast.success('Produto atualizado localmente!');
+  };
 
   const handleCreateProduct = async (productId: string) => {
     if (!createData.name || !createData.ean || !createData.file) {
@@ -535,13 +547,19 @@ export const StepReview = () => {
 
       const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${fileName}?t=${Date.now()}`;
 
-      const { error: dbError } = await supabase.from('products').insert({
+      const product = products.find(p => p.id === productId);
+      
+      const { error: dbError } = await supabase.from('products').upsert({
          ean: cleanEan,
          name: createData.name.toUpperCase(),
-      });
+         brand: product?.brand,
+         line: product?.line,
+         category: product?.category,
+         image_path: fileName
+      }, { onConflict: 'ean' });
 
       if (dbError) {
-         console.error('DB Insert Error (might already exist):', dbError);
+         console.error('DB Upsert Error:', dbError);
       }
 
       setProducts(prev => prev.map(p => {
@@ -638,6 +656,7 @@ export const StepReview = () => {
                 setCreateData={setCreateData}
                 isCreating={isCreating}
                 onConfirmCreate={handleCreateProduct}
+                onUpdateProduct={handleUpdateProduct}
               />
             ))
           )}

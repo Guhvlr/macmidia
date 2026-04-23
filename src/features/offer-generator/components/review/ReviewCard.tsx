@@ -31,9 +31,10 @@ interface ReviewCardProps {
   setCreateData: (data: any) => void;
   isCreating: boolean;
   onConfirmCreate: (id: string) => void;
+  onUpdateProduct: (id: string, updates: Partial<ProductItem>) => void;
 }
 
-export const ReviewCard = ({
+export const ReviewCard = React.memo(({
   product,
   idx,
   isSelected,
@@ -55,9 +56,26 @@ export const ReviewCard = ({
   createData,
   setCreateData,
   isCreating,
-  onConfirmCreate
+  onConfirmCreate,
+  onUpdateProduct
 }: ReviewCardProps) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editData, setEditData] = React.useState({
+    name: product.name,
+    ean: product.ean,
+    price: product.price,
+    suffix: product.suffix
+  });
+
   const isLowConfidence = ['low', 'none'].includes(product.confidence);
+
+  const handleSaveEdit = () => {
+    onUpdateProduct(product.id, {
+      ...editData,
+      name: editData.name.toUpperCase()
+    });
+    setIsEditing(false);
+  };
 
   return (
     <div className={`p-6 rounded-3xl border-2 transition-all relative group ${
@@ -118,35 +136,77 @@ export const ReviewCard = ({
 
         {/* Product Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">
-            #{product.ean} {product.mode === 'barcode' ? '• B-CODE' : ''}
-          </p>
-          <h3 className="text-sm font-black text-white/90 uppercase tracking-tight truncate leading-tight group-hover:text-white transition-colors">
-            {product.name}
-          </h3>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="text-primary font-black text-[11px] bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10">
-              {product.price} 
-              <button 
-                onClick={() => toggleSuffix(product.id)} 
-                className="text-[9px] text-white/40 hover:text-primary transition-colors cursor-pointer ml-1 py-0.5 px-1 bg-white/5 rounded border border-white/10"
-              >
-                / {product.suffix}
-              </button>
-            </span>
-            <div className="w-px h-3 bg-white/10" />
-            <ConfidenceBadge product={product} />
-          </div>
-          {product.confidence_reason && (
-            <p className="text-[9px] text-white/30 mt-1 font-bold uppercase tracking-tight italic line-clamp-1">
-              {product.confidence_reason}
-            </p>
+          {isEditing ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input 
+                  value={editData.ean} 
+                  onChange={e => setEditData({...editData, ean: e.target.value})}
+                  className="bg-black/40 border-white/10 h-7 text-[10px] w-28"
+                  placeholder="EAN"
+                />
+                <Input 
+                  value={editData.price} 
+                  onChange={e => setEditData({...editData, price: e.target.value})}
+                  className="bg-black/40 border-white/10 h-7 text-[10px] w-24"
+                  placeholder="Preço"
+                />
+              </div>
+              <Input 
+                value={editData.name} 
+                onChange={e => setEditData({...editData, name: e.target.value})}
+                className="bg-black/40 border-white/10 h-8 text-xs font-bold"
+                placeholder="Nome do Produto"
+              />
+            </div>
+          ) : (
+            <>
+              <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">
+                #{product.ean} {product.mode === 'barcode' ? '• B-CODE' : ''}
+              </p>
+              <h3 className="text-sm font-black text-white/90 uppercase tracking-tight truncate leading-tight group-hover:text-white transition-colors">
+                {product.name}
+              </h3>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-primary font-black text-[11px] bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10">
+                  {product.price} 
+                  <button 
+                    onClick={() => toggleSuffix(product.id)} 
+                    className="text-[9px] text-white/40 hover:text-primary transition-colors cursor-pointer ml-1 py-0.5 px-1 bg-white/5 rounded border border-white/10"
+                  >
+                    / {product.suffix}
+                  </button>
+                </span>
+                <div className="w-px h-3 bg-white/10" />
+                <ConfidenceBadge product={product} />
+              </div>
+              {product.confidence_reason && (
+                <p className="text-[9px] text-white/30 mt-1 font-bold uppercase tracking-tight italic line-clamp-1">
+                  {product.confidence_reason}
+                </p>
+              )}
+            </>
           )}
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {isLowConfidence && (
+          {isEditing ? (
+            <Button 
+              onClick={handleSaveEdit} 
+              className="h-9 px-4 bg-green-600 hover:bg-green-700 text-[10px] font-black uppercase tracking-widest text-white rounded-xl transition-all"
+            >
+              Salvar
+            </Button>
+          ) : (
+            <Button 
+              onClick={() => setIsEditing(true)} 
+              className="h-9 px-4 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
+            >
+              Editar
+            </Button>
+          )}
+          {isLowConfidence && !isEditing && (
             <Button 
               onClick={() => {
                 setCreateData({ 
@@ -235,4 +295,6 @@ export const ReviewCard = ({
       )}
     </div>
   );
-};
+});
+
+ReviewCard.displayName = 'ReviewCard';

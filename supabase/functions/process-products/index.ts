@@ -167,88 +167,88 @@ serve(async (req) => {
     }
 
 
-    // Get OpenAI key
-    let openAIKey = Deno.env.get('OPENAI_API_KEY')
-    if (!openAIKey) {
-      const { data: s } = await supabase.from('settings').select('value').eq('key', 'openai_api_key').single()
-      openAIKey = s?.value
+    // Get Claude key
+    let claudeKey = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!claudeKey) {
+      const { data: s } = await supabase.from('settings').select('value').eq('key', 'claude_api_key').single()
+      claudeKey = s?.value
     }
-    if (!openAIKey) throw new Error('OpenAI Key não configurada.');
+    if (!claudeKey) throw new Error('Claude API Key não configurada.');
 
     // ─── STEP 1: Parse input with AI ────────────────────
     let parsedItems: any[] = [];
 
     try {
-      const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${openAIKey}`,
           'Content-Type': 'application/json',
+          'x-api-key': claudeKey,
+          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          temperature: 0.1,
-          response_format: { type: 'json_object' },
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 4096,
+          system: `Você é um parser de listas de compras.
+Analise CADA linha e retorne o JSON com o array "items".
+
+Para cada linha, extraia:
+1. "mode": "barcode" (se a linha começar com de 12 a 14 dígitos numéricos) ou "description" (caso contrário).
+2. "barcode": o código de barras numérico (se houver). Se não houver, null.
+3. "price": o preço final na linha (ex: "47,99"). Em português os preços usam vírgula para os centavos (ex: 5,99 ou 10,50). Pode ou não ter R$ na frente. Pode estar colado em unidades como "kg" ou "cada" (ex: "15,99kg" -> extraia apenas "15,99"). Se não achar preço, retorne null.
+4. "display_name": para o modo "description", o NOME EXATO do produto como o usuário digitou, MAS SEM O PREÇO. Mantenha a formatação original e as unidades do nome (ex: "Alcatra kg"). Para modo "barcode", retorne null.
+5. "search_name": uma versão mais limpa do nome, apenas palavras chave para ajudar na busca (apenas description).
+6. "brand_hint": a marca, se identificada (apenas description).
+7. "type_hint": a categoria ou tipo básico (apenas description).
+
+Exemplos de extração:
+Entrada: "Alcatra-47,99  kg"
+Saída: { "mode": "description", "barcode": null, "price": "47,99", "display_name": "Alcatra kg", "search_name": "Alcatra", "brand_hint": null, "type_hint": "carne" }
+
+Entrada: "0000000011136  15,99kg"
+Saída: { "mode": "barcode", "barcode": "0000000011136", "price": "15,99", "display_name": null, "search_name": null, "brand_hint": null, "type_hint": null }
+
+Entrada: "Costela ripa-19,99kg"
+Saída: { "mode": "description", "barcode": null, "price": "19,99", "display_name": "Costela ripa kg", "search_name": "Costela ripa", "brand_hint": null, "type_hint": "carne" }
+
+Retorne APENAS o JSON no formato: { "items": [...] }`,
           messages: [
-            {
-              role: 'system',
-              content: `Você é um parser de listas de supermercado. Analise CADA LINHA da entrada.
-
-REGRA DE DETECÇÃO:
-- Se a linha começa com um número de exatamente 13 dígitos (apenas dígitos) seguido opcionalmente de preço → modo "barcode"
-- Caso contrário → modo "description"
-
-Para CADA linha, retorne um objeto com:
-{
-  "original": "linha exata como recebida",
-  "mode": "barcode" ou "description",
-  "barcode": "código numérico limpo (só no modo barcode, null no modo description)",
-  "display_name": "para description: nome do produto SEM o preço, EXATAMENTE como digitado pelo usuário. Para barcode: null (será preenchido pelo banco)",
-  "search_name": "para description: versão simplificada para busca no banco. Para barcode: null",
-  "brand_hint": "marca principal identificada (ex: 'Italac', 'Monster', 'Tio João'). Só no modo description. null se não identificada",
-  "type_hint": "tipo genérico do produto (ex: 'leite', 'arroz', 'energético', 'sabonete'). Só no modo description. null se não identificado",
-  "price": "preço extraído (ex: '5,99') ou null se não houver"
-}
-
-REGRAS CRÍTICAS:
-1. display_name deve preservar EXATAMENTE o texto do usuário (INCLUINDO pesos e medidas como 1,02KG, 500G, etc), APENAS removendo o preço final e símbolos de moeda.
-2. NÃO corrija erros de escrita no display_name
-3. NÃO substitua marcas ou nomes
-4. NÃO resuma nem abrevie
-5. search_name pode ser mais flexível/simplificado para melhorar a busca
-6. brand_hint deve conter APENAS a marca principal (uma palavra ou nome composto)
-7. type_hint deve conter APENAS o tipo genérico do produto
-8. REGRA DE PREÇO: Identifique como preço SOMENTE valores com contexto monetário (precedidos por R$, após separadores como '-' ou '|', ou o último valor numérico isolado).
-9. REGRA DE PREÇO: NUNCA trate números seguidos de unidades de medida (KG, G, MG, ML, L, LT, UN, CX, FD, PCT) como preço. Exemplo: "1,02KG" é medida, não preço.
-10. REGRA DE PREÇO: Em caso de múltiplos números, sempre priorize o ÚLTIMO valor da linha como preço oficial.
-
-Retorne JSON: { "items": [...] }`
-            },
             { role: 'user', content: bulkInput }
           ],
         }),
       });
 
       const aiData = await apiResponse.json();
-      if (aiData.error) throw new Error('OpenAI: ' + aiData.error.message);
-      parsedItems = JSON.parse(aiData.choices[0].message.content).items || [];
-      console.log('AI parsed:', parsedItems.length, 'items');
+      if (!apiResponse.ok) throw new Error('Anthropic Error: ' + (aiData.error?.message || apiResponse.statusText));
+      
+      let textContent = aiData.content?.[0]?.text || '{}';
+      
+      // Robust JSON extraction: Find the first { and last }
+      const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        textContent = jsonMatch[0];
+      }
+      
+      const parsedJson = JSON.parse(textContent);
+      parsedItems = parsedJson.items || [];
+      console.log('Claude parsed:', parsedItems.length, 'items');
     } catch (aiErr: any) {
+
       console.error('AI parse failed, using fallback:', aiErr.message);
       // ── FALLBACK: parse without AI ──
       parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => {
         const trimmed = line.trim();
-        const isBarcode = /^\d{13}\b/.test(trimmed);
+        const isBarcode = /^\d{12,14}\b/.test(trimmed);
         
-        // Pega todos os números formatados como preço que NÃO são seguidos por medidas
-        const priceMatches = [...trimmed.matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})(?!\s*(?:KG|G|MG|ML|L|LT|UN|CX|FD|PCT)\b)/gi)];
+        // Pega todos os números formatados como preço (tolerante a sufixos colados)
+        const priceMatches = [...trimmed.matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})/gi)];
         // Prioriza o último match como preço
         const price = priceMatches.length > 0 ? priceMatches[priceMatches.length - 1][1] : null;
 
-        // Limpa apenas a ocorrência que virou o preço
+        // Limpa apenas a ocorrência que virou o preço (tolerando unidades após ele)
         let cleanName = trimmed;
         if (price) {
-          const priceRegex = new RegExp(`\\s*[-–—|]?\\s*(?:R\\$\\s*)?${price.replace('.', '\\.')}\\s*$`, 'i');
+          const priceRegex = new RegExp(`\\s*[-–—|]?\\s*(?:R\\$\\s*)?${price.replace('.', '\\.')}(?:\\s*(?:KG|G|MG|ML|L|LT|UN|CX|FD|PCT|CADA)\\b)?\\s*$`, 'i');
           cleanName = cleanName.replace(priceRegex, '').trim();
         }
 

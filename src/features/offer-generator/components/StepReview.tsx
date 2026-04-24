@@ -11,6 +11,7 @@ import { padEan, getImageUrl } from '@/lib/ean';
 import { ReviewCard } from './review/ReviewCard';
 import { BulkSearchArea } from './review/BulkSearchArea';
 import { ConfidenceBadge } from './review/ConfidenceBadge';
+import { FirstUseTour } from './review/FirstUseTour';
 
 export const StepReview = () => {
   const { products, setProducts, setStep, slots, pageCount } = useOffer();
@@ -28,6 +29,11 @@ export const StepReview = () => {
   const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null);
   const [createData, setCreateData] = useState({ name: '', ean: '', file: null as File | null });
   const [isCreating, setIsCreating] = useState(false);
+
+  // Variation Create State (inside Variations modal)
+  const [showVariationCreate, setShowVariationCreate] = useState(false);
+  const [variationCreateData, setVariationCreateData] = useState({ name: '', ean: '', file: null as File | null });
+  const [isCreatingVariation, setIsCreatingVariation] = useState(false);
 
   // Background Removal State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -136,9 +142,11 @@ export const StepReview = () => {
         if (error) throw error;
         
         // Remove from previews to show official PNG
-        const newPreviews = { ...bgPreviews };
-        delete newPreviews[id];
-        setBgPreviews(newPreviews);
+        setBgPreviews(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
         
         // Update product to force re-render with new timestamp
         setProducts(prev => prev.map(p => p.id === id ? {
@@ -171,9 +179,11 @@ export const StepReview = () => {
       const preview = bgPreviews[id];
       if (preview) {
         // Just cancel preview
-        const newPreviews = { ...bgPreviews };
-        delete newPreviews[id];
-        setBgPreviews(newPreviews);
+        setBgPreviews(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
         successCount++;
         continue;
       }
@@ -259,8 +269,8 @@ export const StepReview = () => {
           price = `R$ ${String(res.price).replace('.', ',')}`;
         } else {
           // Fallback: extração ultra-tolerante do texto original
-          // Procura pelo último número que se pareça com preço (X.XX ou X,XX) que não seja medida
-          const priceMatches = [...(res.original || '').matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})(?!\s*(?:KG|G|MG|ML|L|LT|UN|CX|FD|PCT)\b)/gi)];
+          // Procura pelo último número que se pareça com preço (X.XX ou X,XX)
+          const priceMatches = [...(res.original || '').matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})/gi)];
           if (priceMatches.length > 0) {
              price = `R$ ${priceMatches[priceMatches.length - 1][1].replace('.', ',')}`;
           }
@@ -398,6 +408,52 @@ export const StepReview = () => {
     toast.success('Variação adicionada ao conjunto!');
   };
 
+  const handleCreateVariation = async (parentProductId: string) => {
+    if (!variationCreateData.name || !variationCreateData.ean || !variationCreateData.file) {
+      toast.error('Preencha nome, EAN e selecione uma imagem.');
+      return;
+    }
+
+    setIsCreatingVariation(true);
+    const toastId = toast.loading('Cadastrando variação...');
+
+    try {
+      const ext = variationCreateData.file.name.split('.').pop()?.toLowerCase();
+      const cleanEan = variationCreateData.ean.replace(/[^a-zA-Z0-9]/g, '');
+      const fileName = `${cleanEan}.${ext === 'png' ? 'png' : 'jpg'}`;
+
+      // 1. Upload image
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, variationCreateData.file, { upsert: true, contentType: variationCreateData.file.type });
+
+      if (uploadError) throw uploadError;
+
+      // 2. Register in DB
+      const { error: dbError } = await supabase.from('products').upsert({
+        ean: cleanEan,
+        name: variationCreateData.name.toUpperCase(),
+        image_path: fileName
+      }, { onConflict: 'ean' });
+
+      if (dbError) {
+        console.error('DB Error:', dbError);
+      }
+
+      // 3. Add as variation to the product stack
+      const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${fileName}?t=${Date.now()}`;
+      addVariation(parentProductId, publicUrl);
+
+      toast.success('Variação cadastrada e adicionada à pilha!', { id: toastId });
+      setVariationCreateData({ name: '', ean: '', file: null });
+      setShowVariationCreate(false);
+    } catch (e: any) {
+      toast.error(`Falha ao cadastrar: ${e.message}`, { id: toastId });
+    } finally {
+      setIsCreatingVariation(false);
+    }
+  };
+
   const removeVariation = (productId: string, imgIndex: number) => {
     setProducts(prev => prev.map(p => {
       if (p.id === productId) {
@@ -520,8 +576,32 @@ export const StepReview = () => {
     }));
   };
   
-  const handleUpdateProduct = (id: string, updates: Partial<ProductItem>) => {
+  const handleUpdateProduct = async (id: string, updates: Partial<ProductItem>, saveToDb: boolean = false) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    
+    if (saveToDb) {
+      const product = products.find(p => p.id === id);
+      if (product && updates.ean && updates.name) {
+        const cleanEan = updates.ean.replace(/[^0-9]/g, '');
+        if (cleanEan && cleanEan !== '0000000000000') {
+          const { error } = await supabase.from('products').upsert({
+            ean: cleanEan,
+            name: updates.name.toUpperCase(),
+            price: updates.price ? parseFloat(updates.price.replace(/[^\d,]/g, '').replace(',', '.')) : null
+          }, { onConflict: 'ean' });
+          
+          if (error) {
+            toast.error('Erro ao salvar no banco: ' + error.message);
+            return;
+          }
+          toast.success('Produto salvo no banco de dados!');
+          return;
+        }
+      }
+      toast.error('EAN inválido para salvar no banco.');
+      return;
+    }
+    
     toast.success('Produto atualizado localmente!');
   };
 
@@ -587,84 +667,214 @@ export const StepReview = () => {
     }
   };
 
+  const [activeTab, setActiveTab] = useState<'produtos' | 'imagens'>('produtos');
+
   return (
     <div className="h-full flex flex-col bg-[#09090b]">
-      {/* Top Search Area */}
-      <BulkSearchArea 
-        bulkInput={bulkInput}
-        setBulkInput={setBulkInput}
-        isProcessing={isProcessing}
-        onSearch={handleBulkSearch}
-      />
+      <FirstUseTour />
+      {/* Scrollable area — search, tabs, and content all scroll together */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {/* Search Area */}
+        <BulkSearchArea 
+          bulkInput={bulkInput}
+          setBulkInput={setBulkInput}
+          isProcessing={isProcessing}
+          onSearch={handleBulkSearch}
+        />
 
-      {/* Manual Review List */}
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-        <div className="max-w-6xl mx-auto space-y-4">
-          <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center gap-3">
-               <Button onClick={handleSelectAll} variant="outline" className={`h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-widest ${selectedIds.size === products.length && products.length > 0 ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/5 text-white/40 hover:text-white'}`}>
-                 {selectedIds.size === products.length && products.length > 0 ? <CheckSquare className="w-3.5 h-3.5 mr-1" /> : <div className="w-3.5 h-3.5 mr-1 border-2 border-current rounded-sm opacity-50" />}
-                 Todos
-               </Button>
-               <Button onClick={handleSelectJpgs} variant="outline" className="h-8 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors">
-                 <ImageIcon className="w-3.5 h-3.5 mr-1" /> Filtrar apenas JPG
-               </Button>
-               
-               <h2 className="ml-2 text-sm font-black uppercase tracking-tighter text-white/60 flex items-center gap-2">
-                 <CheckCircle2 className="w-4 h-4 text-green-500" /> Revisão ({products.length})
-               </h2>
-             </div>
-             
-             <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full">
-               Total Telas: {Math.ceil(products.length / (slots.length || 1))}
-             </span>
-          </div>
+        {/* Tab Bar (sticky within scroll) */}
+        {products.length > 0 && (
+          <div className="px-8 pt-4 pb-0 bg-[#09090b] border-b border-white/5 sticky top-0 z-20">
+            <div className="max-w-6xl mx-auto flex items-center gap-1">
+              <button
+                onClick={() => setActiveTab('produtos')}
+                className={`flex items-center gap-2.5 px-6 py-3 rounded-t-2xl text-[10px] font-black uppercase tracking-[0.15em] transition-all relative ${
+                  activeTab === 'produtos'
+                    ? 'text-white bg-[#121214] border border-white/10 border-b-[#121214] -mb-px z-10'
+                    : 'text-white/30 hover:text-white/60 bg-white/[0.02] border border-transparent hover:bg-white/[0.05]'
+                }`}
+              >
+                <Search className="w-3.5 h-3.5" />
+                Produtos
+                <span className={`px-2 py-0.5 rounded-full text-[9px] ${activeTab === 'produtos' ? 'bg-primary/20 text-primary' : 'bg-white/10 text-white/30'}`}>
+                  {products.length}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('imagens')}
+                className={`flex items-center gap-2.5 px-6 py-3 rounded-t-2xl text-[10px] font-black uppercase tracking-[0.15em] transition-all relative ${
+                  activeTab === 'imagens'
+                    ? 'text-white bg-[#121214] border border-white/10 border-b-[#121214] -mb-px z-10'
+                    : 'text-white/30 hover:text-white/60 bg-white/[0.02] border border-transparent hover:bg-white/[0.05]'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                Imagens
+                {Object.keys(bgPreviews).length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[9px] bg-purple-500/20 text-purple-400 animate-pulse">
+                    {Object.keys(bgPreviews).length} prévias
+                  </span>
+                )}
+              </button>
 
-          {products.length === 0 ? (
-            <div className="py-20 text-center bg-[#121214] border-2 border-dashed border-white/5 rounded-[2rem]">
-              <div className="w-16 h-16 bg-red-600/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <Search className="w-8 h-8 text-red-600" />
-              </div>
-              <p className="text-white/30 text-xs italic">Nenhum produto selecionado para revisão.</p>
-              <p className="text-white/15 text-[10px] mt-2 uppercase font-bold tracking-widest">
-                Aceita descrição + preço ou código de barras + preço
-              </p>
+              <div className="flex-1" />
+              <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full">
+                Total Telas: {Math.ceil(products.length / (slots.length || 1))}
+              </span>
             </div>
-          ) : (
-            products.map((p, idx) => (
-              <ReviewCard 
-                key={p.id}
-                product={p}
-                idx={idx}
-                isSelected={selectedIds.has(p.id)}
-                toggleSelect={toggleSelect}
-                bgPreview={bgPreviews[p.id]}
-                resolvedUrl={resolvedUrls[p.id]}
-                setResolvedUrl={(url) => setResolvedUrls(prev => ({ ...prev, [p.id]: url }))}
-                handleFormatChange={handleFormatChange}
-                imageFormat={imageFormats[p.id] || 'JPG'}
-                onExpandImage={setExpandedImage}
-                toggleSuffix={toggleSuffix}
-                onLoadVariations={loadVariations}
-                isLoadingVariations={loadingVariationsId === p.id}
-                onManualImageUpload={handleManualImageUpload}
-                onRemove={(id) => setProducts(products.filter(x => x.id !== id))}
-                isProcessing={isProcessing}
-                isCreatingThis={creatingProductFor === p.id}
-                setCreatingThis={setCreatingProductFor}
-                createData={createData}
-                setCreateData={setCreateData}
-                isCreating={isCreating}
-                onConfirmCreate={handleCreateProduct}
-                onUpdateProduct={handleUpdateProduct}
-              />
-            ))
+          </div>
+        )}
+
+        {/* Tab Content */}
+        <div className="p-8">
+          <div className="max-w-6xl mx-auto space-y-4">
+
+          {/* ══════════════ TAB: PRODUTOS ══════════════ */}
+          {(activeTab === 'produtos' || products.length === 0) && (
+            <>
+              {products.length === 0 ? (
+                <div className="py-20 text-center bg-[#121214] border-2 border-dashed border-white/5 rounded-[2rem]">
+                  <div className="w-20 h-20 bg-red-600/10 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-pulse">
+                    <Search className="w-10 h-10 text-red-600" />
+                  </div>
+                  <p className="text-white/40 text-sm font-bold">Nenhum produto adicionado ainda.</p>
+                  <p className="text-white/20 text-[11px] mt-2 uppercase font-bold tracking-widest">
+                    Cole a lista do cliente acima para começar
+                  </p>
+                  <p className="text-white/10 text-[10px] mt-4 uppercase tracking-wider">
+                    Aceita descrição + preço  •  código de barras + preço
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h2 className="text-sm font-black uppercase tracking-tighter text-white/60 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" /> Confirmar Produtos ({products.length})
+                    </h2>
+                  </div>
+                  {products.map((p, idx) => (
+                    <ReviewCard 
+                      key={p.id}
+                      product={p}
+                      idx={idx}
+                      isSelected={selectedIds.has(p.id)}
+                      toggleSelect={toggleSelect}
+                      bgPreview={bgPreviews[p.id]}
+                      resolvedUrl={resolvedUrls[p.id]}
+                      setResolvedUrl={(url) => setResolvedUrls(prev => ({ ...prev, [p.id]: url }))}
+                      handleFormatChange={handleFormatChange}
+                      imageFormat={imageFormats[p.id] || 'JPG'}
+                      onExpandImage={setExpandedImage}
+                      toggleSuffix={toggleSuffix}
+                      onLoadVariations={loadVariations}
+                      isLoadingVariations={loadingVariationsId === p.id}
+                      onManualImageUpload={handleManualImageUpload}
+                      onRemove={(id) => setProducts(products.filter(x => x.id !== id))}
+                      isProcessing={isProcessing}
+                      isCreatingThis={creatingProductFor === p.id}
+                      setCreatingThis={setCreatingProductFor}
+                      createData={createData}
+                      setCreateData={setCreateData}
+                      isCreating={isCreating}
+                      onConfirmCreate={handleCreateProduct}
+                      onUpdateProduct={handleUpdateProduct}
+                    />
+                  ))}
+                </>
+              )}
+            </>
           )}
+
+          {/* ══════════════ TAB: IMAGENS ══════════════ */}
+          {activeTab === 'imagens' && products.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleSelectAll} variant="outline" className={`h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-widest ${selectedIds.size === products.length && products.length > 0 ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/5 text-white/40 hover:text-white'}`}>
+                    {selectedIds.size === products.length && products.length > 0 ? <CheckSquare className="w-3.5 h-3.5 mr-1" /> : <div className="w-3.5 h-3.5 mr-1 border-2 border-current rounded-sm opacity-50" />}
+                    Todos
+                  </Button>
+                  <Button onClick={handleSelectJpgs} variant="outline" className="h-8 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors">
+                    <ImageIcon className="w-3.5 h-3.5 mr-1" /> Filtrar JPG
+                  </Button>
+                  <h2 className="ml-2 text-sm font-black uppercase tracking-tighter text-white/60 flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-purple-400" /> Gerenciar Imagens ({products.length})
+                  </h2>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {products.map((p) => (
+                  <div 
+                    key={p.id}
+                    onClick={() => toggleSelect(p.id)}
+                    className={`relative group rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${
+                      selectedIds.has(p.id) 
+                        ? 'border-primary/50 bg-primary/5 shadow-[0_0_20px_rgba(217,37,75,0.1)]' 
+                        : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                      selectedIds.has(p.id) ? 'bg-primary border-primary' : 'bg-black/60 border-white/20'
+                    }`}>
+                      {selectedIds.has(p.id) && <CheckSquare className="w-3 h-3 text-white" />}
+                    </div>
+
+                    {/* Preview badge */}
+                    {bgPreviews[p.id] && (
+                      <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-lg bg-purple-500/90 text-[8px] font-black text-white uppercase tracking-wider">
+                        Prévia
+                      </div>
+                    )}
+
+                    {/* Image */}
+                    <div className="aspect-square p-3 flex items-center justify-center bg-white/[0.03]">
+                      <ProductImageWithFormat 
+                        src={p.images[0]} 
+                        previewBase64={bgPreviews[p.id]}
+                        onFormatChange={(f) => handleFormatChange(p.id, f)}
+                        onUrlResolved={(url) => setResolvedUrls(prev => ({ ...prev, [p.id]: url }))}
+                        isFallback={!p.images[0]}
+                      />
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-3 border-t border-white/5">
+                      <p className="text-[9px] font-black text-white/60 uppercase truncate leading-tight">{p.name}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[9px] font-black text-primary">{p.price}</span>
+                        <div className="flex gap-1">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleFormatChange(p.id, 'JPG'); }} 
+                            className={`px-1.5 py-0.5 rounded text-[7px] font-black transition-all ${imageFormats[p.id] === 'JPG' || !imageFormats[p.id] ? 'bg-amber-500 text-amber-950' : 'bg-white/10 text-white/30'}`}
+                          >JPG</button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleFormatChange(p.id, 'PNG'); }} 
+                            className={`px-1.5 py-0.5 rounded text-[7px] font-black transition-all ${imageFormats[p.id] === 'PNG' ? 'bg-purple-500 text-white' : 'bg-white/10 text-white/30'}`}
+                          >PNG</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Hover zoom */}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setExpandedImage(bgPreviews[p.id] || resolvedUrls[p.id] || p.images[0]); }}
+                      className="absolute top-2 right-2 w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          </div>
         </div>
       </div>
 
-      {/* Floating Action Bar */}
-      {selectedIds.size > 0 ? (
+      {/* Floating Action Bar — only on Imagens tab with selections */}
+      {activeTab === 'imagens' && selectedIds.size > 0 ? (
         <div className="p-4 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50">
           <div className="flex items-center gap-4 pl-4">
             <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-black text-xs">
@@ -686,7 +896,7 @@ export const StepReview = () => {
         </div>
       ) : products.length > 0 ? (
         <div className="p-6 bg-[#0d0d10] border-t border-white/5 flex items-center justify-center gap-4">
-          <Button onClick={() => setStep(6)} className="px-12 h-14 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-[0.2em] text-[11px] rounded-2xl shadow-[0_0_30px_rgba(217,37,75,0.2)] transition-all transform hover:scale-105 active:scale-95 group">
+          <Button onClick={() => setStep(5)} className="px-12 h-14 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-[0.2em] text-[11px] rounded-2xl shadow-[0_0_30px_rgba(217,37,75,0.2)] transition-all transform hover:scale-105 active:scale-95 group">
              Gerar Tabloide Agora <ChevronRight className="w-4 h-4 ml-3 group-hover:translate-x-1 transition-transform" />
           </Button>
         </div>
@@ -716,7 +926,7 @@ export const StepReview = () => {
                         <h3 className="text-sm font-black uppercase tracking-widest text-white">Gerenciar Variações</h3>
                         <p className="text-[10px] text-white/40 font-bold uppercase">{p.name}</p>
                       </div>
-                      <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 p-2 rounded-xl text-white/40 hover:text-white">
+                      <button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); setShowVariationCreate(false); }} className="bg-white/5 p-2 rounded-xl text-white/40 hover:text-white">
                          <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -731,6 +941,81 @@ export const StepReview = () => {
                       />
                       {isSearchingManual && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />}
                     </div>
+
+                    {/* Botão Cadastrar Variação */}
+                    <Button 
+                      onClick={() => {
+                        setShowVariationCreate(!showVariationCreate);
+                        setVariationCreateData({ name: '', ean: '', file: null });
+                      }}
+                      className={`w-full h-10 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                        showVariationCreate 
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' 
+                          : 'bg-green-600/10 text-green-400 border border-green-500/20 hover:bg-green-600/20'
+                      }`}
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      {showVariationCreate ? 'Cancelar Cadastro' : 'Não encontrou? Cadastrar Novo'}
+                    </Button>
+
+                    {/* Formulário de Cadastro Inline */}
+                    {showVariationCreate && (
+                      <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <h4 className="text-[9px] font-black uppercase tracking-widest text-green-400 flex items-center gap-2">
+                          <PlusCircle className="w-3 h-3" /> Cadastrar Nova Variação
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[8px] font-bold uppercase text-white/30 block mb-1">Nome do Produto</label>
+                            <Input 
+                              disabled={isCreatingVariation}
+                              value={variationCreateData.name} 
+                              onChange={e => setVariationCreateData({...variationCreateData, name: e.target.value})} 
+                              placeholder="Ex: MONSTER MANGA LOCA" 
+                              className="bg-black/40 border-white/10 h-9 text-[11px] text-white rounded-lg" 
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] font-bold uppercase text-white/30 block mb-1">Código EAN</label>
+                            <Input 
+                              disabled={isCreatingVariation}
+                              value={variationCreateData.ean} 
+                              onChange={e => setVariationCreateData({...variationCreateData, ean: e.target.value})} 
+                              placeholder="789..." 
+                              className="bg-black/40 border-white/10 h-9 text-[11px] text-white rounded-lg" 
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-bold uppercase text-white/30 block mb-1">Foto do Produto</label>
+                          <div className="flex gap-3 items-center">
+                            <input 
+                              type="file" 
+                              id="variation-create-file" 
+                              className="hidden" 
+                              accept="image/*"
+                              onChange={e => setVariationCreateData({...variationCreateData, file: e.target.files?.[0] || null})} 
+                            />
+                            <label 
+                              htmlFor="variation-create-file" 
+                              className="flex-1 flex items-center justify-between bg-black/40 border border-white/10 h-9 px-4 rounded-lg cursor-pointer hover:border-white/20 transition-colors"
+                            >
+                              <span className="text-[10px] text-white/30 truncate">
+                                {variationCreateData.file ? variationCreateData.file.name : 'Selecionar imagem...'}
+                              </span>
+                              <ImageIcon className="w-4 h-4 text-white/20" />
+                            </label>
+                            <Button 
+                              onClick={() => handleCreateVariation(p.id)} 
+                              disabled={isCreatingVariation}
+                              className="h-9 px-6 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest"
+                            >
+                              {isCreatingVariation ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cadastrar e Adicionar'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="p-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '60vh' }}>
@@ -789,7 +1074,7 @@ export const StepReview = () => {
                   </div>
 
                   <div className="p-4 bg-black/40 border-t border-white/5 flex justify-end">
-                    <Button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); }} className="bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest">Fechar</Button>
+                    <Button onClick={() => { setShowVariationsFor(null); setManualSearch(''); setManualResults([]); setShowVariationCreate(false); }} className="bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest">Fechar</Button>
                   </div>
                 </>
               );

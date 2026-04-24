@@ -1,13 +1,14 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useOffer, Slot } from '../context/OfferContext';
-import { Trash2, MousePointer, PenTool, Zap, PlusCircle } from 'lucide-react';
+import { Trash2, MousePointer, PenTool, Zap, PlusCircle, Plus, Minus, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 export const StepSlots = () => {
   const { 
     config, slots, setSlots, selectedSlotId, setSelectedSlotId,
-    pageTemplates, saveProjectTemplate, loadProjectTemplate, deleteProjectTemplate, isLoadingTemplates, selectedClientName
+    pageTemplates, saveProjectTemplate, loadProjectTemplate, deleteProjectTemplate, isLoadingTemplates, selectedClientName,
+    pageCount, setPageCount
   } = useOffer();
 
   const filteredTemplates = React.useMemo(() => {
@@ -103,8 +104,8 @@ export const StepSlots = () => {
       {/* Sidebar */}
       <div className="w-[340px] border-r border-white/5 bg-[#0d0d10] p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
         <div>
-          <h2 className="text-sm font-black uppercase tracking-widest text-white">Etapa 2: Layout</h2>
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">Desenhe os slots de produtos</p>
+          <h2 className="text-sm font-black uppercase tracking-widest text-white">Etapa 2: Layout & Telas</h2>
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">Desenhe os slots e defina as telas</p>
         </div>
 
         {/* Mode & Basic Actions */}
@@ -235,6 +236,49 @@ export const StepSlots = () => {
             </div>
           </div>
         )}
+
+        {/* ── Número de Telas ── */}
+        <div className="pt-6 border-t border-white/5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5 text-blue-400" />
+            <h3 className="text-[11px] font-black uppercase text-white/80 tracking-widest">Número de Telas</h3>
+          </div>
+          
+          <div className="flex items-center justify-center gap-4 py-3">
+            <button onClick={() => setPageCount(Math.max(1, pageCount - 1))}
+              className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all active:scale-95">
+              <Minus className="w-4 h-4 text-white/50" />
+            </button>
+            <div className="text-center min-w-[60px]">
+              <div className="text-3xl font-black text-white tracking-tighter">{pageCount}</div>
+              <div className="text-[9px] text-white/30 font-bold uppercase">tela{pageCount > 1 ? 's' : ''}</div>
+            </div>
+            <button onClick={() => setPageCount(pageCount + 1)}
+              className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all active:scale-95">
+              <Plus className="w-4 h-4 text-white/50" />
+            </button>
+          </div>
+
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-lg font-black text-white">{slots.length}</div>
+                <div className="text-[8px] text-white/25 font-bold uppercase">slots/tela</div>
+              </div>
+              <div>
+                <div className="text-lg font-black text-white">{pageCount}</div>
+                <div className="text-[8px] text-white/25 font-bold uppercase">telas</div>
+              </div>
+              <div>
+                <div className="text-lg font-black text-primary">{slots.length * pageCount}</div>
+                <div className="text-[8px] text-white/25 font-bold uppercase">total</div>
+              </div>
+            </div>
+            <p className="text-[9px] text-white/20 text-center mt-2">
+              A mesma grade será repetida em cada tela.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 bg-black/40 flex items-center justify-center p-6 overflow-auto custom-scrollbar">

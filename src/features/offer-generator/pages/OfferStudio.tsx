@@ -13,11 +13,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 const STEPS = [
   { num: 1, label: 'Layout' },
-  { num: 2, label: 'Slots' },
-  { num: 3, label: 'Telas' },
-  { num: 4, label: 'Preço & Desc.' },
-  { num: 5, label: 'Revisão' },
-  { num: 6, label: 'Exportar' },
+  { num: 2, label: 'Slots & Telas' },
+  { num: 3, label: 'Preço & Desc.' },
+  { num: 4, label: 'Revisão' },
+  { num: 5, label: 'Exportar' },
 ];
 
 const PRESETS = [
@@ -228,10 +227,9 @@ const OfferStudioInner = () => {
       <main className="flex-1 overflow-hidden relative">
         {step === 1 && <StepBackground />}
         {step === 2 && <StepSlots />}
-        {step === 3 && <StepPages />}
-        {step === 4 && <StepPriceBadge />}
-        {step === 5 && <StepReview />}
-        {step === 6 && <StepFinal />}
+        {step === 3 && <StepPriceBadge />}
+        {step === 4 && <StepReview />}
+        {step === 5 && <StepFinal />}
       </main>
 
       {/* Footer estável para navegação */}
@@ -245,7 +243,7 @@ const OfferStudioInner = () => {
               <ChevronLeft className="w-4 h-4 mr-2" /> Voltar
             </Button>
           )}
-          {step < 6 && (
+          {step < 5 && (
             <Button onClick={() => setStep(step + 1)} className="h-9 px-8 bg-primary hover:bg-primary/90 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 transition-all group">
               Próximo <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>

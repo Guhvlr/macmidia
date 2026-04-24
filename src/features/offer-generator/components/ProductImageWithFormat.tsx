@@ -19,7 +19,9 @@ export const ProductImageWithFormat = ({
   isFallback
 }: ProductImageWithFormatProps) => {
   const isManual = src?.startsWith('blob:') || src?.startsWith('data:');
-  const baseSrc = (src && !isManual) ? src.split('?')[0].replace(/\.(png|jpg|jpeg)$/i, '') : (src || '');
+  const queryMatch = src?.match(/(\?.*)$/);
+  const queryParams = queryMatch ? queryMatch[1] : '';
+  const baseSrc = (src && !isManual) ? src.replace(/(\?.*)$/, '').replace(/\.(png|jpg|jpeg)$/i, '') : (src || '');
   
   const [currentUrl, setCurrentUrl] = useState<string>(src || '');
   const [format, setFormat] = useState<'PNG' | 'JPG' | 'ERROR' | 'MANUAL'>(isManual ? 'MANUAL' : (src ? 'PNG' : 'ERROR'));
@@ -33,12 +35,11 @@ export const ProductImageWithFormat = ({
       setCurrentUrl(src);
       setFormat('MANUAL');
     } else {
-      // Tenta o PNG limpo primeiro para permitir cache do navegador.
-      // O timestamp agora é gerido apenas se houver mudança explícita ou erro.
-      setCurrentUrl(`${baseSrc}.png`);
+      // Tenta o PNG limpo primeiro para permitir cache do navegador, mas mantendo o cache buster se existir
+      setCurrentUrl(`${baseSrc}.png${queryParams}`);
       setFormat('PNG');
     }
-  }, [src, isManual, baseSrc]);
+  }, [src, isManual, baseSrc, queryParams]);
 
   const onFormatChangeRef = React.useRef(onFormatChange);
   const onUrlResolvedRef = React.useRef(onUrlResolved);

@@ -1,1 +1,0 @@
-ALTER PUBLICATION supabase_realtime ADD TABLE public.employees, public.kanban_cards, public.calendar_tasks, public.credentials, public.calendar_clients, public.settings;

@@ -2,6 +2,7 @@ import React from 'react';
 import { Loader2, Trash2, Layers, PlusCircle, CheckSquare, ZoomIn, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ProductItem } from '../../context/OfferContext';
 import { ProductImageWithFormat } from '../ProductImageWithFormat';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -69,11 +70,11 @@ export const ReviewCard = React.memo(({
 
   const isLowConfidence = ['low', 'none'].includes(product.confidence);
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = (saveToDb: boolean = false) => {
     onUpdateProduct(product.id, {
       ...editData,
       name: editData.name.toUpperCase()
-    });
+    }, saveToDb);
     setIsEditing(false);
   };
 
@@ -192,57 +193,114 @@ export const ReviewCard = React.memo(({
         {/* Actions */}
         <div className="flex items-center gap-2">
           {isEditing ? (
-            <Button 
-              onClick={handleSaveEdit} 
-              className="h-9 px-4 bg-green-600 hover:bg-green-700 text-[10px] font-black uppercase tracking-widest text-white rounded-xl transition-all"
-            >
-              Salvar
-            </Button>
+            <div className="flex gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={() => handleSaveEdit(false)} 
+                    className="h-9 px-4 bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase tracking-widest text-white rounded-xl transition-all"
+                  >
+                    Salvar Local
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-[#1a1a1c] border-white/10 text-white text-xs font-medium max-w-[200px]">
+                  Salvar alterações apenas nesta oferta atual
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={() => handleSaveEdit(true)} 
+                    className="h-9 px-4 bg-green-600 hover:bg-green-700 text-[10px] font-black uppercase tracking-widest text-white rounded-xl transition-all"
+                  >
+                    Salvar no BD
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-[#1a1a1c] border-white/10 text-white text-xs font-medium max-w-[200px]">
+                  Salvar permanentemente no banco de dados para futuras ofertas
+                </TooltipContent>
+              </Tooltip>
+            </div>
           ) : (
-            <Button 
-              onClick={() => setIsEditing(true)} 
-              className="h-9 px-4 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
-            >
-              Editar
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={() => setIsEditing(true)} 
+                  className="h-9 px-4 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
+                >
+                  Editar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-[#1a1a1c] border-white/10 text-white text-xs font-medium max-w-[200px]">
+                Editar nome, preço ou código do produto
+              </TooltipContent>
+            </Tooltip>
           )}
           {isLowConfidence && !isEditing && (
-            <Button 
-              onClick={() => {
-                setCreateData({ 
-                  name: product.name, 
-                  ean: product.ean === 'N/A' || product.ean === 'NA' ? '' : product.ean, 
-                  file: null 
-                });
-                setCreatingThis(isCreatingThis ? null : product.id);
-              }} 
-              className="h-9 px-4 bg-[#1a1a1c] hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
-            >
-              Cadastrar
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={() => {
+                    setCreateData({ 
+                      name: product.name, 
+                      ean: product.ean === 'N/A' || product.ean === 'NA' ? '' : product.ean, 
+                      file: null 
+                    });
+                    setCreatingThis(isCreatingThis ? null : product.id);
+                  }} 
+                  className="h-9 px-4 bg-[#1a1a1c] hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
+                >
+                  Cadastrar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-[#1a1a1c] border-white/10 text-white text-xs font-medium max-w-[200px]">
+                Cadastrar produto novo no banco de dados
+              </TooltipContent>
+            </Tooltip>
           )}
-          <Button 
-            onClick={() => onLoadVariations(product)} 
-            disabled={isProcessing}
-            className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
-          >
-            {isLoadingVariations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
-            Variações
-          </Button>
-          <Button 
-            onClick={() => onManualImageUpload(product.id)} 
-            variant="outline" 
-            className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            Add Foto
-          </Button>
-          <button 
-            onClick={() => onRemove(product.id)} 
-            className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                onClick={() => onLoadVariations(product)} 
+                disabled={isProcessing}
+                className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
+              >
+                {isLoadingVariations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                Variações
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-[#1a1a1c] border-white/10 text-white text-xs font-medium max-w-[220px]">
+              Adicionar outras versões do produto (sabores, marcas, etc)
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                onClick={() => onManualImageUpload(product.id)} 
+                variant="outline" 
+                className="h-9 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                Add Foto
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-[#1a1a1c] border-white/10 text-white text-xs font-medium max-w-[200px]">
+              Adicionar imagem apenas para esta oferta
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button 
+                onClick={() => onRemove(product.id)} 
+                className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-red-950/90 border-red-500/20 text-red-200 text-xs font-medium">
+              Remover produto da lista
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

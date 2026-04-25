@@ -292,7 +292,7 @@ export const ReviewCard = React.memo(({
             <TooltipTrigger asChild>
               <button 
                 onClick={() => onRemove(product.id)} 
-                className="p-2 ml-2 text-white/10 hover:text-red-500 transition-colors"
+                className="p-2 ml-2 text-white/30 hover:text-red-500 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

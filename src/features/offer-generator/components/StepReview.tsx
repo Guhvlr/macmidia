@@ -796,7 +796,11 @@ export const StepReview = () => {
                       onLoadVariations={loadVariations}
                       isLoadingVariations={loadingVariationsId === p.id}
                       onManualImageUpload={handleManualImageUpload}
-                      onRemove={(id) => setProducts(products.filter(x => x.id !== id))}
+                                            onRemove={(id) => {
+                        pushHistory();
+                        setProducts(prev => prev.filter(x => x.id !== id));
+                        toast.success('Produto removido');
+                      }}
                       isProcessing={isProcessing}
                       isCreatingThis={creatingProductFor === p.id}
                       setCreatingThis={setCreatingProductFor}
@@ -901,7 +905,7 @@ export const StepReview = () => {
       </div>
 
       {/* Floating Action Bar — only on Imagens tab with selections */}
-      {activeTab === 'imagens' && selectedIds.size > 0 ? (
+      {selectedIds.size > 0 ? (
         <div className="p-4 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50">
           <div className="flex items-center gap-4 pl-4">
             <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-black text-xs">
@@ -910,15 +914,29 @@ export const StepReview = () => {
             <span className="text-[11px] font-bold tracking-widest uppercase text-white/60">Itens Selecionados</span>
           </div>
           <div className="flex items-center gap-3 pr-4">
-            <Button onClick={() => handleRemoveBackground(Array.from(selectedIds))} variant="outline" className="h-12 border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 font-black uppercase tracking-widest rounded-xl text-[10px]">
-              <Sparkles className="w-4 h-4 mr-2" /> Recortar Fundo em Lote
+            {activeTab === 'imagens' && (
+              <>
+                <Button onClick={() => handleRemoveBackground(Array.from(selectedIds))} variant="outline" className="h-12 border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 font-black uppercase tracking-widest rounded-xl text-[10px]">
+                  <Sparkles className="w-4 h-4 mr-2" /> Recortar Fundo em Lote
+                </Button>
+                <Button onClick={() => handleApprovePreviews(Array.from(selectedIds))} className="h-12 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-widest rounded-xl text-[10px]">
+                  <CheckSquare className="w-4 h-4 mr-2" /> Aprovar Lote
+                </Button>
+              </>
+            )}
+            <Button onClick={() => {
+              pushHistory();
+              setProducts(prev => prev.filter(p => !selectedIds.has(p.id)));
+              setSelectedIds(new Set());
+              toast.success(`${selectedIds.size} itens removidos`);
+            }} variant="outline" className="h-12 border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/10 font-black uppercase tracking-widest rounded-xl text-[10px]">
+              <Trash2 className="w-4 h-4 mr-2" /> Remover Selecionados
             </Button>
-            <Button onClick={() => handleApprovePreviews(Array.from(selectedIds))} className="h-12 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-widest rounded-xl text-[10px]">
-              <CheckSquare className="w-4 h-4 mr-2" /> Aprovar Lote
-            </Button>
-            <Button onClick={() => handleRestoreOriginals(Array.from(selectedIds))} variant="outline" className="h-12 border-white/10 text-white/40 hover:text-white bg-white/5 font-black uppercase tracking-widest rounded-xl text-[10px]">
-              <Undo2 className="w-4 h-4 mr-2" /> Restaurar Originais
-            </Button>
+            {activeTab === 'imagens' && (
+              <Button onClick={() => handleRestoreOriginals(Array.from(selectedIds))} variant="outline" className="h-12 border-white/10 text-white/40 hover:text-white bg-white/5 font-black uppercase tracking-widest rounded-xl text-[10px]">
+                <Undo2 className="w-4 h-4 mr-2" /> Restaurar Originais
+              </Button>
+            )}
           </div>
         </div>
       ) : products.length > 0 ? (

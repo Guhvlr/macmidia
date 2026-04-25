@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/contexts/AppContext";
 import { useApp } from "@/contexts/useApp";
+import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 import MainLayout from "@/components/layout/MainLayout";
 import { PageLoader } from "@/components/layout/PageLoader";
 
@@ -78,7 +79,7 @@ const AppRoutes = () => (
   </Suspense>
 );
 
-import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

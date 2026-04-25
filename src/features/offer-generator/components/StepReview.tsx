@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOffer, ProductItem } from '../context/OfferContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Trash2, Layers, Search, PlusCircle, CheckCircle2, ChevronRight, X, Sparkles, AlertTriangle, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon, ZoomIn, Zap } from 'lucide-react';
+import { Loader2, Trash2, Search, PlusCircle, CheckCircle2, ChevronRight, X, AlertTriangle, Barcode, FileText, Crop, Undo2, CheckSquare, Image as ImageIcon, ZoomIn, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import { ConfidenceBadge } from './review/ConfidenceBadge';
 import { FirstUseTour } from './review/FirstUseTour';
 
 export const StepReview = () => {
-  const { products, setProducts, removeProducts, pushHistory, setStep, slots, pageCount } = useOffer();
+  const { products, setProducts, removeProducts, pushHistory, slots } = useOffer();
   const [bulkInput, setBulkInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [variations, setVariations] = useState<ProductItem[]>([]);

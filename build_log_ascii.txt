@@ -1,0 +1,79 @@
+
+> vite_react_shadcn_ts@0.0.0 build
+> vite build
+
+[36mvite v5.4.19 [32mbuilding for production...[36m[39m
+transforming...
+[32m???[39m 3460 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                             [39m[1m[2m  1.88 kB[22m[1m[22m[2m ??? gzip:   0.72 kB[22m
+[2mdist/[22m[32massets/logo-mac-midia-PPA_7dgP.png     [39m[1m[2m356.18 kB[22m[1m[22m
+[2mdist/[22m[35massets/index-KxgrZ4gD.css              [39m[1m[2m137.72 kB[22m[1m[22m[2m ??? gzip:  20.81 kB[22m
+[2mdist/[22m[36massets/index-DxQI6odG.js               [39m[1m[2m  0.14 kB[22m[1m[22m[2m ??? gzip:   0.14 kB[22m
+[2mdist/[22m[36massets/index-dBc40OtF.js               [39m[1m[2m  0.23 kB[22m[1m[22m[2m ??? gzip:   0.17 kB[22m
+[2mdist/[22m[36massets/check-ItO6XZyO.js               [39m[1m[2m  0.29 kB[22m[1m[22m[2m ??? gzip:   0.24 kB[22m
+[2mdist/[22m[36massets/plus-EyoN-8-p.js                [39m[1m[2m  0.32 kB[22m[1m[22m[2m ??? gzip:   0.25 kB[22m
+[2mdist/[22m[36massets/arrow-left-CIkJN_fB.js          [39m[1m[2m  0.33 kB[22m[1m[22m[2m ??? gzip:   0.27 kB[22m
+[2mdist/[22m[36massets/arrow-right-DJtyYQCT.js         [39m[1m[2m  0.33 kB[22m[1m[22m[2m ??? gzip:   0.26 kB[22m
+[2mdist/[22m[36massets/search-DcADbdAD.js              [39m[1m[2m  0.34 kB[22m[1m[22m[2m ??? gzip:   0.27 kB[22m
+[2mdist/[22m[36massets/circle-check-DxGFSz5H.js        [39m[1m[2m  0.34 kB[22m[1m[22m[2m ??? gzip:   0.27 kB[22m
+[2mdist/[22m[36massets/clock-B0tC1peW.js               [39m[1m[2m  0.35 kB[22m[1m[22m[2m ??? gzip:   0.27 kB[22m
+[2mdist/[22m[36massets/ean-LvcMXT72.js                 [39m[1m[2m  0.35 kB[22m[1m[22m[2m ??? gzip:   0.28 kB[22m
+[2mdist/[22m[36massets/user-gW659wCs.js                [39m[1m[2m  0.37 kB[22m[1m[22m[2m ??? gzip:   0.28 kB[22m
+[2mdist/[22m[36massets/lock-DJlVtnPj.js                [39m[1m[2m  0.38 kB[22m[1m[22m[2m ??? gzip:   0.29 kB[22m
+[2mdist/[22m[36massets/copy-7Qfrg_4c.js                [39m[1m[2m  0.40 kB[22m[1m[22m[2m ??? gzip:   0.31 kB[22m
+[2mdist/[22m[36massets/activity-CLKfo3YO.js            [39m[1m[2m  0.40 kB[22m[1m[22m[2m ??? gzip:   0.30 kB[22m
+[2mdist/[22m[36massets/pen-CN1ihakg.js                 [39m[1m[2m  0.40 kB[22m[1m[22m[2m ??? gzip:   0.30 kB[22m
+[2mdist/[22m[36massets/database-MWfhXZEp.js            [39m[1m[2m  0.41 kB[22m[1m[22m[2m ??? gzip:   0.30 kB[22m
+[2mdist/[22m[36massets/eye-C_gqj7RL.js                 [39m[1m[2m  0.42 kB[22m[1m[22m[2m ??? gzip:   0.30 kB[22m
+[2mdist/[22m[36massets/archive-4MOamRu5.js             [39m[1m[2m  0.42 kB[22m[1m[22m[2m ??? gzip:   0.31 kB[22m
+[2mdist/[22m[36massets/upload-Dhk9LToG.js              [39m[1m[2m  0.43 kB[22m[1m[22m[2m ??? gzip:   0.32 kB[22m
+[2mdist/[22m[36massets/image-DK6e1Gtk.js               [39m[1m[2m  0.44 kB[22m[1m[22m[2m ??? gzip:   0.32 kB[22m
+[2mdist/[22m[36massets/pencil-CzK_GDVN.js              [39m[1m[2m  0.45 kB[22m[1m[22m[2m ??? gzip:   0.32 kB[22m
+[2mdist/[22m[36massets/send-BSPgJ5A9.js                [39m[1m[2m  0.46 kB[22m[1m[22m[2m ??? gzip:   0.33 kB[22m
+[2mdist/[22m[36massets/user-plus-B-YtXE-b.js           [39m[1m[2m  0.48 kB[22m[1m[22m[2m ??? gzip:   0.33 kB[22m
+[2mdist/[22m[36massets/textarea-QkzHkoTb.js            [39m[1m[2m  0.48 kB[22m[1m[22m[2m ??? gzip:   0.32 kB[22m
+[2mdist/[22m[36massets/refresh-cw-DM6ZuZUk.js          [39m[1m[2m  0.49 kB[22m[1m[22m[2m ??? gzip:   0.33 kB[22m
+[2mdist/[22m[36massets/bot-BnKAGkBg.js                 [39m[1m[2m  0.50 kB[22m[1m[22m[2m ??? gzip:   0.33 kB[22m
+[2mdist/[22m[36massets/file-text-Dg8OcBgd.js           [39m[1m[2m  0.50 kB[22m[1m[22m[2m ??? gzip:   0.32 kB[22m
+[2mdist/[22m[36massets/trash-2-Jmco5NiU.js             [39m[1m[2m  0.53 kB[22m[1m[22m[2m ??? gzip:   0.35 kB[22m
+[2mdist/[22m[36massets/layout-list-DXX8qoPA.js         [39m[1m[2m  0.53 kB[22m[1m[22m[2m ??? gzip:   0.32 kB[22m
+[2mdist/[22m[36massets/package-CA7-ue7z.js             [39m[1m[2m  0.56 kB[22m[1m[22m[2m ??? gzip:   0.36 kB[22m
+[2mdist/[22m[36massets/input-BNVxGy6i.js               [39m[1m[2m  0.58 kB[22m[1m[22m[2m ??? gzip:   0.35 kB[22m
+[2mdist/[22m[36massets/eye-off-BgkeFc3p.js             [39m[1m[2m  0.60 kB[22m[1m[22m[2m ??? gzip:   0.38 kB[22m
+[2mdist/[22m[36massets/calendar-days-D8gaWGiJ.js       [39m[1m[2m  0.66 kB[22m[1m[22m[2m ??? gzip:   0.37 kB[22m
+[2mdist/[22m[36massets/square-check-big-JDZKRgTM.js    [39m[1m[2m  0.71 kB[22m[1m[22m[2m ??? gzip:   0.38 kB[22m
+[2mdist/[22m[36massets/NotFound-CI6Aed5z.js            [39m[1m[2m  0.86 kB[22m[1m[22m[2m ??? gzip:   0.50 kB[22m
+[2mdist/[22m[36massets/useDraggableScroll-Ceuao3gy.js  [39m[1m[2m  0.93 kB[22m[1m[22m[2m ??? gzip:   0.46 kB[22m
+[2mdist/[22m[36massets/dialog-CD2tBtjS.js              [39m[1m[2m  2.16 kB[22m[1m[22m[2m ??? gzip:   0.84 kB[22m
+[2mdist/[22m[36massets/tabs-CDe7HmdU.js                [39m[1m[2m  3.26 kB[22m[1m[22m[2m ??? gzip:   1.37 kB[22m
+[2mdist/[22m[36massets/AddCardDialog-9ZJDuFwX.js       [39m[1m[2m  3.28 kB[22m[1m[22m[2m ??? gzip:   1.56 kB[22m
+[2mdist/[22m[36massets/index-DNDKKHm2.js               [39m[1m[2m  3.48 kB[22m[1m[22m[2m ??? gzip:   1.58 kB[22m
+[2mdist/[22m[36massets/subMonths-CS9WhuRl.js           [39m[1m[2m  3.52 kB[22m[1m[22m[2m ??? gzip:   1.57 kB[22m
+[2mdist/[22m[36massets/PostingBoard-D-aRn0lE.js        [39m[1m[2m  3.67 kB[22m[1m[22m[2m ??? gzip:   1.60 kB[22m
+[2mdist/[22m[36massets/CorrectionBoard-BAa1s0Z8.js     [39m[1m[2m  4.67 kB[22m[1m[22m[2m ??? gzip:   2.03 kB[22m
+[2mdist/[22m[36massets/alert-dialog-BGliVqfQ.js        [39m[1m[2m  4.76 kB[22m[1m[22m[2m ??? gzip:   1.74 kB[22m
+[2mdist/[22m[36massets/Login-B0z8Eveo.js               [39m[1m[2m  6.15 kB[22m[1m[22m[2m ??? gzip:   2.14 kB[22m
+[2mdist/[22m[36massets/ArchivedCards-rD1gHkqn.js       [39m[1m[2m  6.88 kB[22m[1m[22m[2m ??? gzip:   2.68 kB[22m
+[2mdist/[22m[36massets/dropdown-menu-BZGvvjgC.js       [39m[1m[2m  7.99 kB[22m[1m[22m[2m ??? gzip:   2.16 kB[22m
+[2mdist/[22m[36massets/CalendarPage-BPlnzvTD.js        [39m[1m[2m  9.61 kB[22m[1m[22m[2m ??? gzip:   3.47 kB[22m
+[2mdist/[22m[36massets/Employee-BldaG-ms.js            [39m[1m[2m 10.13 kB[22m[1m[22m[2m ??? gzip:   3.55 kB[22m
+[2mdist/[22m[36massets/KanbanCard-COF15CMu.js          [39m[1m[2m 10.14 kB[22m[1m[22m[2m ??? gzip:   3.45 kB[22m
+[2mdist/[22m[36massets/IntelligenceCenter-BGm8z_Dw.js  [39m[1m[2m 12.43 kB[22m[1m[22m[2m ??? gzip:   4.10 kB[22m
+[2mdist/[22m[36massets/UsersAdmin-Yj3dm1z0.js          [39m[1m[2m 13.00 kB[22m[1m[22m[2m ??? gzip:   4.20 kB[22m
+[2mdist/[22m[36massets/index-CKvu7jPM.js               [39m[1m[2m 13.02 kB[22m[1m[22m[2m ??? gzip:   4.43 kB[22m
+[2mdist/[22m[36massets/Index-OoKmbDMP.js               [39m[1m[2m 16.97 kB[22m[1m[22m[2m ??? gzip:   5.35 kB[22m
+[2mdist/[22m[36massets/Vault-YBIa5YS-.js               [39m[1m[2m 20.38 kB[22m[1m[22m[2m ??? gzip:   5.59 kB[22m
+[2mdist/[22m[36massets/index-Deu3RBQV.js               [39m[1m[2m 21.00 kB[22m[1m[22m[2m ??? gzip:   7.71 kB[22m
+[2mdist/[22m[36massets/select-B4vqOqTs.js              [39m[1m[2m 21.12 kB[22m[1m[22m[2m ??? gzip:   7.33 kB[22m
+[2mdist/[22m[36massets/Products-wPjWqh7X.js            [39m[1m[2m 25.80 kB[22m[1m[22m[2m ??? gzip:   7.78 kB[22m
+[2mdist/[22m[36massets/pt-BR-CVkBWbec.js               [39m[1m[2m 26.51 kB[22m[1m[22m[2m ??? gzip:   7.26 kB[22m
+[2mdist/[22m[36massets/WhatsAppInbox-BAXEuD-_.js       [39m[1m[2m 27.32 kB[22m[1m[22m[2m ??? gzip:   9.15 kB[22m
+[2mdist/[22m[36massets/Report-BmBmOroc.js              [39m[1m[2m 29.52 kB[22m[1m[22m[2m ??? gzip:   8.86 kB[22m
+[2mdist/[22m[36massets/CardDetailDialog-ClVAom_6.js    [39m[1m[2m 46.14 kB[22m[1m[22m[2m ??? gzip:  12.90 kB[22m
+[2mdist/[22m[36massets/ClientCalendar-CoQe54pO.js      [39m[1m[2m 56.20 kB[22m[1m[22m[2m ??? gzip:  12.87 kB[22m
+[2mdist/[22m[36massets/OfferStudio-YG7gGl-e.js         [39m[1m[2m137.11 kB[22m[1m[22m[2m ??? gzip:  35.75 kB[22m
+[2mdist/[22m[36massets/AreaChart-BjAyhqcV.js           [39m[1m[2m376.16 kB[22m[1m[22m[2m ??? gzip: 103.99 kB[22m
+[2mdist/[22m[36massets/index-gBeOvcL1.js               [39m[1m[33m751.62 kB[39m[22m[2m ??? gzip: 221.61 kB[22m
+[32m??? built in 5.63s[39m

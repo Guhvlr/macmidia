@@ -86,5 +86,6 @@ export const OfferProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 export const useOffer = () => {
   const context = React.useContext(OfferContext);
   // Fallback to store directly if used outside provider, though App.tsx ensures it's wrapped
-  return context || useOfferStore();
+  const store = useOfferStore();
+  return context || store;
 };

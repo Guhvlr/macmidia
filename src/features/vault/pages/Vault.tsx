@@ -119,21 +119,26 @@ const Vault = () => {
     setClientForm(prev => ({ ...prev, phones: newPhones }));
   };
 
-  const handleAddCred = (e: React.FormEvent) => {
+  const handleAddCred = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient) return;
     if (!credForm.label.trim() || !credForm.password.trim()) return;
     
-    addCredential({ 
-      ...credForm, 
-      url: credForm.url || undefined,
-      calendarClientId: selectedClient.id,
-      employeeId: '' // Removed from UI as requested
-    });
-    
-    setCredForm({ label: '', username: '', password: '', url: '' });
-    setShowAddCred(false);
-    toast.success('Acesso adicionado com sucesso!');
+    try {
+      await addCredential({ 
+        ...credForm, 
+        url: credForm.url || undefined,
+        calendarClientId: selectedClient.id,
+        employeeId: '' // Removed from UI as requested
+      });
+      
+      setCredForm({ label: '', username: '', password: '', url: '' });
+      setShowAddCred(false);
+      toast.success('Acesso adicionado com sucesso!');
+    } catch (err) {
+      // Error toast is already shown by addCredential
+      console.error('Falha ao registrar acesso:', err);
+    }
   };
 
   const filteredClients = calendarClients.filter(c => {

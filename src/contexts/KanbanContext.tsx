@@ -532,14 +532,45 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addCredential = useCallback(async (cred: Omit<Credential, 'id'>) => {
-    await supabase.from('credentials').insert({
+    const tempId = crypto.randomUUID();
+    // Optimistic update - add to local state immediately
+    const optimisticCred: Credential = {
+      id: tempId,
       label: cred.label,
       username: cred.username,
       password: cred.password,
       url: cred.url,
-      employee_id: cred.employeeId,
-      calendar_client_id: cred.calendarClientId || null
-    }).select();
+      employeeId: cred.employeeId || '',
+      calendarClientId: cred.calendarClientId,
+    };
+    setCredentials(prev => [...prev, optimisticCred]);
+
+    try {
+      // Find a valid employee ID to satisfy the NOT NULL constraint if none is provided
+      const finalEmployeeId = cred.employeeId || (employees.length > 0 ? employees[0].id : null);
+      
+      const { data, error } = await supabase.from('credentials').insert({
+        label: cred.label,
+        username: cred.username,
+        password: cred.password,
+        url: cred.url || null,
+        employee_id: finalEmployeeId,
+        calendar_client_id: cred.calendarClientId || null
+      }).select();
+
+      if (error) throw error;
+
+      // Replace temp ID with real ID from database
+      if (data?.[0]) {
+        setCredentials(prev => prev.map(c => c.id === tempId ? mapCredential(data[0]) : c));
+      }
+    } catch (err: any) {
+      console.error('Erro ao adicionar credencial:', err);
+      // Rollback optimistic update
+      setCredentials(prev => prev.filter(c => c.id !== tempId));
+      toast.error(`Erro ao salvar acesso: ${err.message || 'Erro desconhecido'}`);
+      throw err;
+    }
   }, []);
   const updateCredential = useCallback(async (id: string, updates: Partial<Credential>) => {
     const db: any = {};

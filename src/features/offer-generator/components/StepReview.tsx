@@ -14,7 +14,7 @@ import { ConfidenceBadge } from './review/ConfidenceBadge';
 import { FirstUseTour } from './review/FirstUseTour';
 
 export const StepReview = () => {
-  const { products, setProducts, setStep, slots, pageCount } = useOffer();
+  const { products, setProducts, removeProducts, pushHistory, setStep, slots, pageCount } = useOffer();
   const [bulkInput, setBulkInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [variations, setVariations] = useState<ProductItem[]>([]);
@@ -796,11 +796,10 @@ export const StepReview = () => {
                       onLoadVariations={loadVariations}
                       isLoadingVariations={loadingVariationsId === p.id}
                       onManualImageUpload={handleManualImageUpload}
-                                            onRemove={(id) => {
-                        pushHistory();
-                        setProducts(prev => prev.filter(x => x.id !== id));
-                        toast.success('Produto removido');
-                      }}
+                       onRemove={(id) => {
+                         removeProducts([id]);
+                         toast.success('Produto removido');
+                       }}
                       isProcessing={isProcessing}
                       isCreatingThis={creatingProductFor === p.id}
                       setCreatingThis={setCreatingProductFor}
@@ -925,10 +924,10 @@ export const StepReview = () => {
               </>
             )}
             <Button onClick={() => {
-              pushHistory();
-              setProducts(prev => prev.filter(p => !selectedIds.has(p.id)));
+              const count = selectedIds.size;
+              removeProducts(Array.from(selectedIds));
               setSelectedIds(new Set());
-              toast.success(`${selectedIds.size} itens removidos`);
+              toast.success(`${count} itens removidos`);
             }} variant="outline" className="h-12 border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/10 font-black uppercase tracking-widest rounded-xl text-[10px]">
               <Trash2 className="w-4 h-4 mr-2" /> Remover Selecionados
             </Button>

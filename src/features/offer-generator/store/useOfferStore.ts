@@ -223,6 +223,7 @@ interface OfferState {
   resetToDefaults: () => void;
   removeBackground: (productIdx: number) => Promise<void>;
   autoFitImage: (productIdx: number) => Promise<void>;
+  removeProducts: (ids: string[]) => void;
 }
 
 export const useOfferStore = create<OfferState>((set, get) => ({
@@ -764,5 +765,13 @@ export const useOfferStore = create<OfferState>((set, get) => ({
       products: [], layouts: [], slotSettings: {}, selectedSlotIndex: null, selectedSlotIndices: [],
       zoom: 0.8, panOffset: { x: 0, y: 0 }, activePage: 0, customCanvasElements: {}, history: [], historyIndex: -1
     });
+  },
+  
+  removeProducts: (ids: string[]) => {
+    const state = get();
+    state.pushHistory();
+    set((state) => ({ 
+      products: state.products.filter(p => !ids.includes(p.id)) 
+    }));
   }
 }));

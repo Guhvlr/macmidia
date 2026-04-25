@@ -131,7 +131,7 @@ export const defaultConfig: ArtBoardConfig = {
   backgroundImageUrl: null,
 };
 
-interface OfferState {
+export interface OfferState {
   step: number;
   setStep: (step: number) => void;
   config: ArtBoardConfig;

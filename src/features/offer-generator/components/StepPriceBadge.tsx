@@ -1,8 +1,10 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useOffer, PriceBadgeConfig, DescriptionConfig, ImageConfig } from '../context/OfferContext';
-import { ChevronDown, ChevronRight, Zap, Layers, CreditCard, PenTool, Layout, ChevronLeft, Trash2, Hand, Maximize, Image as ImageIcon, Undo2, Save, CheckCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap, Layers, CreditCard, PenTool, Layout, ChevronLeft, Trash2, Hand, Maximize, Image as ImageIcon, Undo2, Save, CheckCircle, Upload, Plus, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,51 @@ import { Button } from '@/components/ui/button';
 type ElemId = 'image' | 'name' | 'badge' | 'currency' | 'value' | 'suffix';
 
 const COLOR_PALETTE = ['#D9254B', '#2563EB', '#16A34A', '#EAB308', '#7C3AED', '#000000', '#FFFFFF', '#64748B'];
+
+// SVG generator for complex badge shapes
+const generateShapeSvg = (type: string, color: string): string => {
+  const paths: Record<string, string> = {
+    splash: `<path d="M100 5L118 72L185 55L138 100L185 145L118 128L100 195L82 128L15 145L62 100L15 55L82 72Z" fill="${color}"/>`,
+    star: `<path d="M100 10L123 75L195 75L137 115L155 185L100 145L45 185L63 115L5 75L77 75Z" fill="${color}"/>`,
+    diamond: `<path d="M100 5L195 100L100 195L5 100Z" fill="${color}"/>`,
+    hexagon: `<path d="M100 5L183 50L183 150L100 195L17 150L17 50Z" fill="${color}"/>`,
+  };
+  if (!paths[type]) return '';
+  return `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">${paths[type]}</svg>`)}`;
+};
+
+interface StandardIcon {
+  id: string;
+  name: string;
+  isComplex: boolean;
+  config: Partial<PriceBadgeConfig>;
+}
+
+const STANDARD_ICONS: StandardIcon[] = [
+  { id: 'rectangle', name: 'Retangular', isComplex: false, config: { badgeWidth: 320, badgeHeight: 130, borderRadius: 14, badgeImageUrl: null, badgeType: 'rectangle' } },
+  { id: 'circle', name: 'Redondo', isComplex: false, config: { badgeWidth: 200, badgeHeight: 200, borderRadius: 999, badgeImageUrl: null, badgeType: 'circle' } },
+  { id: 'square', name: 'Quadrado', isComplex: false, config: { badgeWidth: 180, badgeHeight: 180, borderRadius: 14, badgeImageUrl: null, badgeType: 'square' } },
+];
+
+const IconPreview = React.memo(({ type, color, isSelected }: { type: string; color: string; isSelected: boolean }) => {
+  const c = color || '#e11d48';
+  const shapes: Record<string, React.ReactNode> = {
+    rectangle: <rect x="6" y="18" width="40" height="16" rx="3" fill={c} />,
+    circle: <circle cx="26" cy="26" r="17" fill={c} />,
+    square: <rect x="10" y="10" width="32" height="32" rx="3" fill={c} />,
+    pill: <rect x="4" y="19" width="44" height="14" rx="7" fill={c} />,
+    splash: <path d="M26 4L30 19L45 15L35 26L45 37L30 33L26 48L22 33L7 37L17 26L7 15L22 19Z" fill={c} />,
+    star: <path d="M26 6L31 19L45 19L34 27L38 41L26 33L14 41L18 27L7 19L21 19Z" fill={c} />,
+    diamond: <path d="M26 6L46 26L26 46L6 26Z" fill={c} />,
+    hexagon: <path d="M26 5L44 15L44 37L26 47L8 37L8 15Z" fill={c} />,
+  };
+  return (
+    <svg width={52} height={52} viewBox="0 0 52 52" className={`rounded-xl transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0d0d10]' : ''}`}>
+      <rect width="52" height="52" rx="10" fill={isSelected ? 'rgba(217,37,75,0.15)' : 'rgba(255,255,255,0.03)'} />
+      {shapes[type] || <rect x="8" y="8" width="36" height="36" rx="4" fill={c} />}
+    </svg>
+  );
+});
 
 const FontStyles = React.memo(({ fonts }: { fonts: { name: string; url: string }[] }) => (
   <style dangerouslySetInnerHTML={{ __html: fonts.map(f => `
@@ -135,6 +182,142 @@ export const StepPriceBadge = () => {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+
+  // Custom badge icons state — persisted in Supabase Storage + localStorage cache
+  const [customBadgeIcons, setCustomBadgeIcons] = useState<{id: string; name: string; imageUrl: string}[]>(() => {
+    try { return JSON.parse(localStorage.getItem('macmidia_custom_badge_icons') || '[]'); } catch { return []; }
+  });
+  const [customIconForm, setCustomIconForm] = useState({ name: '', imageUrl: '', file: null as File | null });
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [isUploadingIcon, setIsUploadingIcon] = useState(false);
+  const [iconToDelete, setIconToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Sync localStorage whenever icons change
+  useEffect(() => {
+    localStorage.setItem('macmidia_custom_badge_icons', JSON.stringify(customBadgeIcons));
+  }, [customBadgeIcons]);
+
+  const up = useCallback((updates: any) => {
+    pushHistory();
+    if (selectedSlotIndices.length > 0) {
+      selectedSlotIndices.forEach(idx => updateSlotSettings(idx, updates));
+    } else if (selectedSlotIndex !== null) {
+      updateSlotSettings(selectedSlotIndex, updates);
+    } else {
+      if (updates.priceBadge) updatePriceBadge(updates.priceBadge);
+      if (updates.descConfig) updateDescConfig(updates.descConfig);
+      if (updates.imageConfig) updateImageConfig(updates.imageConfig);
+    }
+  }, [selectedSlotIndex, selectedSlotIndices, updateSlotSettings, updatePriceBadge, updateDescConfig, updateImageConfig, pushHistory]);
+
+  // Load saved icons from Supabase Storage on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: files, error } = await supabase.storage.from('product-images').list('badge-icons', { limit: 100 });
+        if (error || !files || files.length === 0) return;
+
+        const cloudIcons = files
+          .filter(f => f.name.endsWith('.png') || f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.webp'))
+          .map(f => {
+            const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(`badge-icons/${f.name}`);
+            const nameWithoutExt = f.name.replace(/\.[^.]+$/, '').replace(/^[a-f0-9-]+_/, '');
+            return { id: f.name, name: nameWithoutExt || f.name, imageUrl: publicUrl };
+          });
+
+        if (cloudIcons.length > 0) {
+          setCustomBadgeIcons(cloudIcons);
+        }
+      } catch (err) {
+        console.warn('Falha ao carregar ícones do Supabase:', err);
+      }
+    })();
+  }, []);
+
+  const applyStandardIcon = (icon: StandardIcon) => {
+    pushHistory();
+    const color = activeCfg.priceBadge.bgColor || '#e11d48';
+    const updates: any = { ...icon.config };
+    if (icon.isComplex) {
+      updates.badgeImageUrl = generateShapeSvg(icon.id, color);
+    }
+    up({ priceBadge: updates });
+    toast.success(`Ícone "${icon.name}" aplicado!`);
+  };
+
+  const handleBadgeBgColorChange = (c: string) => {
+    const currentType = activeCfg.priceBadge.badgeType;
+    const updates: any = { bgColor: c };
+    const complexTypes = ['splash', 'star', 'diamond', 'hexagon'];
+    if (complexTypes.includes(currentType)) {
+      updates.badgeImageUrl = generateShapeSvg(currentType, c);
+    }
+    up({ priceBadge: updates });
+  };
+
+  const handleCustomIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    // Save the actual File for Supabase upload later
+    setCustomIconForm(prev => ({ ...prev, file: f }));
+    // Preview only
+    const r = new FileReader();
+    r.onloadend = () => setCustomIconForm(prev => ({ ...prev, imageUrl: r.result as string }));
+    r.readAsDataURL(f);
+  };
+
+  const saveCustomIcon = async () => {
+    if (!customIconForm.imageUrl || !customIconForm.file) return;
+    setIsUploadingIcon(true);
+    try {
+      const name = customIconForm.name.trim() || `Ícone ${customBadgeIcons.length + 1}`;
+      const fileId = crypto.randomUUID();
+      const ext = customIconForm.file.name.split('.').pop() || 'png';
+      const fileName = `${fileId}_${name.replace(/[^a-zA-Z0-9À-ú]/g, '_')}.${ext}`;
+      const storagePath = `badge-icons/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(storagePath, customIconForm.file, { cacheControl: '31536000', upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(storagePath);
+
+      const newIcon = { id: fileName, name, imageUrl: publicUrl };
+      setCustomBadgeIcons(prev => [...prev, newIcon]);
+      up({ priceBadge: { badgeImageUrl: publicUrl, badgeType: 'custom' } });
+      setCustomIconForm({ name: '', imageUrl: '', file: null });
+      setShowCustomForm(false);
+      toast.success(`Ícone "${name}" salvo na nuvem!`);
+    } catch (err: any) {
+      console.error('Erro ao salvar ícone:', err);
+      toast.error('Erro ao salvar ícone: ' + (err.message || 'desconhecido'));
+    } finally {
+      setIsUploadingIcon(false);
+    }
+  };
+
+  const applyCustomIcon = (icon: { id: string; name: string; imageUrl: string }) => {
+    pushHistory();
+    up({ priceBadge: { badgeImageUrl: icon.imageUrl, badgeType: 'custom' } });
+    toast.success(`Ícone "${icon.name}" aplicado!`);
+  };
+
+  const deleteCustomIcon = async (id: string) => {
+    try {
+      // Remove from Supabase Storage
+      await supabase.storage.from('product-images').remove([`badge-icons/${id}`]);
+      setCustomBadgeIcons(prev => prev.filter(i => i.id !== id));
+      toast.success('Ícone removido');
+    } catch (err) {
+      console.warn('Erro ao remover ícone:', err);
+      setCustomBadgeIcons(prev => prev.filter(i => i.id !== id));
+      toast.success('Ícone removido localmente');
+    }
+  };
 
   useEffect(() => {
     const handleKeys = (e: KeyboardEvent) => {
@@ -273,19 +456,19 @@ export const StepPriceBadge = () => {
     if (dragState && selectedSlotIndex !== null) {
       const { dx, dy } = dragState;
       selectedSlotIndices.forEach(idx => {
-        const ps = slots[idx % slots.length]; const cfg = getSlotSettings(idx); let up: any = {};
+        const ps = slots[idx % slots.length]; const cfg = getSlotSettings(idx); let updates: any = {};
         selectedElems.forEach(id => {
-          if (id === 'image') up.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.imageConfig.offsetY + (dy/ps.height)*100 };
-          else if (id === 'name') up.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.descConfig.offsetY + (dy/ps.height)*100 };
-          else if (id === 'badge') up.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx/ps.width)*100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy/ps.height)*100 };
+          if (id === 'image') updates.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.imageConfig.offsetY + (dy/ps.height)*100 };
+          else if (id === 'name') updates.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.descConfig.offsetY + (dy/ps.height)*100 };
+          else if (id === 'badge') updates.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx/ps.width)*100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy/ps.height)*100 };
           else {
             const bw = cfg.priceBadge.badgeWidth * (ps.width/500); const bh = cfg.priceBadge.badgeHeight * (ps.width/500);
-            if (id === 'currency') up.priceBadge = { ...(up.priceBadge || cfg.priceBadge), currencyOffsetX: cfg.priceBadge.currencyOffsetX + (dx/bw)*100, currencyOffsetY: cfg.priceBadge.currencyOffsetY + (dy/bh)*100 };
-            else if (id === 'value') up.priceBadge = { ...(up.priceBadge || cfg.priceBadge), valueOffsetX: cfg.priceBadge.valueOffsetX + (dx/bw)*100, valueOffsetY: cfg.priceBadge.valueOffsetY + (dy/bh)*100 };
-            else if (id === 'suffix') up.priceBadge = { ...(up.priceBadge || cfg.priceBadge), suffixOffsetX: cfg.priceBadge.suffixOffsetX + (dx/bw)*100, suffixOffsetY: cfg.priceBadge.suffixOffsetY + (dy/bh)*100 };
+            if (id === 'currency') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), currencyOffsetX: cfg.priceBadge.currencyOffsetX + (dx/bw)*100, currencyOffsetY: cfg.priceBadge.currencyOffsetY + (dy/bh)*100 };
+            else if (id === 'value') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), valueOffsetX: cfg.priceBadge.valueOffsetX + (dx/bw)*100, valueOffsetY: cfg.priceBadge.valueOffsetY + (dy/bh)*100 };
+            else if (id === 'suffix') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), suffixOffsetX: cfg.priceBadge.suffixOffsetX + (dx/bw)*100, suffixOffsetY: cfg.priceBadge.suffixOffsetY + (dy/bh)*100 };
           }
         });
-        updateSlotSettings(idx, up);
+        updateSlotSettings(idx, updates);
       });
     }
     if (resizeState && selectedSlotIndex !== null) {
@@ -309,7 +492,7 @@ export const StepPriceBadge = () => {
     setDragging(null); setResizing(null); setDragState(null); setResizeState(null); 
   };
 
-  const up = (p: any) => { pushHistory(); if (selectedSlotIndices.length === 0) { if (p.priceBadge) updatePriceBadge({ ...priceBadge, ...p.priceBadge }); if (p.descConfig) updateDescConfig({ ...descConfig, ...p.descConfig }); if (p.imageConfig) updateImageConfig({ ...imageConfig, ...p.imageConfig }); } else selectedSlotIndices.forEach(idx => updateSlotSettings(idx, p)); };
+
 
   const renderTextWrap = (text: string, x: number, y: number, fontSize: number) => {
     const words = (text||"").split(' '); const lines: string[] = []; let cur = '';
@@ -349,27 +532,148 @@ export const StepPriceBadge = () => {
                 </div>
              ))}
           </Section>
-          <Section label="Fundo do Preço" icon={Layers} isOpen={openSection === 'badge'} onToggle={() => setOpenSection('badge')}>
+          <Section label="Ícone de Preço" icon={Layers} isOpen={openSection === 'badge'} onToggle={() => setOpenSection('badge')}>
              <div className="space-y-4">
-                <input type="file" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => up({ priceBadge: { badgeImageUrl: r.result as string } }); r.readAsDataURL(f); } }} className="hidden" id="bg-badge-up" />
-                <label htmlFor="bg-badge-up" className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/10 rounded-xl hover:bg-primary/20 transition-all text-primary font-black uppercase text-[10px] cursor-pointer"><ImageIcon className="w-4 h-4" /> Anexar Background</label>
-                <ColorSelector label="Cor do Fundo" color={activeCfg.priceBadge.bgColor} onChange={c => up({ priceBadge: { bgColor: c } })} />
-                <div className="space-y-1"><label className="text-[9px] font-black uppercase text-white/30">Arredondamento: {activeCfg.priceBadge.borderRadius}px</label><input type="range" min="0" max="60" value={activeCfg.priceBadge.borderRadius} onChange={e => up({ priceBadge: { borderRadius: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" /></div>
+               <Tabs defaultValue="standard" className="w-full">
+                 <TabsList className="w-full bg-white/[0.03] border border-white/5 rounded-xl h-9 p-0.5 grid grid-cols-2">
+                   <TabsTrigger value="standard" className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white text-white/40 transition-all h-full">Padrões</TabsTrigger>
+                   <TabsTrigger value="custom" className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white text-white/40 transition-all h-full">Personalizados</TabsTrigger>
+                 </TabsList>
+
+                 <TabsContent value="standard" className="mt-4 space-y-3">
+                   <div className="grid grid-cols-4 gap-2">
+                     {STANDARD_ICONS.map(icon => (
+                       <button
+                         key={icon.id}
+                         onClick={() => applyStandardIcon(icon)}
+                         className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all hover:scale-105 ${
+                           activeCfg.priceBadge.badgeType === icon.id
+                             ? 'border-primary/60 bg-primary/10 shadow-lg shadow-primary/10'
+                             : 'border-white/5 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.05]'
+                         }`}
+                       >
+                         <IconPreview type={icon.id} color={activeCfg.priceBadge.bgColor} isSelected={activeCfg.priceBadge.badgeType === icon.id} />
+                         <span className={`text-[8px] font-bold uppercase tracking-wider ${activeCfg.priceBadge.badgeType === icon.id ? 'text-primary' : 'text-white/30'}`}>{icon.name}</span>
+                       </button>
+                     ))}
+                   </div>
+                 </TabsContent>
+
+                 <TabsContent value="custom" className="mt-4 space-y-3">
+                   {/* Saved custom icons grid */}
+                   {customBadgeIcons.length > 0 && (
+                     <div className="grid grid-cols-3 gap-2">
+                       {customBadgeIcons.map(icon => (
+                         <div
+                           key={icon.id}
+                           className={`relative group flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${
+                             activeCfg.priceBadge.badgeType === 'custom' && activeCfg.priceBadge.badgeImageUrl === icon.imageUrl
+                               ? 'border-primary/60 bg-primary/10'
+                               : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+                           }`}
+                           onClick={() => applyCustomIcon(icon)}
+                         >
+                           <img src={icon.imageUrl} alt={icon.name} className="w-12 h-12 object-contain rounded-lg" />
+                           <span className="text-[8px] font-bold uppercase text-white/30 truncate w-full text-center">{icon.name}</span>
+                           <button
+                             onClick={(e) => { e.stopPropagation(); setIconToDelete({ id: icon.id, name: icon.name }); }}
+                             className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                           >
+                             <X className="w-3 h-3 text-white" />
+                           </button>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+
+                   {/* Add new custom icon */}
+                   {!showCustomForm ? (
+                     <button
+                       onClick={() => setShowCustomForm(true)}
+                       className="w-full p-3 bg-white/[0.03] border border-dashed border-white/10 rounded-xl hover:bg-white/[0.06] hover:border-primary/30 transition-all flex items-center justify-center gap-2 text-white/40 hover:text-primary"
+                     >
+                       <Plus className="w-4 h-4" />
+                       <span className="text-[10px] font-black uppercase tracking-widest">Adicionar novo ícone</span>
+                     </button>
+                   ) : (
+                     <div className="p-3 bg-white/[0.03] border border-white/10 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                       <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-black uppercase text-white/40 tracking-widest">Novo Ícone</span>
+                         <button onClick={() => { setShowCustomForm(false); setCustomIconForm({ name: '', imageUrl: '', file: null }); }} className="p-1 hover:bg-white/5 rounded-lg"><X className="w-3 h-3 text-white/30" /></button>
+                       </div>
+
+                       {customIconForm.imageUrl ? (
+                         <div className="flex items-center gap-3 p-2 bg-black/20 rounded-xl border border-white/5">
+                           <img src={customIconForm.imageUrl} alt="preview" className="w-14 h-14 object-contain rounded-lg bg-white/5 p-1" />
+                           <button onClick={() => setCustomIconForm(prev => ({ ...prev, imageUrl: '' }))} className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase">Trocar</button>
+                         </div>
+                       ) : (
+                         <>
+                           <input type="file" accept="image/*" onChange={handleCustomIconUpload} className="hidden" id="custom-badge-up" />
+                           <label htmlFor="custom-badge-up" className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/10 rounded-xl hover:bg-primary/20 transition-all text-primary font-black uppercase text-[10px] cursor-pointer justify-center">
+                             <Upload className="w-4 h-4" /> Upload PNG
+                           </label>
+                         </>
+                       )}
+
+                       <input
+                         type="text"
+                         value={customIconForm.name}
+                         onChange={e => setCustomIconForm(prev => ({ ...prev, name: e.target.value }))}
+                         placeholder="Nome do modelo..."
+                         className="w-full bg-black/40 border border-white/10 rounded-xl h-9 px-3 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all"
+                       />
+
+                       <button
+                         onClick={saveCustomIcon}
+                         disabled={!customIconForm.imageUrl || isUploadingIcon}
+                         className="w-full p-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20"
+                       >
+                         {isUploadingIcon ? <Loader2 className="w-3.5 h-3.5 inline mr-2 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 inline mr-2" />} {isUploadingIcon ? 'Enviando...' : 'Salvar e Aplicar'}
+                       </button>
+                     </div>
+                   )}
+                 </TabsContent>
+               </Tabs>
+
+               {/* Color and radius controls (always visible) */}
+               <div className="pt-3 border-t border-white/5 space-y-4">
+                 <ColorSelector label="Cor do Fundo" color={activeCfg.priceBadge.bgColor} onChange={handleBadgeBgColorChange} />
+                 <div className="space-y-1"><label className="text-[9px] font-black uppercase text-white/30">Arredondamento: {activeCfg.priceBadge.borderRadius}px</label><input type="range" min="0" max="60" value={activeCfg.priceBadge.borderRadius} onChange={e => up({ priceBadge: { borderRadius: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" /></div>
+               </div>
              </div>
           </Section>
           <Section label="Cores dos Textos" icon={CreditCard} isOpen={openSection === 'prices'} onToggle={() => setOpenSection('prices')}>
-             <div className="space-y-4">
-                <ColorSelector label="RS" color={activeCfg.priceBadge.currencyColor} onChange={c => up({ priceBadge: { currencyColor: c } })} />
-                <ColorSelector label="Valor" color={activeCfg.priceBadge.valueColor} onChange={c => up({ priceBadge: { valueColor: c } })} />
-                <Section label="Nome/Título" icon={PenTool} isOpen={true} onToggle={() => {}} className="border-0 bg-transparent p-0">
-                   <div className="space-y-4 pt-4 border-t border-white/5 mt-4">
-                      <select value={activeCfg.descConfig.fontFamily} onChange={e => up({ descConfig: { fontFamily: e.target.value } })} className="w-full bg-black/60 border border-white/10 rounded-xl h-9 px-3 text-[11px] text-white outline-none"><option value="Montserrat, sans-serif">Montserrat</option>{customFonts.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</select>
-                      <ColorSelector label="Cor do Título" color={activeCfg.descConfig.color} onChange={c => up({ descConfig: { color: c } })} />
-                      <div className="flex items-center gap-2 text-[9px] font-black text-white/30 uppercase"><input type="checkbox" checked={activeCfg.descConfig.uppercase} onChange={e => up({ descConfig: { uppercase: e.target.checked } })} /> Maiúsculas</div>
+              <div className="space-y-6">
+                 <div className="space-y-4">
+                   <ColorSelector label="RS" color={activeCfg.priceBadge.currencyColor} onChange={c => up({ priceBadge: { currencyColor: c } })} />
+                   <div className="space-y-1">
+                     <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.priceBadge.currencyFontSize)}px</label>
+                     <input type="range" min="10" max="150" value={activeCfg.priceBadge.currencyFontSize} onChange={e => up({ priceBadge: { currencyFontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
                    </div>
-                </Section>
-             </div>
-          </Section>
+                 </div>
+                 
+                 <div className="space-y-4 border-t border-white/5 pt-4">
+                   <ColorSelector label="Valor" color={activeCfg.priceBadge.valueColor} onChange={c => up({ priceBadge: { valueColor: c } })} />
+                   <div className="space-y-1">
+                     <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.priceBadge.valueFontSize)}px</label>
+                     <input type="range" min="20" max="250" value={activeCfg.priceBadge.valueFontSize} onChange={e => up({ priceBadge: { valueFontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                   </div>
+                 </div>
+
+                 <Section label="Nome/Título" icon={PenTool} isOpen={true} onToggle={() => {}} className="border-0 bg-transparent p-0">
+                    <div className="space-y-4 pt-4 border-t border-white/5 mt-4">
+                       <select value={activeCfg.descConfig.fontFamily} onChange={e => up({ descConfig: { fontFamily: e.target.value } })} className="w-full bg-black/60 border border-white/10 rounded-xl h-9 px-3 text-[11px] text-white outline-none"><option value="Montserrat, sans-serif">Montserrat</option>{customFonts.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</select>
+                       <ColorSelector label="Cor do Título" color={activeCfg.descConfig.color} onChange={c => up({ descConfig: { color: c } })} />
+                       <div className="space-y-1">
+                         <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.descConfig.fontSize)}px</label>
+                         <input type="range" min="10" max="100" value={activeCfg.descConfig.fontSize} onChange={e => up({ descConfig: { fontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                       </div>
+                       <div className="flex items-center gap-2 text-[9px] font-black text-white/30 uppercase"><input type="checkbox" checked={activeCfg.descConfig.uppercase} onChange={e => up({ descConfig: { uppercase: e.target.checked } })} /> Maiúsculas</div>
+                    </div>
+                 </Section>
+              </div>
+           </Section>
            <Section label="Sufixo (kg/cada)" icon={Layers} isOpen={openSection === 'suffix'} onToggle={() => setOpenSection('suffix')}>
               <div className="space-y-4">
                  <div className="flex items-center justify-between p-3 bg-white/[0.03] border border-white/5 rounded-xl">
@@ -430,7 +734,7 @@ export const StepPriceBadge = () => {
                   <rect x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={isSlotSel ? '#D9254B' : 'rgba(0,0,0,0.05)'} strokeWidth={isSlotSel ? 4/zoom : 1/zoom} strokeDasharray={isSlotSel ? 'none' : '4,2'} pointerEvents="none" />
                   
                   <DragBox id="badge" el={v.badge} zoom={zoom} isPrimary={selectedElem === 'badge'} isSel={isSlotSel && selectedElems.includes('badge')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                     {cfg.priceBadge.badgeImageUrl ? <image href={cfg.priceBadge.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="none" style={{ borderRadius: cfg.priceBadge.borderRadius + 'px' }} pointerEvents="none" /> 
+                     {cfg.priceBadge.badgeImageUrl ? <image href={cfg.priceBadge.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" style={{ borderRadius: cfg.priceBadge.borderRadius + 'px' }} pointerEvents="none" /> 
                                                    : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={cfg.priceBadge.borderRadius * el.sFactor} fill={cfg.priceBadge.bgColor} pointerEvents="none" />}
                   </DragBox>
                   
@@ -552,6 +856,39 @@ export const StepPriceBadge = () => {
             }} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-900/20">
               <Zap className="w-4 h-4 mr-2" />
               Sim, Sincronizar Tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Icon Confirmation Modal */}
+      <AlertDialog open={!!iconToDelete} onOpenChange={(open) => !open && setIconToDelete(null)}>
+        <AlertDialogContent className="bg-[#121214] border border-white/10 rounded-2xl p-6 w-[400px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white text-lg font-black uppercase tracking-wider flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Excluir Ícone?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/60 text-sm font-medium mt-2">
+              Tem certeza que deseja excluir o ícone <strong className="text-white">"{iconToDelete?.name}"</strong>?
+              <br/><br/>
+              <span className="text-red-400 font-bold">Esta ação não pode ser desfeita e ele será removido do seu painel e do armazenamento na nuvem.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 gap-2">
+            <AlertDialogCancel className="bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-10 px-6">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (iconToDelete) {
+                  deleteCustomIcon(iconToDelete.id);
+                  setIconToDelete(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-10 px-6 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-900/20"
+            >
+              Excluir Ícone
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

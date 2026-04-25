@@ -200,6 +200,16 @@ export type Database = {
           timer_start: number | null
           updated_at: string
           history: any | null
+          image_url: string | null
+          cover_image: string | null
+          labels: string[] | null
+          checklists: any | null
+          comments: any | null
+          assigned_users: any | null
+          ai_status: string | null
+          ai_report: any | null
+          source: string | null
+          original_message: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -216,6 +226,16 @@ export type Database = {
           timer_start?: number | null
           updated_at?: string
           history?: any | null
+          image_url?: string | null
+          cover_image?: string | null
+          labels?: string[] | null
+          checklists?: any | null
+          comments?: any | null
+          assigned_users?: any | null
+          ai_status?: string | null
+          ai_report?: any | null
+          source?: string | null
+          original_message?: string | null
         }
         Update: {
           archived_at?: string | null

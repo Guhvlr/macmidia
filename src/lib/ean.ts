@@ -19,9 +19,9 @@ export const padEan = (ean: string): string => {
 export const getImageUrl = (ean: string): string => {
   if (!ean || ean === 'N/A' || ean === 'NA' || ean === 'Não encontrado') return '';
   const cleanEanValue = padEan(ean);
-  // Nota: A URL base é fixa para o projeto MacMidia. 
-  // Removido o cache-busting global para permitir cache do navegador/CDN.
-  return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEanValue}.png`;
+  // Cache-buster a cada 5 minutos para resolver imagens cortadas que ainda aparecem com fundo branco em outros PCs
+  const cacheBuster = Math.floor(Date.now() / 300000).toString(36);
+  return `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${cleanEanValue}.png?v=${cacheBuster}`;
 };
 
 /**

@@ -311,7 +311,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                   {/* BADGE */}
                   <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'badge', gIdx)}>
                     {pb.badgeImageUrl
-                      ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="none" />
+                      ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" />
                       : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={pb.borderRadius * sf} fill={pb.bgColor} />
                     }
                     <text x={v.badge.x + v.badge.w * pb.currencyOffsetX / 100} y={v.badge.y + v.badge.h * pb.currencyOffsetY / 100} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>
@@ -557,7 +557,7 @@ export const StepFinal = () => {
           return <image key={`img-${pos}`} href={img} x={imgX + pos * 20} y={imgY - pos * 10} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />;
         })}
         <g transform={`translate(${badgeX}, ${badgeY})`}>
-          {pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} preserveAspectRatio="none" /> : <rect x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sf} />}
+          {pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} preserveAspectRatio="xMidYMid meet" /> : <rect x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sf} />}
           <text x={-badgeW / 2 + (pb.currencyOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.currencyOffsetY / 100) * badgeH} fill={pb.currencyColor} fontSize={pb.currencyFontSize * sf} fontFamily={pb.currencyFontFamily} fontWeight="900">R$</text>
           <text x={-badgeW / 2 + (pb.valueOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.valueOffsetY / 100) * badgeH + pb.valueFontSize * sf * 0.15} fill={pb.valueColor} textAnchor="middle" fontSize={pb.valueFontSize * sf} fontFamily={pb.valueFontFamily} fontWeight="900" letterSpacing="-0.05em">{product.price.replace('R$', '').trim()}</text>
           {pb.showSuffix && <text x={-badgeW / 2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.suffixOffsetY / 100) * badgeH + pb.suffixFontSize * sf * 0.5} fill={pb.suffixColor} textAnchor="middle" fontSize={pb.suffixFontSize * sf} fontWeight="bold">{product.suffix || pb.suffixText}</text>}

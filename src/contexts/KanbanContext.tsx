@@ -236,6 +236,10 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
             if (row.ai_report !== undefined) merged.aiReport = typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report;
             if (row.comments !== undefined) merged.comments = row.comments || [];
             if (row.history !== undefined) merged.history = typeof row.history === 'string' ? JSON.parse(row.history) : (row.history || []);
+            if (row.source !== undefined) merged.source = row.source;
+            if (row.original_message !== undefined) merged.originalMessage = row.original_message;
+            if (row.ai_status !== undefined) merged.aiStatus = row.ai_status;
+            if (row.ai_report !== undefined) merged.aiReport = typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report;
 
             if (JSON.stringify(existing) === JSON.stringify(merged)) return prev;
             const next = [...prev];
@@ -358,7 +362,9 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         images: card.images || [], image_url: card.imageUrl || null, cover_image: card.coverImage || null,
         labels: card.labels || [], checklists: card.checklists || [], comments: card.comments || [],
         assigned_users: card.assignedUsers || [], column: card.column, time_spent: card.timeSpent ?? 0,
-        timer_running: card.timerRunning ?? false, timer_start: card.timerStart || null, history
+        timer_running: card.timerRunning ?? false, timer_start: card.timerStart || null, history,
+        source: card.source || 'manual', original_message: card.originalMessage || null,
+        ai_status: card.aiStatus || null, ai_report: card.aiReport || null
       }).select();
 
       if (data?.[0]) {
@@ -405,6 +411,10 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     if (updates.timerRunning !== undefined) db.timer_running = updates.timerRunning;
     if ('timerStart' in updates) db.timer_start = updates.timerStart || null;
     if ('archivedAt' in updates) db.archived_at = updates.archivedAt || null;
+    if (updates.source !== undefined) db.source = updates.source;
+    if (updates.originalMessage !== undefined) db.original_message = updates.originalMessage;
+    if (updates.aiStatus !== undefined) db.ai_status = updates.aiStatus;
+    if (updates.aiReport !== undefined) db.ai_report = updates.aiReport;
 
     try {
       await monitoring.trackPerformance('UPDATE_KANBAN_CARD', async () => {

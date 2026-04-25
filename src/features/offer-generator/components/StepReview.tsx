@@ -1026,18 +1026,23 @@ export const StepReview = () => {
                          </h4>
                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {manualResults.map(v => (
-                              <div key={v.ean} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-3 flex flex-col items-center gap-2 group relative">
-                                <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
+                              <div key={v.id || v.ean} className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-3 flex flex-col items-center gap-2 group relative">
+                                <div className="w-full h-20">
+                                  <ProductImageWithFormat 
+                                    src={v.images?.[0] || ''} 
+                                    className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+                                  />
+                                </div>
                                 <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
                                 <div className="flex gap-1 mt-2">
                                    <Button onClick={() => {
-                                     setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images[0]], confidence: 'high' as const, warning: undefined } : old));
+                                     setProducts(prev => prev.map(old => old.id === p.id ? { ...old, ean: v.ean, name: v.name, images: [v.images?.[0] || ''], confidence: 'high' as const, warning: undefined } : old));
                                      setShowVariationsFor(null);
                                      setManualSearch('');
                                      setManualResults([]);
                                      toast.success('Produto substituído!');
                                    }} className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-[8px] font-black uppercase">Substituir</Button>
-                                   <Button onClick={() => addVariation(p.id, v.images[0])} className="h-7 px-3 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
+                                   <Button onClick={() => addVariation(p.id, v.images?.[0] || '')} className="h-7 px-3 bg-white/10 hover:bg-white/20 text-[8px] font-black uppercase">Pilha</Button>
                                 </div>
                               </div>
                             ))}

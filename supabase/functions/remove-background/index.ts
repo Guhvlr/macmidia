@@ -90,12 +90,13 @@ serve(async (req) => {
 
     console.log(`[INFO] Image size: ${(imgBlob.size / 1024).toFixed(2)} KB. Sending to Photoroom...`);
 
-    // 2. Enviar para Photoroom
+    // 2. Enviar para Photoroom API v2 (Para recortar o fundo E remover as margens vazias)
     const formData = new FormData();
     formData.append('image_file', imgBlob);
-    formData.append('format', 'png');
+    formData.append('background.color', 'transparent');
+    formData.append('outputSize', 'croppedSubject');
 
-    const phResponse = await fetch('https://sdk.photoroom.com/v1/segment', {
+    const phResponse = await fetch('https://sdk.photoroom.com/v2/edit', {
       method: 'POST',
       headers: { 'x-api-key': photoroomKey },
       body: formData

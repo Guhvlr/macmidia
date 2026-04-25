@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useOffer } from '../context/OfferContext';
+import { useOfferExport } from '../hooks/useOfferExport';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
@@ -9,7 +10,7 @@ import {
   FileIcon, Download, Loader2,
   ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
   Group, Ungroup, AlignLeft, AlignCenter, AlignRight,
-  Bold, Italic, Undo2, Redo2
+  Bold, Italic, Undo2, Redo2, Scissors, Maximize2
 } from 'lucide-react';
 
 /* ─────────────────── GOOGLE FONTS ─────────────────── */
@@ -82,7 +83,7 @@ export const OfferEditorPage = () => {
     config, slots, products, setProducts, customFonts,
     getSlotSettings, updateSlotSettings, pageCount, activePage, setActivePage,
     customCanvasElements, setCustomCanvasElements, pushHistory,
-    undo, redo
+    undo, redo, removeBackground, autoFitImage
   } = useOffer();
 
   // ── Canvas navigation ──
@@ -115,9 +116,9 @@ export const OfferEditorPage = () => {
   const [inlineEdit, setInlineEdit] = useState<any | null>(null);
 
   // ── Clipboard & Export ──
+  const svgRef = useRef<SVGSVGElement>(null);
   const [clipboard, setClipboard] = useState<any[]>([]);
-  const [isExporting, setIsExporting] = useState(false);
-
+  const { isExporting, exportAllPages } = useOfferExport({ svgRef, config, pageCount, activePage, setActivePage, setSelection, setInlineEdit });
   // ── Groups ──
   const [groups, setGroups] = useState<Record<string, string[]>>({});
 
@@ -127,7 +128,6 @@ export const OfferEditorPage = () => {
   const [isRotating, setIsRotating] = useState(false);
   const [rotationStart, setRotationStart] = useState(0);
 
-  const svgRef = useRef<SVGSVGElement>(null);
   const pageElements: CanvasElement[] = useMemo(() => (customCanvasElements[activePage] || []).sort((a: any, b: any) => (a.zIndex || 0) - (b.zIndex || 0)), [customCanvasElements, activePage]);
 
   /* ── SVG coordinate mapping ── */
@@ -880,238 +880,6 @@ export const OfferEditorPage = () => {
     });
   };
 
-  /* ───────────── EXPORT (ALL PAGES) ───────────── */
-  const toBase64 = async (url: string): Promise<string> => {
-    if (!url || url.startsWith('data:')) return url;
-    try {
-      const resp = await fetch(url, { mode: 'cors' });
-      const blob = await resp.blob();
-      return new Promise(res => {
-        const rd = new FileReader();
-        rd.onloadend = () => res(rd.result as string);
-        rd.readAsDataURL(blob);
-      });
-    } catch { return url; }
-  };
-
-  const cleanSvgForExport = async (svgEl: SVGSVGElement): Promise<string> => {
-    const clone = svgEl.cloneNode(true) as SVGSVGElement;
-    // Set proper SVG namespace attributes for Illustrator
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-    clone.setAttribute('width', config.width.toString());
-    clone.setAttribute('height', config.height.toString());
-    clone.setAttribute('viewBox', `0 0 ${config.width} ${config.height}`);
-    clone.removeAttribute('class');
-    clone.removeAttribute('style');
-
-    // Add white background rect (since we removed the style="background: white")
-    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    bgRect.setAttribute('x', '0'); bgRect.setAttribute('y', '0');
-    bgRect.setAttribute('width', config.width.toString());
-    bgRect.setAttribute('height', config.height.toString());
-    bgRect.setAttribute('fill', '#ffffff');
-    clone.insertBefore(bgRect, clone.firstChild);
-
-    // Remove UI overlays (selection rects, handles)
-    clone.querySelectorAll('[data-ui="1"]').forEach(n => n.remove());
-
-    // Remove all <style> elements with @import (Illustrator can't process these)
-    clone.querySelectorAll('style').forEach(s => {
-      const text = s.textContent || '';
-      if (text.includes('@import')) s.remove();
-    });
-
-    // Remove all hit-test rects (fill="none" invisible rects used for click areas)
-    clone.querySelectorAll('rect[fill="none"]').forEach(r => {
-      // Only remove if it's a hit-test rect (no stroke, no visual purpose)
-      if (!r.getAttribute('stroke') || r.getAttribute('stroke') === 'none') {
-        r.remove();
-      }
-    });
-
-    // Remove all data-* attributes, class attributes, and non-visual styles
-    const allEls = clone.querySelectorAll('*');
-    allEls.forEach(el => {
-      el.removeAttribute('class');
-      Array.from(el.attributes).forEach(attr => {
-        if (attr.name.startsWith('data-')) el.removeAttribute(attr.name);
-      });
-      // Clean up style attributes
-      const style = el.getAttribute('style');
-      if (style) {
-        const cleaned = style
-          .replace(/pointer-events:[^;]+;?/gi, '')
-          .replace(/cursor:[^;]+;?/gi, '')
-          .replace(/user-select:[^;]+;?/gi, '')
-          .replace(/transform-origin:[^;]+;?/gi, '')
-          .trim();
-        if (cleaned) el.setAttribute('style', cleaned);
-        else el.removeAttribute('style');
-      }
-      // Remove pointerEvents attribute
-      el.removeAttribute('pointer-events');
-    });
-
-    // Fix font references: replace generic 'sans-serif' with specific fonts
-    clone.querySelectorAll('text, tspan').forEach(t => {
-      const ff = t.getAttribute('font-family');
-      if (ff === 'sans-serif' || ff === 'serif') {
-        t.setAttribute('font-family', 'Arial');
-      }
-    });
-
-    // Convert all images to base64
-    for (const img of Array.from(clone.querySelectorAll('image'))) {
-      const href = img.getAttribute('href') || img.getAttribute('xlink:href');
-      if (href && !href.startsWith('data:')) {
-        try {
-          const b64 = await toBase64(href);
-          img.setAttribute('xlink:href', b64);
-          img.setAttribute('href', b64);
-        } catch {}
-      }
-      // Remove pointerEvents from images
-      img.removeAttribute('pointer-events');
-    }
-
-    // Remove foreignObject (Illustrator doesn't support it)
-    clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
-
-    return new XMLSerializer().serializeToString(clone);
-  };
-
-  const svgToCanvas = async (svgStr: string): Promise<Blob | null> => {
-    const cvs = document.createElement('canvas');
-    cvs.width = config.width; cvs.height = config.height;
-    const ctx = cvs.getContext('2d')!;
-    const im = new Image();
-    im.crossOrigin = 'anonymous';
-    const url = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml' }));
-    await new Promise<void>(r => {
-      im.onload = () => { ctx.drawImage(im, 0, 0); URL.revokeObjectURL(url); r(); };
-      im.onerror = () => { URL.revokeObjectURL(url); r(); };
-      im.src = url;
-    });
-    return new Promise(res => cvs.toBlob(blob => res(blob), 'image/png'));
-  };
-
-  const exportAllPages = async (format: 'svg' | 'png') => {
-    if (!svgRef.current) return;
-    setIsExporting(true);
-    const origPage = activePage;
-    setSelection([]); setInlineEdit(null);
-
-    try {
-      await new Promise(r => setTimeout(r, 200));
-
-      if (format === 'svg') {
-        // SVG: Always generate a SINGLE SVG file with all pages side by side
-        const spacing = 80;
-        const totalW = pageCount * config.width + Math.max(0, pageCount - 1) * spacing;
-
-        // Build combined SVG document
-        const combined = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        combined.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        combined.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-        combined.setAttribute('width', totalW.toString());
-        combined.setAttribute('height', config.height.toString());
-        combined.setAttribute('viewBox', `0 0 ${totalW} ${config.height}`);
-
-        // Add overall background
-        const masterBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        masterBg.setAttribute('x', '0'); masterBg.setAttribute('y', '0');
-        masterBg.setAttribute('width', totalW.toString());
-        masterBg.setAttribute('height', config.height.toString());
-        masterBg.setAttribute('fill', '#e0e0e0');
-        combined.appendChild(masterBg);
-
-        // Copy defs from first page (fonts, etc)
-        const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        if (svgRef.current.querySelector('defs')) {
-          const srcDefs = svgRef.current.querySelector('defs')!;
-          // Copy @font-face styles (not @import)
-          srcDefs.querySelectorAll('style').forEach(s => {
-            const text = s.textContent || '';
-            if (!text.includes('@import')) {
-              defsEl.appendChild(s.cloneNode(true));
-            }
-          });
-        }
-        combined.appendChild(defsEl);
-
-        for (let pg = 0; pg < pageCount; pg++) {
-          setActivePage(pg);
-          await new Promise(r => setTimeout(r, 400));
-
-          if (!svgRef.current) continue;
-          const cleanedStr = await cleanSvgForExport(svgRef.current);
-
-          // Parse the cleaned SVG string
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(cleanedStr, 'image/svg+xml');
-          const svgDoc = doc.documentElement;
-
-          // Create a group for this page (artboard)
-          const offsetX = pg * (config.width + spacing);
-          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-          g.setAttribute('id', `tela-${pg + 1}`);
-          g.setAttribute('transform', `translate(${offsetX}, 0)`);
-
-          // Move all children from parsed SVG into the group
-          while (svgDoc.firstChild) {
-            const child = svgDoc.firstChild;
-            // Skip defs (already copied) and stray style elements
-            if (child.nodeName === 'defs' || child.nodeName === 'style') {
-              svgDoc.removeChild(child);
-              continue;
-            }
-            g.appendChild(child);
-          }
-
-          combined.appendChild(g);
-        }
-
-        setActivePage(origPage);
-        const svgStr = new XMLSerializer().serializeToString(combined);
-        saveAs(new Blob([svgStr], { type: 'image/svg+xml' }), `telas_completas.svg`);
-        toast.success(`${pageCount} tela${pageCount > 1 ? 's' : ''} exportada${pageCount > 1 ? 's' : ''} em SVG único!`);
-
-      } else {
-        // PNG: single page → direct file, multiple → ZIP
-        if (pageCount === 1) {
-          const svgStr = await cleanSvgForExport(svgRef.current);
-          const blob = await svgToCanvas(svgStr);
-          if (blob) saveAs(blob, `tela_1.png`);
-          toast.success('Tela 1 exportada!');
-        } else {
-          const zip = new JSZip();
-          for (let pg = 0; pg < pageCount; pg++) {
-            setActivePage(pg);
-            await new Promise(r => setTimeout(r, 300));
-            if (!svgRef.current) continue;
-            const svgStr = await cleanSvgForExport(svgRef.current);
-            const blob = await svgToCanvas(svgStr);
-            if (blob) {
-              const arrBuf = await blob.arrayBuffer();
-              zip.file(`tela_${pg + 1}.png`, arrBuf);
-            }
-          }
-          setActivePage(origPage);
-          const zipBlob = await zip.generateAsync({ type: 'blob' });
-          saveAs(zipBlob, `telas_png.zip`);
-          toast.success(`${pageCount} telas exportadas em ZIP!`);
-        }
-      }
-    } catch (err) {
-      console.error('Export error:', err);
-      toast.error('Erro na exportação');
-      setActivePage(origPage);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   /* ───────────── DERIVED STATE FOR RIGHT PANEL ───────────── */
   const propTarget = selection.length >= 1 ? selection[0] : null;
   const propCustom = propTarget?.id ? pageElements.find(x => x.id === propTarget.id) : null;
@@ -1307,7 +1075,7 @@ export const OfferEditorPage = () => {
                         
                         {type === 'image' && product.images?.[0] && <image href={product.images[0]} x={elData.image.x} y={elData.image.y} width={elData.image.w} height={elData.image.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
                         
-                        {type === 'badgeBg' && (pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={elData.badgeBg.x} y={elData.badgeBg.y} width={elData.badgeBg.w} height={elData.badgeBg.h} preserveAspectRatio="none" pointerEvents="none" /> : <rect x={elData.badgeBg.x} y={elData.badgeBg.y} width={elData.badgeBg.w} height={elData.badgeBg.h} rx={pb.borderRadius * sf} fill={pb.bgColor} pointerEvents="none" />)}
+                        {type === 'badgeBg' && (pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={elData.badgeBg.x} y={elData.badgeBg.y} width={elData.badgeBg.w} height={elData.badgeBg.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" /> : <rect x={elData.badgeBg.x} y={elData.badgeBg.y} width={elData.badgeBg.w} height={elData.badgeBg.h} rx={pb.borderRadius * sf} fill={pb.bgColor} pointerEvents="none" />)}
                         
                         {type === 'badgeCurrency' && <text x={elData.badgeCurrency.x} y={elData.badgeCurrency.y + elData.badgeCurrency.h*0.8} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>}
                         
@@ -1381,7 +1149,7 @@ export const OfferEditorPage = () => {
                           {nameLines2.map((l: string, i: number) => <tspan key={i} x={fW/2} y={fH*0.65 + i * cfg.descConfig.fontSize*sf2*1.1}>{l}</tspan>)}
                         </text>
                         {cfg.priceBadge.badgeImageUrl
-                          ? <image href={cfg.priceBadge.badgeImageUrl} x={fW/2 - cfg.priceBadge.badgeWidth*sf2/2} y={fH - cfg.priceBadge.badgeHeight*sf2 - fH*0.05} width={cfg.priceBadge.badgeWidth*sf2} height={cfg.priceBadge.badgeHeight*sf2} preserveAspectRatio="none" />
+                          ? <image href={cfg.priceBadge.badgeImageUrl} x={fW/2 - cfg.priceBadge.badgeWidth*sf2/2} y={fH - cfg.priceBadge.badgeHeight*sf2 - fH*0.05} width={cfg.priceBadge.badgeWidth*sf2} height={cfg.priceBadge.badgeHeight*sf2} preserveAspectRatio="xMidYMid meet" />
                           : <rect x={fW/2 - cfg.priceBadge.badgeWidth*sf2/2} y={fH - cfg.priceBadge.badgeHeight*sf2 - fH*0.05} width={cfg.priceBadge.badgeWidth*sf2} height={cfg.priceBadge.badgeHeight*sf2} fill={cfg.priceBadge.bgColor} rx={cfg.priceBadge.borderRadius*sf2} />}
                         <text x={fW/2} y={fH - fH*0.05 - cfg.priceBadge.badgeHeight*sf2*0.2} fill={cfg.priceBadge.valueColor} fontSize={cfg.priceBadge.valueFontSize*sf2} fontFamily={cfg.priceBadge.valueFontFamily} fontWeight="900" textAnchor="middle">{product.price}</text>
                       </g>
@@ -1682,19 +1450,30 @@ export const OfferEditorPage = () => {
                     </select>
                   </div>
 
-                  {/* Font Size */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Tamanho</label>
-                      <input type="number" value={Math.round(pStyle.fontSize || 40)}
-                        onChange={e => updateProductFont(propProductIdx, propProductType!, 'fontSize', +e.target.value)}
-                        className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-xs text-[#ccc] outline-none focus:border-[#007acc]" />
-                    </div>
-                    <div>
-                      <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Peso</label>
-                      <span className="text-[11px] text-[#666] px-2 leading-7 block">{pStyle.fontWeight}</span>
-                    </div>
-                  </div>
+                   {/* Font Size */}
+                   <div className="space-y-2">
+                     <div className="flex justify-between items-center">
+                       <label className="text-[9px] text-[#888] uppercase font-bold">Escala / Tamanho</label>
+                       <span className="text-[10px] text-[#007acc] font-mono">{Math.round(pStyle.fontSize || 40)}px</span>
+                     </div>
+                     <input 
+                       type="range" 
+                       min="8" 
+                       max="200" 
+                       step="1" 
+                       value={Math.round(pStyle.fontSize || 40)}
+                       onChange={e => updateProductFont(propProductIdx, propProductType!, 'fontSize', +e.target.value)}
+                       className="w-full accent-[#007acc] h-1.5 bg-[#1e1e1e] rounded-lg appearance-none cursor-pointer" 
+                     />
+                     <div className="flex gap-2">
+                       <input type="number" value={Math.round(pStyle.fontSize || 40)}
+                         onChange={e => updateProductFont(propProductIdx, propProductType!, 'fontSize', +e.target.value)}
+                         className="flex-1 bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc] outline-none focus:border-[#007acc]" />
+                       <div className="flex-1 bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 flex items-center justify-center">
+                         <span className="text-[9px] text-[#666] font-bold truncate">{pStyle.fontWeight}</span>
+                       </div>
+                     </div>
+                   </div>
 
                   {/* Color */}
                   <div>
@@ -1745,6 +1524,24 @@ export const OfferEditorPage = () => {
                   <p className="text-[11px] text-white font-bold mb-0.5">{products[propProductIdx].name}</p>
                   <p className="text-[9px] text-[#007acc] font-semibold uppercase">Imagem</p>
                 </div>
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => removeBackground(propProductIdx)}
+                    className="flex-1 bg-[#333] hover:bg-[#444] text-[9px] py-2 rounded flex items-center justify-center gap-1.5 transition-colors font-bold"
+                    title="Remove o fundo e recorta bordas vazias"
+                  >
+                    <Scissors className="w-3 h-3 text-[#E11D48]" /> Recortar Fundo
+                  </button>
+                  <button 
+                    onClick={() => autoFitImage(propProductIdx)}
+                    className="flex-1 bg-[#333] hover:bg-[#444] text-[9px] py-2 rounded flex items-center justify-center gap-1.5 transition-colors font-bold"
+                    title="Ajusta a caixa de seleção ao produto"
+                  >
+                    <Maximize2 className="w-3 h-3 text-[#007acc]" /> Ajustar Caixa
+                  </button>
+                </div>
+
                 <div>
                   <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Escala</label>
                   <input type="range" min="0.2" max="2" step="0.05" value={getSlotSettings(propProductIdx).imageConfig.scale} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { imageConfig: { ...getSlotSettings(propProductIdx).imageConfig, scale: +e.target.value } }); }} className="w-full accent-[#007acc]" />
@@ -1770,7 +1567,41 @@ export const OfferEditorPage = () => {
                     </div>
                   </div>
                   <div>
+                    <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Tamanho / Escala</label>
+                    <input 
+                      type="range" 
+                      min="50" 
+                      max="800" 
+                      step="5" 
+                      value={cfg.priceBadge.badgeWidth} 
+                      onChange={e => {
+                        pushHistory();
+                        const val = +e.target.value;
+                        const ratio = cfg.priceBadge.badgeHeight / cfg.priceBadge.badgeWidth;
+                        updateSlotSettings(propProductIdx, { 
+                          priceBadge: { 
+                            ...cfg.priceBadge, 
+                            badgeWidth: val,
+                            badgeHeight: Math.round(val * ratio)
+                          } 
+                        });
+                      }} 
+                      className="w-full accent-[#007acc] mb-2" 
+                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[7px] text-[#555] uppercase font-bold">Largura</label>
+                        <input type="number" value={cfg.priceBadge.badgeWidth || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, badgeWidth: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc]" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[7px] text-[#555] uppercase font-bold">Altura</label>
+                        <input type="number" value={cfg.priceBadge.badgeHeight || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, badgeHeight: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc]" />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
                     <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Arredondamento</label>
+                    <input type="range" min="0" max="100" step="1" value={cfg.priceBadge.borderRadius || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, borderRadius: +e.target.value } }); }} className="w-full accent-[#007acc] mb-1" />
                     <input type="number" value={cfg.priceBadge.borderRadius || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, borderRadius: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-xs text-[#ccc] outline-none focus:border-[#007acc]" />
                   </div>
                 </div>

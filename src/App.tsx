@@ -78,6 +78,8 @@ const AppRoutes = () => (
   </Suspense>
 );
 
+import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -85,9 +87,11 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AppProvider>
-          <OfferProvider>
-            <AppRoutes />
-          </OfferProvider>
+          <ErrorBoundary>
+            <OfferProvider>
+              <AppRoutes />
+            </OfferProvider>
+          </ErrorBoundary>
         </AppProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -347,15 +347,24 @@ export const StepReview = () => {
       const { data, error } = await query.neq('ean', product.ean).limit(15);
       if (error) throw error;
 
-      setVariations((data || []).map(v => ({
-        id: `var-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        ean: v.ean,
-        name: v.name,
-        images: [getImageUrl(v.ean)],
-        price: product.price,
-        brand: v.brand,
-        line: v.line
-      })));
+      setVariations((data || []).map(v => {
+        let imageUrl = '';
+        if (v.image_path) {
+          imageUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${v.image_path}`;
+        } else {
+          imageUrl = getImageUrl(v.ean);
+        }
+
+        return {
+          id: `var-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          ean: v.ean,
+          name: v.name,
+          images: [imageUrl],
+          price: product.price,
+          brand: v.brand,
+          line: v.line
+        };
+      }));
       setShowVariationsFor(product.id);
     } catch (e: any) {
       toast.error(e.message);
@@ -381,15 +390,24 @@ export const StepReview = () => {
         .limit(10);
 
       if (error) throw error;
-      setManualResults((data || []).map(v => ({
-        id: `man-${Date.now()}-${Math.random()}`,
-        ean: v.ean,
-        name: v.name,
-        images: [getImageUrl(v.ean)],
-        price: currentProduct.price,
-        brand: v.brand,
-        line: v.line
-      })));
+      setManualResults((data || []).map(v => {
+        let imageUrl = '';
+        if (v.image_path) {
+          imageUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${v.image_path}`;
+        } else {
+          imageUrl = getImageUrl(v.ean);
+        }
+
+        return {
+          id: `man-${Date.now()}-${Math.random()}`,
+          ean: v.ean,
+          name: v.name,
+          images: [imageUrl],
+          price: currentProduct.price,
+          brand: v.brand,
+          line: v.line
+        };
+      }));
     } catch (e) {
       console.error(e);
     } finally {
@@ -409,6 +427,7 @@ export const StepReview = () => {
   };
 
   const handleCreateVariation = async (parentProductId: string) => {
+    const parentProduct = products.find(p => p.id === parentProductId);
     if (!variationCreateData.name || !variationCreateData.ean || !variationCreateData.file) {
       toast.error('Preencha nome, EAN e selecione uma imagem.');
       return;
@@ -419,7 +438,8 @@ export const StepReview = () => {
 
     try {
       const ext = variationCreateData.file.name.split('.').pop()?.toLowerCase();
-      const cleanEan = variationCreateData.ean.replace(/[^a-zA-Z0-9]/g, '');
+      const rawEan = variationCreateData.ean.replace(/[^0-9]/g, '');
+      const cleanEan = padEan(rawEan);
       const fileName = `${cleanEan}.${ext === 'png' ? 'png' : 'jpg'}`;
 
       // 1. Upload image
@@ -433,14 +453,19 @@ export const StepReview = () => {
       const { error: dbError } = await supabase.from('products').upsert({
         ean: cleanEan,
         name: variationCreateData.name.toUpperCase(),
+        brand: parentProduct?.brand,
+        line: parentProduct?.line,
+        category: parentProduct?.category,
         image_path: fileName
       }, { onConflict: 'ean' });
 
       if (dbError) {
         console.error('DB Error:', dbError);
+        toast.error('Variação salva no storage, mas houve erro ao registrar no banco: ' + dbError.message);
       }
 
       // 3. Add as variation to the product stack
+      // Construction uses padEan and the correct extension
       const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${fileName}?t=${Date.now()}`;
       addVariation(parentProductId, publicUrl);
 
@@ -495,10 +520,12 @@ export const StepReview = () => {
       const { error: dbError } = await supabase.from('products').upsert({
         ean: ean,
         name: product.name.toUpperCase(),
+        image_path: fileName
       }, { onConflict: 'ean' });
 
       if (dbError) {
         console.error('Erro ao sincronizar produto no banco:', dbError);
+        toast.error('Erro ao salvar no banco: ' + dbError.message);
       }
 
       toast.success('Imagem salva e vinculada ao código com sucesso!', { id: toastId });
@@ -1056,7 +1083,12 @@ export const StepReview = () => {
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {p.images.map((img, i) => (
                         <div key={`cur-${i}`} className="relative bg-primary/10 border-2 border-primary/40 rounded-2xl p-3 flex flex-col items-center gap-2 group">
-                          <img src={img} className="w-full h-20 object-contain" />
+                          <div className="w-full h-20">
+                            <ProductImageWithFormat 
+                              src={img} 
+                              className="w-full h-full object-contain" 
+                            />
+                          </div>
                           <span className="text-[8px] font-black uppercase text-primary">Na Pilha</span>
                           <button onClick={() => removeVariation(p.id, i)} className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
                             <Trash2 className="w-3 h-3" />
@@ -1067,7 +1099,12 @@ export const StepReview = () => {
                       {variations.length > 0 ? variations.map(v => (
                         <div key={v.ean} onClick={() => addVariation(p.id, v.images[0])} 
                           className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col items-center gap-2 hover:border-blue-500/50 cursor-pointer transition-all group">
-                          <img src={v.images[0]} className="w-full h-20 object-contain group-hover:scale-110 transition-transform" />
+                          <div className="w-full h-20">
+                            <ProductImageWithFormat 
+                              src={v.images[0]} 
+                              className="w-full h-full object-contain group-hover:scale-110 transition-transform" 
+                            />
+                          </div>
                           <p className="text-[9px] font-bold text-center text-white/60 truncate w-full uppercase">{v.name}</p>
                         </div>
                       )) : !isSearchingManual && manualResults.length === 0 && (

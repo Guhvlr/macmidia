@@ -30,7 +30,15 @@ const Report = lazy(() => import("@/features/reports/pages/Report"));
 const IntelligenceCenter = lazy(() => import("@/features/intelligence/pages/IntelligenceCenter"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutos — evita refetch desnecessário
+      refetchOnWindowFocus: false, // não refetch ao voltar para a aba
+      retry: 1, // apenas 1 retry em caso de falha
+    },
+  },
+});
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

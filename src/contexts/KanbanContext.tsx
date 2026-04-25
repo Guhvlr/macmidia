@@ -161,20 +161,45 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) return;
     try {
       setLoading(true);
-      const [empRes, cardsRes, colsRes, tasksRes, credsRes, clientsRes] = await Promise.all([
+      const calendarCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const results = await Promise.allSettled([
         supabase.from('employees').select('*'),
         supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()),
         supabase.from('kanban_columns').select('*'),
-        supabase.from('calendar_tasks').select('*'),
+        supabase.from('calendar_tasks').select('*').gte('date', calendarCutoff),
         supabase.from('credentials').select('*'),
         supabase.from('calendar_clients').select('*'),
       ]);
-      setEmployees(empRes.data?.map(mapEmployee) || []);
-      setKanbanCards(cardsRes.data?.map(mapKanbanCard) || []);
-      setKanbanColumns(colsRes.data?.map(mapKanbanColumn) || []);
-      setCalendarTasks(tasksRes.data?.map(mapCalendarTask) || []);
-      setCredentials(credsRes.data?.map(mapCredential) || []);
-      setCalendarClients(clientsRes.data?.map(mapCalendarClient) || []);
+
+      const tableNames = ['Funcionários', 'Cards', 'Colunas', 'Calendário', 'Credenciais', 'Clientes'];
+      const setters = [
+        (d: any[]) => setEmployees(d.map(mapEmployee)),
+        (d: any[]) => setKanbanCards(d.map(mapKanbanCard)),
+        (d: any[]) => setKanbanColumns(d.map(mapKanbanColumn)),
+        (d: any[]) => setCalendarTasks(d.map(mapCalendarTask)),
+        (d: any[]) => setCredentials(d.map(mapCredential)),
+        (d: any[]) => setCalendarClients(d.map(mapCalendarClient)),
+      ];
+
+      let failCount = 0;
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          const res = result.value;
+          if (res.error) {
+            console.error(`Erro ao carregar ${tableNames[i]}:`, res.error);
+            failCount++;
+          } else {
+            setters[i](res.data || []);
+          }
+        } else {
+          console.error(`Falha crítica em ${tableNames[i]}:`, result.reason);
+          failCount++;
+        }
+      });
+
+      if (failCount > 0) {
+        toast.error(`${failCount} ${failCount === 1 ? 'módulo falhou' : 'módulos falharam'} ao carregar. Tente recarregar a página.`);
+      }
     } catch (err) {
       console.error('Erro ao carregar dados kanban:', err);
       toast.error('Erro ao carregar dados do painel.');

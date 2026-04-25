@@ -43,7 +43,7 @@ export const IntelligenceProvider = ({ children }: { children: React.ReactNode }
           .from('intelligence_logs')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(100);
 
         if (!error && data) {
           const parsedLogs: IntelligenceEvent[] = data.map(row => ({
@@ -79,7 +79,7 @@ export const IntelligenceProvider = ({ children }: { children: React.ReactNode }
             module: row.module,
             timestamp: new Date(row.created_at).getTime()
           };
-          setLogs(prev => [novoLog, ...prev].slice(0, 500));
+          setLogs(prev => [novoLog, ...prev].slice(0, 100));
         }
       )
       .subscribe();
@@ -111,7 +111,7 @@ export const IntelligenceProvider = ({ children }: { children: React.ReactNode }
     };
 
     // Atualiza local primeiro para percepção de velociadade
-    setLogs((prev) => [newLog, ...prev].slice(0, 500));
+    setLogs((prev) => [newLog, ...prev].slice(0, 100));
 
     // Envia para o Supabase no background
     try {

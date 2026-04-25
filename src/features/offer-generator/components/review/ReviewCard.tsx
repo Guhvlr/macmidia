@@ -32,7 +32,7 @@ interface ReviewCardProps {
   setCreateData: (data: any) => void;
   isCreating: boolean;
   onConfirmCreate: (id: string) => void;
-  onUpdateProduct: (id: string, updates: Partial<ProductItem>) => void;
+  onUpdateProduct: (id: string, updates: Partial<ProductItem>, saveToDb?: boolean) => void;
 }
 
 export const ReviewCard = React.memo(({

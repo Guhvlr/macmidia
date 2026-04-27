@@ -191,8 +191,8 @@ const Index = () => {
 
   const handleExport = (type: string) => {
     if (type === 'PDF' || type === 'Relatórios') {
-      if (loggedUserRole !== 'ADMIN') {
-        toast.error('Acesso Negado', { description: 'Apenas administradores podem gerar relatórios executivos.' });
+      if (loggedUserRole === 'GUEST') {
+        toast.error('Acesso Negado', { description: 'Visitantes não podem gerar relatórios executivos.' });
         return;
       }
       navigate(`/relatorio?clientId=${selectedClientId}&month=${viewDate.toISOString()}`);
@@ -419,7 +419,7 @@ const Index = () => {
             <h2 className="text-[11px] font-black tracking-[0.25em] text-white/30 uppercase flex items-center gap-3 italic">
               <Users className="w-4.5 h-4.5 text-primary" /> Equipe Mac Mídia
             </h2>
-            {loggedUserRole === 'ADMIN' && (
+            {loggedUserRole !== 'GUEST' && (
               <button onClick={() => setShowAdd(true)} className="h-9 w-9 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all border border-white/10 text-white/40 shadow-lg hover:text-white hover:border-primary/40"><UserPlus className="w-4 h-4" /></button>
             )}
           </div>

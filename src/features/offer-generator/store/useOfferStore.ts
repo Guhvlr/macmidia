@@ -155,7 +155,7 @@ export interface OfferState {
   products: ProductItem[];
   setProducts: (prods: ProductItem[]) => void;
   layouts: any[];
-  setLayouts: (l: any[]) => void;
+  setLayouts: (l: any[] | ((prev: any[]) => any[])) => void;
   customFonts: { name: string; url: string }[];
   setCustomFonts: (fonts: any | ((prev: any[]) => any[])) => void;
   presets: any[];
@@ -250,7 +250,7 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   products: [],
   setProducts: (products) => set((state) => ({ products: typeof products === 'function' ? products(state.products) : products })),
   layouts: [],
-  setLayouts: (layouts) => set({ layouts }),
+  setLayouts: (layouts) => set((state) => ({ layouts: typeof layouts === 'function' ? layouts(state.layouts) : layouts })),
   customFonts: [],
   setCustomFonts: (fonts) => set((state) => ({ customFonts: typeof fonts === 'function' ? fonts(state.customFonts) : fonts })),
   presets: [],

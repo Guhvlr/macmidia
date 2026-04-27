@@ -78,6 +78,16 @@ export const ReviewCard = React.memo(({
     setIsEditing(false);
   };
 
+  const handleEditClick = () => {
+    setEditData({
+      name: product.name,
+      ean: product.ean,
+      price: product.price,
+      suffix: product.suffix
+    });
+    setIsEditing(true);
+  };
+
   return (
     <div className={`p-6 rounded-3xl border-2 transition-all relative group ${
       isSelected ? 'bg-primary/5 border-primary/20 shadow-[0_0_30px_rgba(217,37,75,0.05)]' : 'bg-white/[0.02] border-white/5 hover:border-white/10'
@@ -225,7 +235,7 @@ export const ReviewCard = React.memo(({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button 
-                  onClick={() => setIsEditing(true)} 
+                  onClick={handleEditClick} 
                   className="h-9 px-4 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 rounded-xl border border-white/5 transition-all"
                 >
                   Editar

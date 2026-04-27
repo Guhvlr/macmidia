@@ -286,7 +286,7 @@ export const StepReview = () => {
         }
 
         return {
-          id: res.match?.id || `nf-${(res.original || '').toLowerCase().replace(/[^a-z0-9]/g, '-')}-${idx}`,
+          id: `item-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 9)}`,
           name: displayName,
           ean: extractedEan || (isBarcode ? firstWord : 'N/A'),
           price,

@@ -7,9 +7,13 @@ import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
 
-const CORRECTION_COLUMNS = [
+const KANBAN_COLUMNS = [
+  { key: 'para-producao', title: 'Para Produção', color: 'bg-info' },
+  { key: 'em-producao', title: 'Em Produção', color: 'bg-warning' },
+  { key: 'alteracao', title: 'Alteração', color: 'bg-destructive' },
   { key: 'para-correcao', title: 'Para Correção', color: 'bg-destructive' },
-  { key: 'correcao-cliente', title: 'Aprovação do Cliente', color: 'bg-warning' },
+  { key: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive' },
+  { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
 ] as const;
 
 const CorrectionBoard = () => {
@@ -19,15 +23,15 @@ const CorrectionBoard = () => {
 
   const activeCards = useMemo(() =>
     kanbanCards.filter(c => {
-      if (c.archivedAt) return false;
-      return ['para-correcao', 'correcao-cliente'].includes(c.column);
+      if (c.archivedAt && c.column !== 'postado') return false;
+      return KANBAN_COLUMNS.some(col => col.key === c.column);
     }),
     [kanbanCards]
   );
 
   const cardsByColumn = useMemo(() => {
     const grouped: Record<string, typeof activeCards> = {};
-    CORRECTION_COLUMNS.forEach(col => { grouped[col.key] = []; });
+    KANBAN_COLUMNS.forEach(col => { grouped[col.key] = []; });
     activeCards.forEach(card => {
       if (grouped[card.column]) grouped[card.column].push(card);
     });
@@ -77,7 +81,7 @@ const CorrectionBoard = () => {
           onMouseDown={onMouseDown}
           className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
         >
-          {CORRECTION_COLUMNS.map(col => (
+          {KANBAN_COLUMNS.map(col => (
             <KanbanColumn
               key={col.key}
               id={col.key}
@@ -85,6 +89,7 @@ const CorrectionBoard = () => {
               color={col.color}
               cards={cardsByColumn[col.key] || []}
               count={(cardsByColumn[col.key] || []).length}
+              employeeId=""
             />
           ))}
         </main>

@@ -7,10 +7,10 @@ import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
 
-const POSTING_COLUMNS = [
+const KANBAN_COLUMNS = [
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
   { key: 'postado', title: 'Postado', color: 'bg-success' },
-  { key: 'alteracao', title: 'Alterações', color: 'bg-warning' },
+  { key: 'alteracao', title: 'Alteração', color: 'bg-warning' },
 ] as const;
 
 const PostingBoard = () => {
@@ -21,14 +21,14 @@ const PostingBoard = () => {
   const activeCards = useMemo(() =>
     kanbanCards.filter(c => {
       if (c.archivedAt && c.column !== 'postado') return false; 
-      return ['aprovado-programar', 'postado', 'alteracao'].includes(c.column);
+      return KANBAN_COLUMNS.some(col => col.key === c.column);
     }),
     [kanbanCards]
   );
 
   const cardsByColumn = useMemo(() => {
     const grouped: Record<string, typeof activeCards> = {};
-    POSTING_COLUMNS.forEach(col => { grouped[col.key] = []; });
+    KANBAN_COLUMNS.forEach(col => { grouped[col.key] = []; });
     activeCards.forEach(card => {
       if (grouped[card.column]) grouped[card.column].push(card);
     });
@@ -78,7 +78,7 @@ const PostingBoard = () => {
           onMouseDown={onMouseDown}
           className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
         >
-          {POSTING_COLUMNS.map(col => (
+          {KANBAN_COLUMNS.map(col => (
             <KanbanColumn
               key={col.key}
               id={col.key}

@@ -14,9 +14,11 @@ export function useDraggableScroll() {
   const [scrollLeft, setScrollLeft] = useState(0);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    // Evita disparar se o clique for em botões, inputs, links ou no próprio card draggable
+    // Evita disparar se o clique for em botões, inputs, textareas, links ou modais
     const target = e.target as HTMLElement;
-    const isInteractive = target.closest('button, input, a, [draggable="true"], .kanban-card');
+    const isInteractive = target.closest(
+      'button, input, textarea, a, [draggable="true"], .kanban-card, [role="dialog"], [data-no-dnd="true"], [role="menu"]'
+    );
     
     if (isInteractive) return;
 

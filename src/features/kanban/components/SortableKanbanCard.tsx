@@ -33,11 +33,9 @@ export function SortableKanbanCard({ card }: SortableKanbanCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       className={`touch-manipulation ${isDragging ? 'z-50 relative' : ''}`}
     >
-      <KanbanCard card={card} />
+      <KanbanCard card={card} dragAttributes={attributes} dragListeners={listeners} />
     </div>
   );
 }

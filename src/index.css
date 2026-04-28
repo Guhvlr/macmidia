@@ -305,9 +305,20 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%    %3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
     z-index: 9999;
   }
-  /* ── Performance & Scalability Utilities ── */
-  .performance-virtual {
-    content-visibility: auto;
-    contain-intrinsic-size: 1px 150px; /* Estimated height for smoother scroll */
+  /* ── Z-Index Layers ── */
+  /* Ensure Radix Dialogs are ALWAYS on top of DND overlays */
+  [role="dialog"] {
+    z-index: 1000 !important;
+  }
+  .fixed.inset-0.z-50 { /* Common Radix overlay class */
+    z-index: 999 !important;
+  }
+
+  /* Ensure Kanban cards don't pop up over UI elements */
+  .kanban-card {
+    z-index: 1;
+  }
+  .kanban-card:active {
+    z-index: 50; /* Slightly elevated when dragging but still below modals */
   }
 }

@@ -13,9 +13,11 @@ interface KanbanCardProps {
   employees: Employee[];
   updateKanbanCard: (id: string, updates: Partial<KanbanCardType>, actionDescription?: string) => Promise<void>;
   triggerAICorrection: (cardId: string) => Promise<void>;
+  dragAttributes?: any;
+  dragListeners?: any;
 }
 
-const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrection }: KanbanCardProps) => {
+const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrection, dragAttributes, dragListeners }: KanbanCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const { activeTasks, uploadKanbanAsset } = useApp();
@@ -80,7 +82,9 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleOpenDetail}
-        className={`bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
+        {...dragAttributes}
+        {...dragListeners}
+        className={`kanban-card bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
       >
         {isDragOver && !isProcessing && (
           <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none rounded-xl">
@@ -252,7 +256,7 @@ KanbanCard.displayName = 'KanbanCard';
 
 import { useApp } from '@/contexts/useApp';
 
-const KanbanCardContainer = ({ card }: { card: KanbanCardType }) => {
+const KanbanCardContainer = ({ card, dragAttributes, dragListeners }: { card: KanbanCardType, dragAttributes?: any, dragListeners?: any }) => {
   const { employees, updateKanbanCard, triggerAICorrection } = useApp();
   return (
     <KanbanCard 
@@ -260,6 +264,8 @@ const KanbanCardContainer = ({ card }: { card: KanbanCardType }) => {
       employees={employees} 
       updateKanbanCard={updateKanbanCard} 
       triggerAICorrection={triggerAICorrection} 
+      dragAttributes={dragAttributes}
+      dragListeners={dragListeners}
     />
   );
 };

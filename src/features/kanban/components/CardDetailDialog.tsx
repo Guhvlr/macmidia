@@ -308,6 +308,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          data-no-dnd="true"
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="sr-only">
             <DialogTitle>Detalhes do Card: {clientName || 'Sem nome'}</DialogTitle>
@@ -493,7 +495,15 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-white/5 border-none">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => { deleteKanbanCard(card.id); onOpenChange(false); }}>Excluir</AlertDialogAction>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={async () => { 
+              // 1. Fechar o diálogo de confirmação (automático pelo componente)
+              // 2. Fechar o diálogo de detalhes IMEDIATAMENTE
+              onOpenChange(false); 
+              // 3. Aguardar um pouco para a animação de fechar concluir e então deletar
+              setTimeout(() => {
+                deleteKanbanCard(card.id);
+              }, 200);
+            }}>Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

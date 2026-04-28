@@ -476,9 +476,19 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       console.warn('Falha ao limpar arquivos do storage:', err);
     }
 
+    const oldCards = [...kanbanCards];
     setKanbanCards(prev => prev.filter(c => c.id !== id));
-    await supabase.from('kanban_cards').delete().eq('id', id);
-  }, []);
+    
+    try {
+      const { error } = await supabase.from('kanban_cards').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Card excluído com sucesso');
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast.error(`Erro ao excluir card: ${error.message}`);
+      setKanbanCards(oldCards); // Rollback
+    }
+  }, [kanbanCards]);
 
   const moveKanbanCard = useCallback(async (id: string, column: string) => {
     const card = kanbanCards.find(c => c.id === id);

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   DndContext,
   PointerSensor,
-  KeyboardSensor,
   useSensor,
   useSensors,
   DragStartEvent,
@@ -13,7 +12,7 @@ import {
   defaultDropAnimationSideEffects,
   DropAnimation
 } from '@dnd-kit/core';
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { arrayMove } from '@dnd-kit/sortable';
 import { useApp } from '@/contexts/useApp';
 import KanbanCard from './KanbanCard';
 
@@ -34,15 +33,25 @@ const dropAnimation: DropAnimation = {
 export function KanbanBoardDndContext({ children }: Props) {
   const { kanbanCards, reorderKanbanCards } = useApp();
   const [activeId, setActiveId] = useState<string | null>(null);
+  
+  // Cleanup active drag state if the card is deleted from the external state
+  React.useEffect(() => {
+    if (activeId && !kanbanCards.some(c => c.id === activeId)) {
+      setActiveId(null);
+    }
+  }, [kanbanCards, activeId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Increased to avoid accidental drags
+        distance: 10,
+        // Block drag if clicking on interactive elements or inside dialogs with data-no-dnd
+        predicate: (event) => {
+          const target = event.nativeEvent.target as HTMLElement;
+          // Se o clique for em um botão, input, etc, OU dentro de algo com data-no-dnd="true"
+          return !target.closest('button, input, textarea, a, [role="button"], [contenteditable="true"], [data-no-dnd="true"]');
+        },
       },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 

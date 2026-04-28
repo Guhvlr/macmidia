@@ -44,7 +44,7 @@ const PostingBoard = () => {
   }
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col gradient-bg">
+    <div className="h-screen overflow-hidden flex flex-col kanban-custom-bg">
       <header className="page-header flex-shrink-0">
         <div className="flex items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-4">

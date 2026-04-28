@@ -150,6 +150,17 @@
     background: linear-gradient(135deg, hsl(0 0% 6%) 0%, hsl(0 2% 8%) 100%);
   }
 
+  .kanban-custom-bg {
+    background-color: #020202;
+    background-image: 
+      linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.65)),
+      url('/bg-kanban.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
   /* ── Primary button ── */
   .btn-primary-glow {
     @apply bg-primary text-primary-foreground font-semibold;
@@ -306,19 +317,56 @@
     z-index: 9999;
   }
   /* ── Z-Index Layers ── */
-  /* Ensure Radix Dialogs are ALWAYS on top of DND overlays */
-  [role="dialog"] {
-    z-index: 1000 !important;
-  }
-  .fixed.inset-0.z-50 { /* Common Radix overlay class */
-    z-index: 999 !important;
+  /* 
+   * Layer hierarchy:
+   * 1. Kanban cards: z-index 1 (normal), 50 (dragging)
+   * 2. DND drag overlay: z-index ~100 (dnd-kit default)
+   * 3. Dialog backdrop/overlay: z-index 5000
+   * 4. Dialog content: z-index 5001
+   * 5. AlertDialog backdrop: z-index 6000
+   * 6. AlertDialog content: z-index 6001
+   */
+
+  /* Dialog backdrop overlay - must cover everything including kanban */
+  [data-radix-dialog-overlay],
+  div[role="dialog"] ~ div.fixed.inset-0,
+  .fixed.inset-0.z-50 {
+    z-index: 5000 !important;
   }
 
-  /* Ensure Kanban cards don't pop up over UI elements */
+  /* Dialog content - above overlay */
+  [role="dialog"] {
+    z-index: 5001 !important;
+  }
+
+  /* AlertDialog backdrop - above regular dialog */
+  [data-radix-alert-dialog-overlay] {
+    z-index: 6000 !important;
+  }
+
+  /* AlertDialog content - topmost */
+  [role="alertdialog"] {
+    z-index: 6001 !important;
+  }
+
+  /* Popovers and Select contents - must be above Dialogs */
+  [data-radix-popper-content-wrapper] {
+    z-index: 7000 !important;
+  }
+  [data-radix-select-content] {
+    z-index: 7001 !important;
+  }
+
+  /* Kanban cards stay low */
   .kanban-card {
     z-index: 1;
   }
   .kanban-card:active {
-    z-index: 50; /* Slightly elevated when dragging but still below modals */
+    z-index: 50;
+  }
+
+  /* DND Kit drag overlay - above cards but below dialogs */
+  [data-dnd-overlay] {
+    z-index: 100 !important;
   }
 }

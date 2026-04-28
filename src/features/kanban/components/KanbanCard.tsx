@@ -134,11 +134,17 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         <div className="space-y-2 flex-1">
           {Array.isArray(card.labels) && card.labels.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {card.labels.map(label => (
-                <span key={label} className="px-2 py-0.5 text-[9px] font-bold text-white bg-red-600/90 rounded-sm truncate max-w-full">
-                  {label}
-                </span>
-              ))}
+              {card.labels.map(label => {
+                const parts = label.split('|');
+                const hasColor = parts.length > 1;
+                const colorClass = hasColor ? parts[0] : 'bg-red-600';
+                const text = hasColor ? parts.slice(1).join('|') : label;
+                return (
+                  <span key={label} className={`px-2 py-0.5 text-[9px] font-bold text-white rounded-sm truncate max-w-full ${colorClass}`}>
+                    {text}
+                  </span>
+                );
+              })}
             </div>
           )}
           <h4 className="font-bold text-[13px] text-white leading-tight uppercase line-clamp-2">{card.clientName}</h4>

@@ -71,6 +71,13 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   }, [showMembersSelection]);
 
   useEffect(() => {
+    setClientName(card.clientName || '');
+    setDescription(card.description || '');
+    setLocalImages(Array.isArray(card.images) ? card.images : []);
+    setCoverImage(card.coverImage || null);
+    setLabels(Array.isArray(card.labels) ? card.labels : []);
+    setChecklists(Array.isArray(card.checklists) ? card.checklists : []);
+    setComments(Array.isArray(card.comments) ? card.comments : []);
     setAssignedUsers(Array.isArray(card.assignedUsers) ? card.assignedUsers : []);
   }, [card.id, card.clientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history]);
 
@@ -254,11 +261,13 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates({ comments: newList }, "Comentou no card");
   };
 
-  const addLabel = () => {
+  const addLabel = (color: string = 'bg-red-600') => {
     if (!newLabelText.trim()) return;
     const txt = newLabelText.toUpperCase().trim();
-    if (!labels.includes(txt)) {
-      const newList = [...labels, txt];
+    const labelVal = `${color}|${txt}`;
+    // Check if the label text already exists (ignore color when checking duplicates)
+    if (!labels.some(l => l.split('|').pop() === txt)) {
+      const newList = [...labels, labelVal];
       setLabels(newList);
       saveUpdates({ labels: newList });
     }

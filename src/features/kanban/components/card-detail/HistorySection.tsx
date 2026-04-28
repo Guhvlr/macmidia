@@ -45,7 +45,7 @@ export const HistorySection = memo( ({
         <div className="bg-white/5 p-3 rounded-xl border border-white/5 focus-within:border-white/10 transition-colors shadow-inner">
           <Textarea
             placeholder="Escrever comentário..."
-            className="min-h-[60px] text-[13px] bg-transparent border-none p-0 focus-visible:ring-0 resize-none placeholder:text-white/30"
+            className="min-h-[60px] text-[13px] bg-transparent border-none px-2 py-1 focus-visible:ring-0 resize-none placeholder:text-white/30"
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
           />

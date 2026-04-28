@@ -100,7 +100,7 @@ const Employee = () => {
   }
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col gradient-bg">
+    <div className="h-screen overflow-hidden flex flex-col kanban-custom-bg">
       {/* Header — clean, without global add buttons */}
       <header className="page-header flex-shrink-0">
         <div className="flex items-center gap-4 px-6 py-3.5">

@@ -175,7 +175,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       const calendarCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
       const results = await Promise.allSettled([
         supabase.from('employees').select('*'),
-        supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('kanban_cards').select('*').or('archived_at.is.null,archived_at.gt.' + new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()).order('position_index', { ascending: true }),
         supabase.from('kanban_columns').select('*'),
         supabase.from('calendar_tasks').select('*').gte('date', calendarCutoff),
         supabase.from('credentials').select('*'),
@@ -221,7 +221,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
   const debouncedRefetchCards = useMemo(() => createDebouncedRefetch(() => {
     const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-    supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).then(r => {
+    supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).order('position_index', { ascending: true }).then(r => {
       if (r.data) setKanbanCards(prev => {
         const pending = pendingOpsRef.current;
         if (pending.size === 0) return r.data!.map(mapKanbanCard);
@@ -272,6 +272,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
             if (row.ai_report !== undefined) merged.aiReport = typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report;
             if (row.comments !== undefined) merged.comments = row.comments || [];
             if (row.history !== undefined) merged.history = typeof row.history === 'string' ? JSON.parse(row.history) : (row.history || []);
+            if (row.position_index !== undefined) merged.position_index = row.position_index;
             if (row.source !== undefined) merged.source = row.source;
             if (row.original_message !== undefined) merged.originalMessage = row.original_message;
             if (row.ai_status !== undefined) merged.aiStatus = row.ai_status;
@@ -388,7 +389,12 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   const addKanbanCard = useCallback(async (card: Omit<KanbanCard, 'id'>): Promise<string | undefined> => {
     const tempId = crypto.randomUUID();
     const history = [createHistoryAction('create', `Criou o card na coluna`)];
-    const opCard: KanbanCard = { ...card, id: tempId, history };
+    const columnCards = kanbanCards.filter(c => c.column === card.column);
+    const maxPos = columnCards.length > 0 ? Math.max(...columnCards.map(c => c.position_index || 0)) : 0;
+    const position_index = maxPos + 1024;
+    const employeeId = card.employeeId || '';
+
+    const opCard: KanbanCard = { ...card, id: tempId, history, position_index, employeeId };
     setKanbanCards(prev => [...prev, opCard]);
     pendingOpsRef.current.add(tempId);
 
@@ -400,7 +406,8 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         assigned_users: card.assignedUsers || [], column: card.column, time_spent: card.timeSpent ?? 0,
         timer_running: card.timerRunning ?? false, timer_start: card.timerStart || null, history,
         source: card.source || 'manual', original_message: card.originalMessage || null,
-        ai_status: card.aiStatus || null, ai_report: card.aiReport || null
+        ai_status: card.aiStatus || null, ai_report: card.aiReport || null,
+        position_index: position_index
       }).select();
 
       if (data?.[0]) {
@@ -416,7 +423,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       return undefined;
     }, { clientName: card.clientName });
-  }, [createHistoryAction]);
+  }, [kanbanCards, createHistoryAction]);
 
   const updateKanbanCard = useCallback(async (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => {
     const existing = kanbanCards.find(c => c.id === id);
@@ -447,6 +454,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     if (updates.timerRunning !== undefined) db.timer_running = updates.timerRunning;
     if ('timerStart' in updates) db.timer_start = updates.timerStart || null;
     if ('archivedAt' in updates) db.archived_at = updates.archivedAt || null;
+    if (updates.position_index !== undefined) db.position_index = updates.position_index;
     if (updates.source !== undefined) db.source = updates.source;
     if (updates.originalMessage !== undefined) db.original_message = updates.originalMessage;
     if (updates.aiStatus !== undefined) db.ai_status = updates.aiStatus;

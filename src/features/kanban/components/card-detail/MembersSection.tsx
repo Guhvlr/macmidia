@@ -53,27 +53,63 @@ export const MembersSection = memo( ({
   fixDescriptionWithAI,
   customAICommand
 }: MembersSectionProps) => {
+  const [selectedColor, setSelectedColor] = React.useState('bg-red-600');
+  const labelColors = [
+    'bg-red-600', 'bg-orange-600', 'bg-amber-500', 'bg-emerald-600', 
+    'bg-blue-600', 'bg-indigo-600', 'bg-purple-600', 'bg-pink-600', 'bg-slate-600'
+  ];
+
   return (
     <div className="pl-2 flex flex-col gap-6 w-full">
       <div className="flex flex-wrap items-start gap-8">
         {/* Labels */}
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40 mb-2">Etiquetas</h3>
-          <div className="flex flex-wrap gap-2">
-            {labels.map(l => (
-              <span key={l} className="group flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold tracking-wider text-white rounded bg-red-600/90 hover:bg-red-600 transition-colors cursor-pointer">
-                {l}
-                <X className="w-3 h-3 opacity-0 group-hover:opacity-100 hover:text-white/70" onClick={() => removeLabel(l)} />
-              </span>
-            ))}
-            <div className="flex items-center gap-1">
-              <Input
-                value={newLabelText}
-                onChange={e => setNewLabelText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') addLabel(); }}
-                placeholder="Adicionar..."
-                className="w-24 h-7 text-[10px] bg-white/5 border-white/10 rounded px-2 focus-visible:ring-0 text-white"
-              />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              {labels.map(l => {
+                const parts = l.split('|');
+                const hasColor = parts.length > 1;
+                const colorClass = hasColor ? parts[0] : 'bg-red-600';
+                const text = hasColor ? parts.slice(1).join('|') : l;
+                return (
+                  <span key={l} className={`group flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold tracking-wider text-white rounded hover:opacity-80 transition-opacity cursor-pointer ${colorClass}`}>
+                    {text}
+                    <X className="w-3 h-3 opacity-0 group-hover:opacity-100 hover:text-white/70" onClick={() => removeLabel(l)} />
+                  </span>
+                );
+              })}
+            </div>
+            
+            <div className="flex flex-col gap-2 bg-white/5 p-2 rounded-lg border border-white/5 w-fit">
+              <div className="flex gap-1.5">
+                {labelColors.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setSelectedColor(c)}
+                    className={`w-4 h-4 rounded-full ${c} ${selectedColor === c ? 'ring-2 ring-white ring-offset-1 ring-offset-black scale-110' : 'opacity-50 hover:opacity-100'} transition-all`}
+                    title="Selecionar cor"
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <Input
+                  value={newLabelText}
+                  onChange={e => setNewLabelText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addLabel(selectedColor); }}
+                  placeholder="Nova etiqueta..."
+                  className="w-32 h-7 text-[10px] bg-black/40 border-white/10 rounded px-2 focus-visible:ring-0 text-white"
+                />
+                <Button 
+                  size="sm" 
+                  onClick={() => addLabel(selectedColor)}
+                  disabled={!newLabelText.trim()}
+                  className={`h-7 px-2 text-[10px] text-white ${selectedColor} hover:opacity-80 transition-opacity`}
+                >
+                  <Plus className="w-3 h-3" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

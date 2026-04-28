@@ -72,6 +72,7 @@ const KanbanColumnInner = ({ id, title, color, cards, count, employeeId, onEdit,
         <AddCardDialog
           employeeId={employeeId}
           fixedColumnKey={id}
+          showEmployeeSelect={!employeeId}
         />
       </div>
     </div>

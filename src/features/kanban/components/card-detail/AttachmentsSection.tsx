@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface AttachmentsSectionProps {
   localImages: string[];
@@ -111,14 +110,35 @@ export const AttachmentsSection = memo(({
         <div className="flex gap-2">
           {localImages.length > 0 && (
             <>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowDeleteAllConfirm(true)} 
-                className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-full px-4"
-              >
-                Excluir Todos
-              </Button>
+              {!showDeleteAllConfirm ? (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowDeleteAllConfirm(true)} 
+                  className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-full px-4"
+                >
+                  Excluir Todos
+                </Button>
+              ) : (
+                <div className="flex items-center gap-1.5 animate-in slide-in-from-right-2">
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={confirmDeleteAll} 
+                    className="text-[10px] h-7 bg-red-600 hover:bg-red-700 font-bold rounded-full px-3"
+                  >
+                    CONFIRMAR TUDO
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setShowDeleteAllConfirm(false)} 
+                    className="h-7 text-[10px] text-white/40 hover:text-white"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              )}
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -172,13 +192,39 @@ export const AttachmentsSection = memo(({
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  {isImg && <Button size="icon" variant="ghost" onClick={() => setPreviewIndex(i)}><ZoomIn className="w-4 h-4" /></Button>}
-                  <Button size="icon" variant="ghost" onClick={(e) => downloadAttachment(img, i, e)}><Download className="w-4 h-4 text-white" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => setDeleteConfirmIdx(i)} className="text-red-400"><Trash2 className="w-4 h-4" /></Button>
-                  {isImg && coverImage !== img && (
-                    <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => setAsCover(img)}>
-                      Usar Capa
-                    </Button>
+                  {deleteConfirmIdx !== i ? (
+                    <>
+                      {isImg && <Button size="icon" variant="ghost" onClick={() => setPreviewIndex(i)}><ZoomIn className="w-4 h-4" /></Button>}
+                      <Button size="icon" variant="ghost" onClick={(e) => downloadAttachment(img, i, e)}><Download className="w-4 h-4 text-white" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteConfirmIdx(i)} className="text-red-400"><Trash2 className="w-4 h-4" /></Button>
+                      {isImg && coverImage !== img && (
+                        <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => setAsCover(img)}>
+                          Usar Capa
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 p-2 animate-in zoom-in-95 duration-200">
+                      <p className="text-[10px] font-bold text-white uppercase tracking-tighter">Excluir?</p>
+                      <div className="flex gap-1">
+                        <Button 
+                          size="sm" 
+                          variant="destructive" 
+                          className="h-7 px-3 text-[9px] font-bold bg-red-600"
+                          onClick={() => confirmDelete(i)}
+                        >
+                          SIM
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-7 px-3 text-[9px] text-white/60"
+                          onClick={() => setDeleteConfirmIdx(null)}
+                        >
+                          NÃO
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -187,35 +233,7 @@ export const AttachmentsSection = memo(({
         </div>
       )}
 
-      <AlertDialog open={deleteConfirmIdx !== null} onOpenChange={(open) => !open && setDeleteConfirmIdx(null)}>
-        <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir anexo?</AlertDialogTitle>
-            <AlertDialogDescription className="text-white/50 text-[13px]">
-              Deseja excluir permanentemente este anexo? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/5 border-none hover:bg-white/10 text-white">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={() => deleteConfirmIdx !== null && confirmDelete(deleteConfirmIdx)}>Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
-      <AlertDialog open={showDeleteAllConfirm} onOpenChange={setShowDeleteAllConfirm}>
-        <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir TODOS os anexos?</AlertDialogTitle>
-            <AlertDialogDescription className="text-white/50 text-[13px]">
-              Tem certeza que deseja excluir permanentemente <strong>TODOS</strong> os anexos deste cartão? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/5 border-none hover:bg-white/10 text-white">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteAll}>Excluir Todos</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 });

@@ -71,15 +71,15 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   }, [showMembersSelection]);
 
   useEffect(() => {
-    setClientName(card.clientName || '');
-    setDescription(card.description || '');
-    setLocalImages(Array.isArray(card.images) ? card.images : []);
-    setCoverImage(card.coverImage || null);
-    setLabels(Array.isArray(card.labels) ? card.labels : []);
-    setChecklists(Array.isArray(card.checklists) ? card.checklists : []);
-    setComments(Array.isArray(card.comments) ? card.comments : []);
     setAssignedUsers(Array.isArray(card.assignedUsers) ? card.assignedUsers : []);
   }, [card.id, card.clientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history]);
+
+  const { kanbanCards } = useApp();
+  useEffect(() => {
+    if (open && !kanbanCards.some(c => c.id === card.id)) {
+      onOpenChange(false);
+    }
+  }, [kanbanCards, card.id, open]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -485,28 +485,6 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent className="bg-[#1C1C1E] border-white/10 text-white rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir card?</AlertDialogTitle>
-            <AlertDialogDescription className="text-white/50 text-[13px]">
-              Deseja excluir permanentemente o card "{card.clientName}"? Esta ação não pode ser restaurada.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/5 border-none">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={async () => { 
-              // 1. Fechar o diálogo de confirmação (automático pelo componente)
-              // 2. Fechar o diálogo de detalhes IMEDIATAMENTE
-              onOpenChange(false); 
-              // 3. Aguardar um pouco para a animação de fechar concluir e então deletar
-              setTimeout(() => {
-                deleteKanbanCard(card.id);
-              }, 200);
-            }}>Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 };

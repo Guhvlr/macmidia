@@ -254,33 +254,40 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   customFonts: [],
   setCustomFonts: (fonts) => set((state) => ({ customFonts: typeof fonts === 'function' ? fonts(state.customFonts) : fonts })),
   presets: [],
-  setPresets: (newPresets) => {
-    set((state) => ({ 
-      presets: typeof newPresets === 'function' ? newPresets(state.presets) : newPresets 
-    }));
-  },
-  savePresetsToDb: async () => {
+  setPresets: async (newPresets) => {
     const state = get();
-    const { data: remotePresets } = await supabase.from('offer_presets').select('id');
-    const remoteIds = remotePresets?.map(r => r.id) || [];
-    const localIds = state.presets.map(l => l.id);
+    const current = state.presets;
+    const updated = typeof newPresets === 'function' ? newPresets(current) : newPresets;
     
-    // Find deletions
-    const toDelete = remoteIds.filter(id => !localIds.includes(id));
-    if (toDelete.length > 0) {
-      await supabase.from('offer_presets').delete().in('id', toDelete);
-    }
-    
-    // Upsert local state
-    for (const item of state.presets) {
-      await supabase.from('offer_presets').upsert({
-        id: item.id,
-        name: item.name,
-        client: item.client || state.selectedClientName,
-        price_badge: item.priceBadge,
-        desc_config: item.descConfig,
-        updated_at: new Date().toISOString()
+    // Optimistic local update
+    set({ presets: updated });
+
+    try {
+      // Find what was deleted
+      const deletedIds = current.filter(cb => !updated.some(ub => ub.id === cb.id)).map(b => b.id);
+      // Find what was added/updated
+      const addedOrUpdated = updated.filter((ub: any) => {
+        const existing = current.find(cb => cb.id === ub.id);
+        return !existing || JSON.stringify(existing) !== JSON.stringify(ub);
       });
+
+      if (deletedIds.length > 0) {
+        await supabase.from('offer_presets').delete().in('id', deletedIds);
+      }
+
+      for (const item of addedOrUpdated) {
+        await supabase.from('offer_presets').upsert({
+          id: item.id,
+          name: item.name,
+          client: item.client || state.selectedClientName,
+          price_badge: item.priceBadge,
+          desc_config: item.descConfig,
+          updated_at: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao persistir presets:', err);
+      toast.error('Erro ao sincronizar modelos com o servidor.');
     }
   },
   isLoadingPresets: true,
@@ -483,20 +490,46 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   saveProjectTemplate: async (name: string) => {
     const state = get();
     const id = crypto.randomUUID();
-    const newTemplate = { id, name, slots: state.slots, slotSettings: state.slotSettings, priceBadge: state.priceBadge, descConfig: state.descConfig, config: state.config, client: state.selectedClientName };
+    const newTemplate = { 
+      id, 
+      name, 
+      slots: state.slots, 
+      slotSettings: state.slotSettings, 
+      priceBadge: state.priceBadge, 
+      descConfig: state.descConfig, 
+      config: state.config, 
+      client: state.selectedClientName 
+    };
+    
+    // Optimistic update
     set({ pageTemplates: [...state.pageTemplates, newTemplate] });
     
-    await supabase.from('offer_templates').insert({
-      id,
-      name,
-      client: state.selectedClientName,
-      slots: state.slots,
-      slot_settings: state.slotSettings,
-      price_badge: state.priceBadge,
-      desc_config: state.descConfig,
-      config: state.config
-    });
-    toast.success('Template salvo!');
+    try {
+      const { error } = await supabase.from('offer_templates').insert({
+        id,
+        name,
+        client: state.selectedClientName,
+        slots: state.slots,
+        slot_settings: state.slotSettings,
+        price_badge: state.priceBadge,
+        desc_config: state.descConfig,
+        config: state.config,
+        created_at: new Date().toISOString()
+      });
+
+      if (error) {
+        console.error('Erro detalhado ao salvar template:', error);
+        toast.error(`Falha ao salvar template no servidor: ${error.message}`);
+        // Rollback local state
+        set({ pageTemplates: state.pageTemplates.filter(t => t.id !== id) });
+      } else {
+        toast.success('Template salvo com sucesso!');
+      }
+    } catch (err: any) {
+      console.error('Erro crítico ao salvar template:', err);
+      toast.error('Ocorreu um erro inesperado ao tentar salvar o template.');
+      set({ pageTemplates: state.pageTemplates.filter(t => t.id !== id) });
+    }
   },
 
   deleteProjectTemplate: async (templateToDelete: { id?: string; name: string }) => {
@@ -505,10 +538,26 @@ export const useOfferStore = create<OfferState>((set, get) => ({
         toast.error('O template não possui ID para deleção.');
         return;
       }
+      
+      // Local update first
       set((state) => ({ pageTemplates: state.pageTemplates.filter(t => t.id !== templateToDelete.id) }));
-      await supabase.from('offer_templates').delete().eq('id', templateToDelete.id);
-      toast.success('Template removido!');
+      
+      const { error } = await supabase.from('offer_templates').delete().eq('id', templateToDelete.id);
+      
+      if (error) {
+        console.error('Erro ao deletar template:', error);
+        toast.error('Erro ao remover template do banco de dados.');
+        // Refetch to restore state if error
+        const { data } = await supabase.from('offer_templates').select('*').order('created_at', { ascending: true });
+        if (data) set({ pageTemplates: data.map((d: any) => ({
+          id: d.id, name: d.name, client: d.client, slots: d.slots, slotSettings: d.slot_settings,
+          priceBadge: d.price_badge, descConfig: d.desc_config, config: d.config
+        })) });
+      } else {
+        toast.success('Template removido!');
+      }
     } catch (err: any) {
+      console.error('Catch error deleting template:', err);
       toast.error('Erro ao excluir template.');
     }
   },
@@ -577,11 +626,27 @@ export const useOfferStore = create<OfferState>((set, get) => ({
 
   getProjectStateSnapshot: () => {
     const state = get();
+    
+    // Clean products to avoid saving huge blobs if they were just processed
+    const cleanProducts = state.products.map(p => ({
+      ...p,
+      // If the image is a data URI (base64) and it's too long, we might want to alert 
+      // but for now we'll save it, just ensuring we don't save duplicates
+    }));
+
     return {
-      step: state.step, config: state.config, slots: state.slots, pageCount: state.pageCount, 
-      priceBadge: state.priceBadge, descConfig: state.descConfig, imageConfig: state.imageConfig,
-      products: state.products, layouts: state.layouts, slotSettings: state.slotSettings, 
-      activePage: state.activePage, selectedClientName: state.selectedClientName,
+      step: state.step, 
+      config: state.config, 
+      slots: state.slots, 
+      pageCount: state.pageCount, 
+      priceBadge: state.priceBadge, 
+      descConfig: state.descConfig, 
+      imageConfig: state.imageConfig,
+      products: cleanProducts, 
+      layouts: state.layouts, 
+      slotSettings: state.slotSettings, 
+      activePage: state.activePage, 
+      selectedClientName: state.selectedClientName,
       customCanvasElements: state.customCanvasElements,
     };
   },

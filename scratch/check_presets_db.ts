@@ -1,16 +1,40 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../src/integrations/supabase/client';
 
-const url = 'https://ebvvmddizsggrqasnnvv.supabase.co';
-const key = 'sb_publishable_AxiHBuzz8Cq82deFBen1iw_x-KRYotZ';
+async function checkPersistence() {
+  console.log('--- TESTE DE PERSISTÊNCIA DE PRESETS ---');
+  const testId = 'test-' + Date.now();
+  
+  // 1. Tentar Inserir
+  const { data: insertData, error: insertError } = await supabase
+    .from('offer_presets')
+    .insert({
+      id: testId,
+      name: 'TESTE PERSISTÊNCIA',
+      client: 'SISTEMA',
+      price_badge: {},
+      desc_config: {}
+    })
+    .select();
 
-const supabase = createClient(url, key);
-
-async function main() {
-  const { data, error } = await supabase.from('offer_presets').select('*');
-  console.log('Presets from DB:', data?.length);
-  if (data) {
-    console.log(JSON.stringify(data, null, 2));
+  if (insertError) {
+    console.error('ERRO AO INSERIR PRESET:', insertError);
+  } else {
+    console.log('SUCESSO AO INSERIR:', insertData);
   }
+
+  // 2. Tentar Deletar
+  const { error: deleteError } = await supabase
+    .from('offer_presets')
+    .delete()
+    .eq('id', testId);
+
+  if (deleteError) {
+    console.error('ERRO AO DELETAR PRESET:', deleteError);
+  } else {
+    console.log('SUCESSO AO DELETAR');
+  }
+
+  console.log('--- FIM DO TESTE ---');
 }
 
-main();
+checkPersistence();

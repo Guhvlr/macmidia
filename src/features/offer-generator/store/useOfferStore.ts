@@ -266,16 +266,21 @@ export const useOfferStore = create<OfferState>((set, get) => ({
     const addedItems = updated.filter((ub: any) => !current.some(cb => cb.id === ub.id));
 
     if (deletedIds.length > 0) {
-      await supabase.from('offer_presets').delete().in('id', deletedIds);
+      const { error } = await supabase.from('offer_presets').delete().in('id', deletedIds);
+      if (error) { console.error('Error deleting presets:', error); toast.error('Erro ao excluir modelo'); }
     }
     for (const item of addedItems) {
-      await supabase.from('offer_presets').insert({
+      const { error } = await supabase.from('offer_presets').insert({
         id: item.id,
         name: item.name,
         client: item.client,
         price_badge: item.priceBadge,
-        desc_config: item.desc_config
+        desc_config: item.descConfig
       });
+      if (error) {
+         console.error('Error inserting preset:', error);
+         toast.error('Erro ao salvar o modelo no servidor.');
+      }
     }
   },
   isLoadingPresets: true,
@@ -580,6 +585,7 @@ export const useOfferStore = create<OfferState>((set, get) => ({
       priceBadge: state.priceBadge, descConfig: state.descConfig, imageConfig: state.imageConfig,
       products: state.products, layouts: state.layouts, slotSettings: state.slotSettings, 
       activePage: state.activePage, selectedClientName: state.selectedClientName,
+      customCanvasElements: state.customCanvasElements,
     };
   },
 
@@ -599,6 +605,7 @@ export const useOfferStore = create<OfferState>((set, get) => ({
       slotSettings: s.slotSettings ? s.slotSettings : state.slotSettings,
       activePage: s.activePage != null ? s.activePage : state.activePage,
       selectedClientName: s.selectedClientName !== undefined ? s.selectedClientName : state.selectedClientName,
+      customCanvasElements: s.customCanvasElements ? s.customCanvasElements : state.customCanvasElements,
       history: [],
       historyIndex: -1
     });

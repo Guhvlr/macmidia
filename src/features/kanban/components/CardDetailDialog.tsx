@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, X, ZoomIn, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { compressImage } from '@/lib/utils';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 // Modular Components
 import { CardHeader } from './card-detail/CardHeader';
@@ -105,29 +106,53 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   };
 
   const handleImagesUpload = async (files: FileList | null) => {
-    if (!files) return;
-    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-    if (validFiles.length === 0) return;
+    if (!files || files.length === 0) return;
+    const validFiles = Array.from(files);
 
     setIsUploading(true);
     setUploadProgress(10);
-    const tempUrl = URL.createObjectURL(validFiles[0]);
-    setPreviewInitial(tempUrl);
+    
+    if (validFiles[0].type.startsWith('image/')) {
+       setPreviewInitial(URL.createObjectURL(validFiles[0]));
+    }
 
     try {
-      const compressPromises = validFiles.map(file => compressImage(file));
-      setUploadProgress(40);
+      const newUploads: string[] = [];
+      const total = validFiles.length;
 
-      const newBase64Images = await Promise.all(compressPromises);
-      setUploadProgress(80);
+      for (let i = 0; i < total; i++) {
+        const file = validFiles[i];
+        if (file.type.startsWith('image/')) {
+           const base64 = await compressImage(file);
+           newUploads.push(base64);
+        } else {
+           const fileExt = file.name.split('.').pop() || 'file';
+           const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+           const filePath = `attachments/${fileName}`;
+           
+           const { error } = await supabase.storage.from('kanban_assets').upload(filePath, file);
+           if (error) {
+             console.error("Storage upload error:", error);
+             toast.error(`Erro ao enviar ${file.name}`);
+           } else {
+             const { data: { publicUrl } } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
+             newUploads.push(publicUrl);
+           }
+        }
+        setUploadProgress(10 + Math.round(((i + 1) / total) * 70));
+      }
 
-      const updatedImages = [...localImages, ...newBase64Images];
+      const updatedImages = [...localImages, ...newUploads];
       setLocalImages(updatedImages);
 
       const updates: Partial<KanbanCardType> = { images: updatedImages };
-      if (!coverImage && newBase64Images.length > 0 && localImages.length === 0) {
-        setCoverImage(newBase64Images[0]);
-        updates.coverImage = newBase64Images[0];
+      
+      if (!coverImage && newUploads.length > 0 && localImages.length === 0) {
+        const firstImg = newUploads.find(u => u.startsWith('data:image') || u.match(/\.(jpeg|jpg|gif|png)$/i));
+        if (firstImg) {
+          setCoverImage(firstImg);
+          updates.coverImage = firstImg;
+        }
       }
 
       saveUpdates(updates, `Adicionou ${validFiles.length} anexo(s) ao card`);
@@ -138,13 +163,12 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
         setUploadSuccess(false);
         setPreviewInitial(null);
         setUploadProgress(0);
-        URL.revokeObjectURL(tempUrl);
       }, 2000);
     } catch (err) {
       console.error(err);
+      toast.error('Erro ao fazer upload');
       setIsUploading(false);
       setPreviewInitial(null);
-      URL.revokeObjectURL(tempUrl);
     }
   };
 
@@ -162,9 +186,20 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates(updates, "Removeu um anexo do card");
   };
 
+  const removeAllImages = () => {
+    setLocalImages([]);
+    setCoverImage(null);
+    saveUpdates({ images: [], coverImage: null }, "Removeu todos os anexos do card");
+  };
+
   const setAsCover = (imgUrl: string) => {
     setCoverImage(imgUrl);
     saveUpdates({ coverImage: imgUrl }, "Alterou a capa do card");
+  };
+
+  const reorderImages = (newImages: string[]) => {
+    setLocalImages(newImages);
+    saveUpdates({ images: newImages }, "Reordenou os anexos");
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -365,9 +400,11 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                 coverImage={coverImage}
                 setPreviewIndex={setPreviewIndex}
                 removeImage={removeImage}
+                removeAllImages={removeAllImages}
                 setAsCover={setAsCover}
                 fileInputRef={fileInputRef}
                 handleImagesUpload={handleImagesUpload}
+                reorderImages={reorderImages}
               />
             </div>
 

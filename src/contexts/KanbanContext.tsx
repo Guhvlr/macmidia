@@ -44,6 +44,7 @@ interface KanbanActions {
   updateKanbanCard: (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => Promise<void>;
   deleteKanbanCard: (id: string) => Promise<void>;
   moveKanbanCard: (id: string, column: string) => Promise<void>;
+  reorderKanbanCards: (updates: { id: string; position_index: number; column?: string }[]) => Promise<void>;
   addKanbanColumn: (employeeId: string, title: string, color: string) => Promise<void>;
   updateKanbanColumn: (id: string, updates: Partial<KanbanColumnDef>) => Promise<void>;
   deleteKanbanColumn: (id: string) => Promise<void>;
@@ -71,19 +72,29 @@ function mapEmployee(row: any): Employee {
 }
 function mapKanbanCard(row: any): KanbanCard {
   return {
-    id: row.id, clientName: row.client_name, description: row.description,
-    notes: row.notes || undefined, images: row.images || [],
-    imageUrl: row.image_url || undefined, coverImage: row.cover_image || undefined,
-    labels: row.labels || [], checklists: row.checklists || [], comments: row.comments || [],
-    assignedUsers: row.assigned_users || [],
-    column: row.column, timeSpent: row.time_spent ?? 0,
-    timerRunning: row.timer_running ?? false, timerStart: row.timer_start || undefined,
-    employeeId: row.employee_id, archivedAt: row.archived_at || undefined,
+    id: row.id || '',
+    clientName: row.client_name || 'Sem Nome',
+    description: row.description || '',
+    notes: row.notes || undefined,
+    images: Array.isArray(row.images) ? row.images : [],
+    imageUrl: row.image_url || undefined,
+    coverImage: row.cover_image || undefined,
+    labels: Array.isArray(row.labels) ? row.labels : [],
+    checklists: Array.isArray(row.checklists) ? row.checklists : [],
+    comments: Array.isArray(row.comments) ? row.comments : [],
+    assignedUsers: Array.isArray(row.assigned_users) ? row.assigned_users : [],
+    column: row.column || 'pendente',
+    timeSpent: row.time_spent ?? 0,
+    timerRunning: row.timer_running ?? false,
+    timerStart: row.timer_start || undefined,
+    employeeId: row.employee_id || '',
+    position_index: row.position_index ?? 0,
+    archivedAt: row.archived_at || undefined,
     aiStatus: row.ai_status || undefined,
     aiReport: row.ai_report ? (typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report) : undefined,
     source: row.source || 'manual',
     originalMessage: row.original_message || undefined,
-    history: row.history ? (typeof row.history === 'string' ? JSON.parse(row.history) : row.history) : [],
+    history: Array.isArray(row.history) ? row.history : (row.history ? (typeof row.history === 'string' ? JSON.parse(row.history) : row.history) : []),
   };
 }
 function mapKanbanColumn(row: any): KanbanColumnDef {
@@ -503,6 +514,49 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     setTimeout(() => pendingOpsRef.current.delete(id), 1500);
   }, [kanbanCards, kanbanColumns, createHistoryAction, trackEvent]);
 
+  const reorderKanbanCards = useCallback(async (updates: { id: string; position_index: number; column?: string }[]) => {
+    // Optimistic UI update
+    const updateMap = new Map(updates.map(u => [u.id, u]));
+    
+    // Add all affected IDs to pending ops to prevent realtime jumps
+    updates.forEach(u => pendingOpsRef.current.add(u.id));
+
+    setKanbanCards(prev => prev.map(c => {
+      const update = updateMap.get(c.id);
+      if (update) {
+        const newCard = { ...c, position_index: update.position_index };
+        if (update.column) newCard.column = update.column;
+        return newCard;
+      }
+      return c;
+    }));
+
+    try {
+      await monitoring.trackPerformance('REORDER_KANBAN_CARDS', async () => {
+        // Execute updates. We do them sequentially or in small chunks if there are many to avoid Supabase rate limits
+        // For standard reorders (10-20 cards), Promise.all is fine.
+        const batchSize = 10;
+        for (let i = 0; i < updates.length; i += batchSize) {
+          const chunk = updates.slice(i, i + batchSize);
+          await Promise.all(chunk.map(u => {
+            const db: any = { position_index: u.position_index };
+            if (u.column) db.column = u.column;
+            return supabase.from('kanban_cards').update(db).eq('id', u.id);
+          }));
+        }
+      });
+    } catch (error) {
+      console.error('Reorder error:', error);
+      toast.error('Erro ao salvar nova ordem.');
+      debouncedRefetchCards();
+    } finally {
+      // Keep in pending for a bit longer to ensure DB is consistent
+      setTimeout(() => {
+        updates.forEach(u => pendingOpsRef.current.delete(u.id));
+      }, 3000);
+    }
+  }, [debouncedRefetchCards]);
+
   const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
     await supabase.from('kanban_columns').insert({ employee_id: employeeId, title, color, column_key: title.toLowerCase().replace(/ /g, '-'), position: kanbanColumns.length });
   }, [kanbanColumns]);
@@ -696,12 +750,12 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   }), [employees, kanbanCards, kanbanColumns, calendarTasks, credentials, calendarClients, activeTasks]);
 
   const actionsValue = useMemo(() => ({
-    addEmployee, updateEmployee, deleteEmployee, addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+    addEmployee, updateEmployee, deleteEmployee, addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard, reorderKanbanCards,
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask, addCredential, updateCredential, deleteCredential,
     addCalendarClient, updateCalendarClient, deleteCalendarClient, uploadKanbanAsset, resolveTask, fetchAll: fetchAllBase
   }), [
-    addEmployee, updateEmployee, deleteEmployee, addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard,
+    addEmployee, updateEmployee, deleteEmployee, addKanbanCard, updateKanbanCard, deleteKanbanCard, moveKanbanCard, reorderKanbanCards,
     addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getColumnsForEmployee,
     addCalendarTask, updateCalendarTask, deleteCalendarTask, addCredential, updateCredential, deleteCredential,
     addCalendarClient, updateCalendarClient, deleteCalendarClient, uploadKanbanAsset, resolveTask, fetchAllBase

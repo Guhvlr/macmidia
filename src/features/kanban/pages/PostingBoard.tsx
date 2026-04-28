@@ -3,8 +3,9 @@ import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Send, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import KanbanCard from '@/features/kanban/components/KanbanCard';
+import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
+import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
 
 const POSTING_COLUMNS = [
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
@@ -14,7 +15,7 @@ const POSTING_COLUMNS = [
 
 const PostingBoard = () => {
   const navigate = useNavigate();
-  const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
+  const { kanbanCards, loading } = useApp();
   const { ref: scrollRef, onMouseDown } = useDraggableScroll();
 
   const activeCards = useMemo(() =>
@@ -33,21 +34,6 @@ const PostingBoard = () => {
     });
     return grouped;
   }, [activeCards]);
-
-  const getEmployeeName = useCallback((id: string) =>
-    employees.find(e => e.id === id)?.name || 'Desconhecido',
-    [employees]
-  );
-
-  const handleDrop = useCallback((e: React.DragEvent, colKey: string) => {
-    e.preventDefault();
-    const cardId = e.dataTransfer.getData('cardId');
-    if (cardId) moveKanbanCard(cardId, colKey);
-  }, [moveKanbanCard]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-  }, []);
 
   if (loading) {
     return (
@@ -86,40 +72,25 @@ const PostingBoard = () => {
         </div>
       </header>
 
-      <main 
-        ref={scrollRef as any}
-        onMouseDown={onMouseDown}
-        className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
-      >
-        {POSTING_COLUMNS.map(col => {
-          const colCards = cardsByColumn[col.key] || [];
-          return (
-            <div
+      <KanbanBoardDndContext>
+        <main 
+          ref={scrollRef as any}
+          onMouseDown={onMouseDown}
+          className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+        >
+          {POSTING_COLUMNS.map(col => (
+            <KanbanColumn
               key={col.key}
-              onDragOver={handleDragOver}
-              onDrop={e => handleDrop(e, col.key)}
-              className="flex flex-col h-fit max-h-full min-w-[340px] w-[360px] flex-shrink-0 mb-10"
-            >
-              <div className="flex items-center gap-2.5 mb-3 px-1 flex-shrink-0">
-                <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
-                <h3 className="font-semibold text-[13px] tracking-wide uppercase">{col.title}</h3>
-                <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
-              </div>
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-24 rounded-2xl bg-secondary/15 border border-border/25 max-h-[calc(100vh-200px)]">
-                {colCards.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-12">Nenhum card</p>
-                ) : (
-                  colCards.map(card => (
-                    <div key={card.id} className="relative">
-                      <KanbanCard card={card} />
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </main>
+              id={col.key}
+              title={col.title}
+              color={col.color}
+              cards={cardsByColumn[col.key] || []}
+              count={(cardsByColumn[col.key] || []).length}
+              employeeId=""
+            />
+          ))}
+        </main>
+      </KanbanBoardDndContext>
     </div>
   );
 };

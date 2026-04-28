@@ -41,6 +41,7 @@ export interface KanbanCard {
   timerRunning: boolean;
   timerStart?: number;
   employeeId: string;
+  position_index?: number;
   archivedAt?: string;
   history?: CardAction[];
   // AI fields

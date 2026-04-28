@@ -1,29 +1,30 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import { useApp } from '@/contexts/useApp';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
+import { ArrowLeft, Loader2, FileEdit, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import KanbanCard from '@/features/kanban/components/KanbanCard';
-import AddCardDialog from '@/features/kanban/components/AddCardDialog';
+import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
+import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
 
 const CORRECTION_COLUMNS = [
-  { key: 'para-producao', title: 'Para Produção', color: 'bg-info' },
-  { key: 'em-producao', title: 'Em Produção', color: 'bg-warning' },
-  { key: 'alteracao', title: 'Alteração', color: 'bg-primary' },
   { key: 'para-correcao', title: 'Para Correção', color: 'bg-destructive' },
-  { key: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive' },
-  { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-success' },
-];
+  { key: 'correcao-cliente', title: 'Aprovação do Cliente', color: 'bg-warning' },
+] as const;
 
 const CorrectionBoard = () => {
   const navigate = useNavigate();
-  const { kanbanCards, employees, moveKanbanCard, loading } = useApp();
+  const { kanbanCards, loading } = useApp();
   const { ref: scrollRef, onMouseDown } = useDraggableScroll();
 
-  const activeCards = useMemo(() => kanbanCards.filter(c => !c.archivedAt && CORRECTION_COLUMNS.some(col => col.key === c.column)), [kanbanCards]);
+  const activeCards = useMemo(() =>
+    kanbanCards.filter(c => {
+      if (c.archivedAt) return false;
+      return ['para-correcao', 'correcao-cliente'].includes(c.column);
+    }),
+    [kanbanCards]
+  );
 
-  // Pre-group cards by column for O(1) access
   const cardsByColumn = useMemo(() => {
     const grouped: Record<string, typeof activeCards> = {};
     CORRECTION_COLUMNS.forEach(col => { grouped[col.key] = []; });
@@ -32,16 +33,6 @@ const CorrectionBoard = () => {
     });
     return grouped;
   }, [activeCards]);
-
-  const getEmployeeName = useCallback((id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido', [employees]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent, colKey: string) => {
-    e.preventDefault();
-    const cardId = e.dataTransfer.getData('cardId');
-    if (cardId) moveKanbanCard(cardId, colKey);
-  }, [moveKanbanCard]);
 
   if (loading) {
     return (
@@ -54,72 +45,50 @@ const CorrectionBoard = () => {
   return (
     <div className="h-screen overflow-hidden flex flex-col gradient-bg">
       <header className="page-header flex-shrink-0">
-        <div className="flex items-center gap-4 px-6 py-3.5">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-primary/8 border border-primary/20">
-              <Wrench className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Quadro de Correção e Produção</h1>
-              <p className="text-[11px] text-muted-foreground">Visão geral unificada de todos os membros</p>
+        <div className="flex items-center justify-between px-6 py-3.5">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-destructive/10">
+                <FileEdit className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-foreground">Quadros de Correção</h1>
+                <p className="text-[11px] text-muted-foreground">Gerencie artes que precisam de ajustes</p>
+              </div>
             </div>
           </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => navigate('/arquivados')} 
+            className="border-border/50 hover:border-primary/30 rounded-xl text-xs bg-secondary/20 h-9 px-4 transition-all hover:bg-secondary/40"
+          >
+            <Archive className="w-4 h-4 mr-2 text-primary" /> Central de Arquivados
+          </Button>
         </div>
       </header>
 
-      <main 
-        ref={scrollRef as any}
-        onMouseDown={onMouseDown}
-        className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
-      >
-        {CORRECTION_COLUMNS.map(col => {
-          const colCards = cardsByColumn[col.key] || [];
-          return (
-            <div
+      <KanbanBoardDndContext>
+        <main 
+          ref={scrollRef as any}
+          onMouseDown={onMouseDown}
+          className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+        >
+          {CORRECTION_COLUMNS.map(col => (
+            <KanbanColumn
               key={col.key}
-              onDragOver={handleDragOver}
-              onDrop={e => handleDrop(e, col.key)}
-              className="flex flex-col h-fit max-h-full min-w-[340px] w-[360px] flex-shrink-0 mb-10"
-            >
-              <div className="flex items-center justify-between mb-3 px-1 flex-shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm`} />
-                  <h3 className="font-semibold text-[13px] tracking-wide uppercase text-white/90">{col.title}</h3>
-                  <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{colCards.length}</span>
-                </div>
-                {/* Botão Adicionar movido para o topo */}
-                <div className="scale-90 origin-right transition-all hover:scale-100">
-                  <AddCardDialog
-                    employeeId={employees.length > 0 ? employees[0].id : ''}
-                    columnKey={col.key}
-                    showEmployeeSelect={true}
-                  />
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-24 rounded-2xl bg-[#0f0f11]/60 border border-white/5 shadow-inner max-h-[calc(100vh-200px)]">
-                {colCards.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center p-8 opacity-40">
-                    <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3">
-                      <Wrench className="w-5 h-5" />
-                    </div>
-                    <p className="text-xs text-center">Nenhum card</p>
-                  </div>
-                ) : (
-                  colCards.map(card => (
-                    <div key={card.id} className="relative animate-in slide-in-from-bottom-2 fade-in duration-300">
-                      <KanbanCard card={card} />
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </main>
+              id={col.key}
+              title={col.title}
+              color={col.color}
+              cards={cardsByColumn[col.key] || []}
+              count={(cardsByColumn[col.key] || []).length}
+            />
+          ))}
+        </main>
+      </KanbanBoardDndContext>
     </div>
   );
 };

@@ -254,33 +254,33 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   customFonts: [],
   setCustomFonts: (fonts) => set((state) => ({ customFonts: typeof fonts === 'function' ? fonts(state.customFonts) : fonts })),
   presets: [],
-  setPresets: async (newPresets) => {
+  setPresets: (newPresets) => {
+    set((state) => ({ 
+      presets: typeof newPresets === 'function' ? newPresets(state.presets) : newPresets 
+    }));
+  },
+  savePresetsToDb: async () => {
     const state = get();
-    const current = state.presets;
-    let updated = typeof newPresets === 'function' ? newPresets(current) : newPresets;
-    updated = updated.map((p: any) => p.client === undefined ? { ...p, client: state.selectedClientName } : p);
+    const { data: remotePresets } = await supabase.from('offer_presets').select('id');
+    const remoteIds = remotePresets?.map(r => r.id) || [];
+    const localIds = state.presets.map(l => l.id);
     
-    set({ presets: updated });
-    
-    const deletedIds = current.filter(cb => !updated.some(ub => ub.id === cb.id)).map(b => b.id);
-    const addedItems = updated.filter((ub: any) => !current.some(cb => cb.id === ub.id));
-
-    if (deletedIds.length > 0) {
-      const { error } = await supabase.from('offer_presets').delete().in('id', deletedIds);
-      if (error) { console.error('Error deleting presets:', error); toast.error('Erro ao excluir modelo'); }
+    // Find deletions
+    const toDelete = remoteIds.filter(id => !localIds.includes(id));
+    if (toDelete.length > 0) {
+      await supabase.from('offer_presets').delete().in('id', toDelete);
     }
-    for (const item of addedItems) {
-      const { error } = await supabase.from('offer_presets').insert({
+    
+    // Upsert local state
+    for (const item of state.presets) {
+      await supabase.from('offer_presets').upsert({
         id: item.id,
         name: item.name,
-        client: item.client,
+        client: item.client || state.selectedClientName,
         price_badge: item.priceBadge,
-        desc_config: item.descConfig
+        desc_config: item.descConfig,
+        updated_at: new Date().toISOString()
       });
-      if (error) {
-         console.error('Error inserting preset:', error);
-         toast.error('Erro ao salvar o modelo no servidor.');
-      }
     }
   },
   isLoadingPresets: true,
@@ -340,36 +340,33 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   historyIndex: -1,
 
   pushHistory: () => {
-    try {
-      const state = get();
-      // Only stringify stable data parts to avoid circular refs or huge state crashes
-      const snap = JSON.stringify({ 
-        slots: state.slots, 
-        slotSettings: state.slotSettings, 
-        priceBadge: state.priceBadge, 
-        descConfig: state.descConfig, 
-        imageConfig: state.imageConfig, 
-        config: state.config, 
-        customCanvasElements: state.customCanvasElements, 
-        products: state.products.map(p => ({
-          id: p.id, ean: p.ean, name: p.name, price: p.price, images: p.images, suffix: p.suffix
-        }))
-      });
-      
-      if (state.historyIndex >= 0 && state.history[state.historyIndex] === snap) return;
-      
-      const newHistory = [...state.history.slice(0, state.historyIndex + 1), snap];
-      let newIndex = newHistory.length - 1;
-      
-      if (newHistory.length > 50) {
-        newHistory.shift();
-        newIndex = Math.max(0, newIndex - 1);
-      }
-      
-      set({ history: newHistory, historyIndex: newIndex });
-    } catch (err) {
-      console.warn('Failed to push history snapshot:', err);
+    const state = get();
+    // Use a lightweight snapshot for history to avoid main thread jank
+    const snapshotObj = { 
+      slots: state.slots, 
+      slotSettings: state.slotSettings, 
+      priceBadge: state.priceBadge, 
+      descConfig: state.descConfig, 
+      imageConfig: state.imageConfig, 
+      config: state.config, 
+      customCanvasElements: state.customCanvasElements, 
+      products: state.products.map(p => ({
+        id: p.id, ean: p.ean, name: p.name, price: p.price, images: p.images, suffix: p.suffix
+      }))
+    };
+
+    const snap = JSON.stringify(snapshotObj);
+    if (state.historyIndex >= 0 && state.history[state.historyIndex] === snap) return;
+    
+    const newHistory = [...state.history.slice(0, state.historyIndex + 1), snap];
+    let newIndex = newHistory.length - 1;
+    
+    if (newHistory.length > 30) { // Reduced from 50 to 30 for better memory management
+      newHistory.shift();
+      newIndex = Math.max(0, newIndex - 1);
     }
+    
+    set({ history: newHistory, historyIndex: newIndex });
   },
 
   applySnapshot: (snap: string) => {

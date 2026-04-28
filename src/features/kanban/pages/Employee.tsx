@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
+import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
 
 const COLUMN_COLORS = [
   { value: 'bg-info', label: 'Azul' },
@@ -144,36 +145,38 @@ const Employee = () => {
         </div>
 
         {/* Kanban board */}
-        <div 
-          ref={scrollRef as any}
-          onMouseDown={onMouseDown}
-          className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start min-h-0 custom-scrollbar cursor-grab active:cursor-grabbing select-none"
-        >
-          {columns.map(col => (
-            <KanbanColumn
-              key={col.id}
-              id={col.columnKey}
-              title={col.title}
-              color={col.color}
-              cards={cardsByColumn[col.columnKey] || []}
-              count={(cardsByColumn[col.columnKey] || []).length}
-              employeeId={employee.id}
-              onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
-              onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
-            />
-          ))}
+        <KanbanBoardDndContext>
+          <div 
+            ref={scrollRef as any}
+            onMouseDown={onMouseDown}
+            className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start min-h-0 custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+          >
+            {columns.map(col => (
+              <KanbanColumn
+                key={col.id}
+                id={col.columnKey}
+                title={col.title}
+                color={col.color}
+                cards={cardsByColumn[col.columnKey] || []}
+                count={(cardsByColumn[col.columnKey] || []).length}
+                employeeId={employee.id}
+                onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
+                onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
+              />
+            ))}
 
-          {/* "+ Nova Coluna" button — fixed at the end of all columns */}
-          <div className="flex-shrink-0 min-w-[280px] w-[280px]">
-            <button
-              onClick={() => setShowAddCol(true)}
-              className="w-full flex items-center justify-center gap-2 py-4 mt-9 rounded-2xl border-2 border-dashed border-border/30 text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/[0.03] transition-all group"
-            >
-              <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="text-sm font-medium">Nova Coluna</span>
-            </button>
+            {/* "+ Nova Coluna" button — fixed at the end of all columns */}
+            <div className="flex-shrink-0 min-w-[280px] w-[280px]">
+              <button
+                onClick={() => setShowAddCol(true)}
+                className="w-full flex items-center justify-center gap-2 py-4 mt-9 rounded-2xl border-2 border-dashed border-border/30 text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/[0.03] transition-all group"
+              >
+                <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span className="text-sm font-medium">Nova Coluna</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </KanbanBoardDndContext>
       </div>
 
       {/* Add column dialog */}

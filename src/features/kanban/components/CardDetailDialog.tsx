@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, X, ZoomIn, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { sanitizeFileName } from '@/lib/utils';
 
 // Modular Components
 import { CardHeader } from './card-detail/CardHeader';
@@ -139,8 +140,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
         const file = validFiles[i];
         
         // Always upload to storage to preserve original file (size and quality)
-        const fileExt = file.name.split('.').pop() || (file.type.startsWith('image/') ? 'jpg' : 'file');
-        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const safeName = sanitizeFileName(file.name);
+        const fileName = `${Date.now()}-${safeName}`;
         const filePath = `${card.id}/${fileName}`;
         
         const { error } = await supabase.storage.from('kanban_assets').upload(filePath, file, {
@@ -189,8 +190,19 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     }
   };
 
-  const removeImage = (index: number) => {
+  const removeImage = async (index: number) => {
     const imgToRemove = localImages[index];
+    
+    // Tentar remover do Storage físico
+    try {
+      const storagePath = imgToRemove.split('/public/kanban_assets/')[1];
+      if (storagePath) {
+        await supabase.storage.from('kanban_assets').remove([storagePath]);
+      }
+    } catch (err) {
+      console.warn("Falha ao remover arquivo do storage:", err);
+    }
+
     const newImgs = localImages.filter((_, i) => i !== index);
     setLocalImages(newImgs);
 
@@ -203,7 +215,20 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates(updates, "Removeu um anexo do card");
   };
 
-  const removeAllImages = () => {
+  const removeAllImages = async () => {
+    // Tentar remover todos os arquivos do Storage físico
+    try {
+      const pathsToDelete = localImages
+        .map(url => url.split('/public/kanban_assets/')[1])
+        .filter(Boolean) as string[];
+      
+      if (pathsToDelete.length > 0) {
+        await supabase.storage.from('kanban_assets').remove(pathsToDelete);
+      }
+    } catch (err) {
+      console.warn("Falha ao remover arquivos do storage:", err);
+    }
+
     setLocalImages([]);
     setCoverImage(null);
     saveUpdates({ images: [], coverImage: null }, "Removeu todos os anexos do card");

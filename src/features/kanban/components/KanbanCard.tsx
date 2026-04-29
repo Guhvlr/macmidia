@@ -27,7 +27,25 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
   const mainTask = cardTasks[0];
 
   const images = card.images || (card.imageUrl ? [card.imageUrl] : []);
-  const coverImage = card.coverImage || (images.length > 0 ? images[0] : null);
+  
+  // Helper to check if a URL is likely an image
+  const isImageUrl = (url: string) => 
+    url.startsWith('data:image') || 
+    url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ||
+    (url.includes('supabase') && !url.match(/\.(pdf|doc|docx|xls|xlsx|odt|ods)$/i));
+
+  // Cover Logic:
+  // 1. If coverImage is exactly '', it was explicitly removed.
+  // 2. If coverImage exists and is an image, use it.
+  // 3. Otherwise, fallback to the first valid image from the attachments list.
+  let coverImage = null;
+  if (card.coverImage === '') {
+    coverImage = null;
+  } else if (card.coverImage && isImageUrl(card.coverImage)) {
+    coverImage = card.coverImage;
+  } else {
+    coverImage = images.find(img => isImageUrl(img)) || null;
+  }
 
   const employee = employees.find(e => e.id === card.employeeId);
   const safeChecklists = Array.isArray(card.checklists) ? card.checklists : [];

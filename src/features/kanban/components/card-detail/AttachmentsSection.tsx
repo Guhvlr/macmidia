@@ -17,9 +17,9 @@ interface AttachmentsSectionProps {
   reorderImages: (newImages: string[]) => void;
 }
 
-const isPdf = (url: string) => url.includes('application/pdf') || url.toLowerCase().endsWith('.pdf');
-const isExcel = (url: string) => url.includes('spreadsheet') || url.includes('excel') || url.toLowerCase().endsWith('.xls') || url.toLowerCase().endsWith('.xlsx');
-const isWord = (url: string) => url.includes('wordprocessing') || url.includes('msword') || url.toLowerCase().endsWith('.doc') || url.toLowerCase().endsWith('.docx');
+const isPdf = (url: string) => url.toLowerCase().includes('pdf') || url.toLowerCase().endsWith('.pdf');
+const isExcel = (url: string) => url.toLowerCase().includes('spreadsheet') || url.toLowerCase().includes('excel') || url.toLowerCase().includes('sheet') || url.match(/\.(xls|xlsx|csv|ods)$/i);
+const isWord = (url: string) => url.toLowerCase().includes('word') || url.toLowerCase().includes('officedocument.word') || url.toLowerCase().includes('msword') || url.toLowerCase().includes('opendocument.text') || url.match(/\.(doc|docx|odt|rtf)$/i);
 const isImage = (url: string) => url.startsWith('data:image') || url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
 
 export const AttachmentsSection = memo(({
@@ -63,8 +63,14 @@ export const AttachmentsSection = memo(({
       toast.loading('Preparando download...', { id: `dl-${index}` });
       const res = await fetch(url);
       const blob = await res.blob();
-      const ext = isPdf(url) ? 'pdf' : isExcel(url) ? 'xlsx' : isWord(url) ? 'docx' : (blob.type.split('/')[1] || 'jpg');
-      saveAs(blob, `Anexo_${Date.now()}_${index + 1}.${ext}`);
+      
+      // Tentar extrair a extensão do URL se possível
+      let ext = url.split('.').pop()?.split('?')[0] || '';
+      if (!ext || ext.length > 4) {
+        ext = isPdf(url) ? 'pdf' : isExcel(url) ? 'xlsx' : isWord(url) ? 'docx' : (blob.type.split('/')[1]?.split('.').pop() || 'file');
+      }
+      
+      saveAs(blob, `Anexo_${index + 1}.${ext}`);
       toast.success('Download concluído', { id: `dl-${index}` });
     } catch (err) {
       toast.error('Erro ao baixar', { id: `dl-${index}` });
@@ -186,9 +192,12 @@ export const AttachmentsSection = memo(({
                 {isImg ? (
                   <img src={img} className="w-full h-full object-cover" alt={`Anexo ${i + 1}`} />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a1c]">
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a1c] p-4 text-center">
                      {isP ? <FileText className="w-8 h-8 text-red-400 mb-2" /> : isE ? <FileSpreadsheet className="w-8 h-8 text-green-400 mb-2" /> : isW ? <FileText className="w-8 h-8 text-blue-400 mb-2" /> : <File className="w-8 h-8 text-white/50 mb-2" />}
-                     <span className="text-xs text-white/50">{isP ? 'PDF' : isE ? 'Excel' : isW ? 'Word' : 'Arquivo'}</span>
+                     <span className="text-[10px] text-white/70 font-medium line-clamp-1 truncate w-full mb-1 px-2">
+                       {decodeURIComponent(img.split('/').pop()?.split('-').slice(1).join('-') || 'Arquivo')}
+                     </span>
+                     <span className="text-[9px] text-white/30 uppercase tracking-widest">{isP ? 'PDF' : isE ? 'Excel' : isW ? 'Word' : 'Arquivo'}</span>
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">

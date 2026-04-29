@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Upload, X, ZoomIn, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { compressImage } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -114,7 +113,16 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
   const handleImagesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     const validFiles = Array.from(files);
+    
+    // Check for files exceeding the size limit
+    const oversizedFiles = validFiles.filter(f => f.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 10MB.`);
+      return;
+    }
 
     setIsUploading(true);
     setUploadProgress(10);
@@ -129,23 +137,25 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
       for (let i = 0; i < total; i++) {
         const file = validFiles[i];
-        if (file.type.startsWith('image/')) {
-           const base64 = await compressImage(file);
-           newUploads.push(base64);
+        
+        // Always upload to storage to preserve original file (size and quality)
+        const fileExt = file.name.split('.').pop() || (file.type.startsWith('image/') ? 'jpg' : 'file');
+        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const filePath = `${card.id}/${fileName}`;
+        
+        const { error } = await supabase.storage.from('kanban_assets').upload(filePath, file, {
+          contentType: file.type,
+          upsert: true
+        });
+        
+        if (error) {
+          console.error("Storage upload error:", error);
+          toast.error(`Erro ao enviar ${file.name}`);
         } else {
-           const fileExt = file.name.split('.').pop() || 'file';
-           const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-           const filePath = `attachments/${fileName}`;
-           
-           const { error } = await supabase.storage.from('kanban_assets').upload(filePath, file);
-           if (error) {
-             console.error("Storage upload error:", error);
-             toast.error(`Erro ao enviar ${file.name}`);
-           } else {
-             const { data: { publicUrl } } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
-             newUploads.push(publicUrl);
-           }
+          const { data: { publicUrl } } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
+          newUploads.push(publicUrl);
         }
+        
         setUploadProgress(10 + Math.round(((i + 1) / total) * 70));
       }
 
@@ -155,7 +165,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
       const updates: Partial<KanbanCardType> = { images: updatedImages };
       
       if (!coverImage && newUploads.length > 0 && localImages.length === 0) {
-        const firstImg = newUploads.find(u => u.startsWith('data:image') || u.match(/\.(jpeg|jpg|gif|png)$/i));
+        const firstImg = newUploads.find(u => u.match(/\.(jpeg|jpg|gif|png|webp)$/i));
         if (firstImg) {
           setCoverImage(firstImg);
           updates.coverImage = firstImg;

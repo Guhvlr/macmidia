@@ -725,17 +725,20 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     updateTask(taskId, { status: 'processing', progress: 10 });
 
     try {
-      const { compressImageToBlob, sanitizeFileName } = await import('@/lib/utils');
-      const blob = await compressImageToBlob(file, 1600, 0.8);
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error('Arquivo muito grande. O limite é de 10MB.');
+      }
+
+      const { sanitizeFileName } = await import('@/lib/utils');
       
       const card = kanbanCards.find(c => c.id === cardId);
-      const clientSlug = card ? slugify(card.clientName) : 'geral';
       const safeName = sanitizeFileName(file.name);
-      const fileName = `${clientSlug}/${cardId}/${Date.now()}-${safeName}`;
+      const fileName = `${cardId}/${Date.now()}-${safeName}`;
       
       updateTask(taskId, { progress: 50 });
-      const { data, error } = await supabase.storage.from('kanban_assets').upload(fileName, blob, { 
-        contentType: 'image/jpeg', 
+      const { data, error } = await supabase.storage.from('kanban_assets').upload(fileName, file, { 
+        contentType: file.type, 
         cacheControl: '3600' 
       });
       if (error) throw error;

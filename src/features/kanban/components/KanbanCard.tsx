@@ -60,6 +60,16 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
       e.preventDefault();
       e.stopPropagation();
 
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+      // Check for files exceeding the size limit
+      const oversizedFiles = droppedFiles.filter(f => f.size > MAX_FILE_SIZE);
+      if (oversizedFiles.length > 0) {
+        toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 10MB.`);
+        return;
+      }
+
       const imagesToUpload = droppedFiles.filter(f => f.type.startsWith('image/'));
 
       if (imagesToUpload.length === 0) {

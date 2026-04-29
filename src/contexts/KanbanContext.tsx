@@ -501,8 +501,12 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   const moveKanbanCard = useCallback(async (id: string, column: string) => {
     const card = kanbanCards.find(c => c.id === id);
     if (!card) return;
-    const colDef = kanbanColumns.find(c => c.columnKey === column);
-    const hist = [createHistoryAction('move', `Moveu para "${colDef?.title || column}"`), ...(card.history || [])];
+    const fromCol = kanbanColumns.find(c => c.columnKey === card.column);
+    const toCol = kanbanColumns.find(c => c.columnKey === column);
+    const fromTitle = fromCol?.title || card.column;
+    const toTitle = toCol?.title || column;
+
+    const hist = [createHistoryAction('move', `Moveu de "${fromTitle}" para "${toTitle}"`), ...(card.history || [])];
     const now = Date.now();
     const op: Partial<KanbanCard> = { column, history: hist };
     const db: any = { column, history: hist };
@@ -535,6 +539,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   const reorderKanbanCards = useCallback(async (updates: { id: string; position_index: number; column?: string }[]) => {
     // Optimistic UI update
     const updateMap = new Map(updates.map(u => [u.id, u]));
+    const now = Date.now();
     
     // Add all affected IDs to pending ops to prevent realtime jumps
     updates.forEach(u => pendingOpsRef.current.add(u.id));
@@ -543,7 +548,36 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       const update = updateMap.get(c.id);
       if (update) {
         const newCard = { ...c, position_index: update.position_index };
-        if (update.column) newCard.column = update.column;
+        
+        // If the column is changing, we need to handle history and timers
+        if (update.column && update.column !== c.column) {
+          const fromCol = kanbanColumns.find(col => col.columnKey === c.column);
+          const toCol = kanbanColumns.find(col => col.columnKey === update.column);
+          const fromTitle = fromCol?.title || c.column;
+          const toTitle = toCol?.title || update.column;
+
+          newCard.column = update.column;
+          newCard.history = [createHistoryAction('move', `Moveu de "${fromTitle}" para "${toTitle}"`), ...(c.history || [])];
+          
+          // Production Timer Logic
+          if (update.column === 'em-producao') {
+            newCard.timerRunning = true;
+            newCard.timerStart = now;
+          } else if (c.column === 'em-producao' && c.timerRunning) {
+            const elapsed = c.timerStart ? Math.floor((now - c.timerStart) / 1000) : 0;
+            newCard.timerRunning = false;
+            newCard.timeSpent = c.timeSpent + elapsed;
+            newCard.timerStart = undefined;
+          }
+          
+          // Archiving Logic
+          if (update.column === 'postado') {
+            newCard.archivedAt = new Date().toISOString();
+          } else if (c.column === 'postado') {
+            newCard.archivedAt = undefined;
+          }
+        }
+        
         return newCard;
       }
       return c;
@@ -551,16 +585,36 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
     try {
       await monitoring.trackPerformance('REORDER_KANBAN_CARDS', async () => {
-        // Execute updates. We do them sequentially or in small chunks if there are many to avoid Supabase rate limits
-        // For standard reorders (10-20 cards), Promise.all is fine.
-        const batchSize = 10;
-        for (let i = 0; i < updates.length; i += batchSize) {
-          const chunk = updates.slice(i, i + batchSize);
-          await Promise.all(chunk.map(u => {
-            const db: any = { position_index: u.position_index };
-            if (u.column) db.column = u.column;
-            return supabase.from('kanban_cards').update(db).eq('id', u.id);
-          }));
+        // Execute updates. 
+        for (const u of updates) {
+          const card = kanbanCards.find(c => c.id === u.id);
+          if (!card) continue;
+
+          const db: any = { position_index: u.position_index };
+          
+          if (u.column && u.column !== card.column) {
+            const fromCol = kanbanColumns.find(col => col.columnKey === card.column);
+            const toCol = kanbanColumns.find(col => col.columnKey === u.column);
+            const fromTitle = fromCol?.title || card.column;
+            const toTitle = toCol?.title || u.column;
+            
+            const hist = [createHistoryAction('move', `Moveu de "${fromTitle}" para "${toTitle}"`), ...(card.history || [])];
+            
+            db.column = u.column;
+            db.history = hist;
+
+            if (u.column === 'em-producao') {
+              db.timer_running = true; db.timer_start = now;
+            } else if (card.column === 'em-producao' && card.timerRunning) {
+              const elapsed = card.timerStart ? Math.floor((now - card.timerStart) / 1000) : 0;
+              db.timer_running = false; db.time_spent = card.timeSpent + elapsed; db.timer_start = null;
+            }
+
+            if (u.column === 'postado') db.archived_at = new Date().toISOString();
+            else if (card.column === 'postado') db.archived_at = null;
+          }
+
+          await supabase.from('kanban_cards').update(db).eq('id', u.id);
         }
       });
     } catch (error) {
@@ -568,12 +622,11 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       toast.error('Erro ao salvar nova ordem.');
       debouncedRefetchCards();
     } finally {
-      // Keep in pending for a bit longer to ensure DB is consistent
       setTimeout(() => {
         updates.forEach(u => pendingOpsRef.current.delete(u.id));
       }, 3000);
     }
-  }, [debouncedRefetchCards]);
+  }, [debouncedRefetchCards, kanbanCards, kanbanColumns, createHistoryAction]);
 
   const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
     await supabase.from('kanban_columns').insert({ employee_id: employeeId, title, color, column_key: title.toLowerCase().replace(/ /g, '-'), position: kanbanColumns.length });

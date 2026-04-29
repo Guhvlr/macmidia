@@ -261,9 +261,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates({ comments: newList }, "Comentou no card");
   };
 
-  const addLabel = (color: string = 'bg-red-600') => {
-    if (!newLabelText.trim()) return;
-    const txt = newLabelText.toUpperCase().trim();
+  const addLabel = (color: string = 'bg-red-600', textParam?: string) => {
+    const txt = (textParam !== undefined ? textParam : newLabelText).toUpperCase().trim();
+    if (!txt) return;
     const labelVal = `${color}|${txt}`;
     // Check if the label text already exists (ignore color when checking duplicates)
     if (!labels.some(l => l.split('|').pop() === txt)) {
@@ -271,7 +271,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
       setLabels(newList);
       saveUpdates({ labels: newList });
     }
-    setNewLabelText("");
+    if (textParam === undefined) {
+      setNewLabelText("");
+    }
   };
 
   const removeLabel = (label: string) => {

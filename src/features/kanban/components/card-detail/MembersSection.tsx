@@ -1,5 +1,7 @@
 import React, { memo } from "react";
-import { X, Plus, Sparkles, CheckCircle2, Clock, Send, Edit3, LayoutList } from 'lucide-react';
+import { X, Plus, Sparkles, CheckCircle2, Clock, Send, Edit3, LayoutList, Trash } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Timer from '../Timer';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
+import { useApp } from '@/contexts/useApp';
 
 interface MembersSectionProps {
   card: KanbanCardType;
@@ -20,7 +23,7 @@ interface MembersSectionProps {
   removeLabel: (label: string) => void;
   newLabelText: string;
   setNewLabelText: (txt: string) => void;
-  addLabel: () => void;
+  addLabel: (color?: string, text?: string) => void;
   triggerAICorrection: (id: string) => void;
   fixDescriptionWithAI: (id: string, mode: 'keep_sequence' | 'organize') => void;
   customAICommand: (id: string, prompt: string) => void;
@@ -59,6 +62,125 @@ export const MembersSection = memo( ({
     'bg-blue-600', 'bg-indigo-600', 'bg-purple-600', 'bg-pink-600', 'bg-slate-600'
   ];
 
+  const { kanbanCards } = useApp();
+  const [showLabelsSelection, setShowLabelsSelection] = React.useState(false);
+  const labelsSelectionRef = React.useRef<HTMLDivElement>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [hiddenLabels, setHiddenLabels] = React.useState<string[]>(() => {
+    const saved = localStorage.getItem('kanban_hidden_labels');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [customLabels, setCustomLabels] = React.useState<string[]>(() => {
+    const saved = localStorage.getItem('kanban_custom_labels');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const predefinedLabels = React.useMemo(() => [
+    'bg-emerald-600|VÍDEO',
+    'bg-emerald-600|CONCLUÍDO',
+    'bg-amber-500|ALTERAÇÃO',
+    'bg-orange-600|PANFLETO',
+    'bg-orange-600|INSTITUCIONAL',
+    'bg-amber-500|FAZER COM ANTECEDÊNCIA',
+    'bg-emerald-600|HORÁRIO DE FUNCIONAMENTO'
+  ], []);
+
+  const allLabels = React.useMemo(() => {
+    const set = new Set<string>(predefinedLabels);
+    // Adicionar as etiquetas personalizadas salvas
+    customLabels.forEach(l => set.add(l));
+    
+    kanbanCards?.forEach(c => {
+      if (Array.isArray(c.labels)) {
+        c.labels.forEach(l => set.add(l));
+      }
+    });
+    return Array.from(set)
+      .filter(l => !hiddenLabels.includes(l))
+      .sort((a, b) => a.localeCompare(b));
+  }, [kanbanCards, predefinedLabels, hiddenLabels, customLabels]);
+
+  const filteredLabels = allLabels.filter(l => l.split('|').pop()?.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const handleDeleteGlobalLabel = async (e: React.MouseEvent, labelToRemove: string) => {
+    e.stopPropagation();
+    
+    // Adicionar às ocultas para sumir das sugestões imediatamente
+    const newHidden = [...hiddenLabels, labelToRemove];
+    setHiddenLabels(newHidden);
+    localStorage.setItem('kanban_hidden_labels', JSON.stringify(newHidden));
+
+    // Remover também da lista de personalizadas se estiver lá
+    if (customLabels.includes(labelToRemove)) {
+      const newCustom = customLabels.filter(l => l !== labelToRemove);
+      setCustomLabels(newCustom);
+      localStorage.setItem('kanban_custom_labels', JSON.stringify(newCustom));
+    }
+
+    const cardsToUpdate = kanbanCards.filter(c => c.labels?.includes(labelToRemove));
+    
+    if (cardsToUpdate.length > 0) {
+      try {
+        const batchSize = 10;
+        for (let i = 0; i < cardsToUpdate.length; i += batchSize) {
+          const chunk = cardsToUpdate.slice(i, i + batchSize);
+          await Promise.all(chunk.map(c => {
+            const newLabels = (c.labels || []).filter(l => l !== labelToRemove);
+            return supabase.from('kanban_cards').update({ labels: newLabels }).eq('id', c.id);
+          }));
+        }
+        toast.success('Etiqueta removida globalmente.');
+        
+        if (labels.includes(labelToRemove)) {
+          removeLabel(labelToRemove);
+        }
+      } catch (err) {
+        console.error('Error deleting label from cards:', err);
+        toast.error('Erro ao excluir etiqueta.');
+      }
+    } else {
+      toast.success('Etiqueta removida das sugestões.');
+    }
+  };
+
+  const handleInternalAddLabel = (color?: string, text?: string) => {
+    const textVal = text || searchTerm;
+    if (!textVal) return;
+    
+    const colorVal = color || selectedColor;
+    const labelVal = `${colorVal}|${textVal.toUpperCase().trim()}`;
+    
+    if (hiddenLabels.includes(labelVal)) {
+      const newHidden = hiddenLabels.filter(l => l !== labelVal);
+      setHiddenLabels(newHidden);
+      localStorage.setItem('kanban_hidden_labels', JSON.stringify(newHidden));
+    }
+
+    // Salvar na lista de etiquetas personalizadas para persistir nas sugestões
+    if (!customLabels.includes(labelVal)) {
+      const newCustom = [...customLabels, labelVal];
+      setCustomLabels(newCustom);
+      localStorage.setItem('kanban_custom_labels', JSON.stringify(newCustom));
+    }
+    
+    addLabel(color, text);
+    if (!text) setSearchTerm('');
+  };
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (labelsSelectionRef.current && !labelsSelectionRef.current.contains(event.target as Node)) {
+        setShowLabelsSelection(false);
+      }
+    };
+    if (showLabelsSelection) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLabelsSelection]);
+
   return (
     <div className="pl-2 flex flex-col gap-6 w-full">
       <div className="flex flex-wrap items-start gap-8">
@@ -79,36 +201,110 @@ export const MembersSection = memo( ({
                   </span>
                 );
               })}
-            </div>
-            
-            <div className="flex flex-col gap-2 bg-white/5 p-2 rounded-lg border border-white/5 w-fit">
-              <div className="flex gap-1.5">
-                {labelColors.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setSelectedColor(c)}
-                    className={`w-4 h-4 rounded-full ${c} ${selectedColor === c ? 'ring-2 ring-white ring-offset-1 ring-offset-black scale-110' : 'opacity-50 hover:opacity-100'} transition-all`}
-                    title="Selecionar cor"
-                  />
-                ))}
-              </div>
-              <div className="flex items-center gap-1">
-                <Input
-                  value={newLabelText}
-                  onChange={e => setNewLabelText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') addLabel(selectedColor); }}
-                  placeholder="Nova etiqueta..."
-                  className="w-32 h-7 text-[10px] bg-black/40 border-white/10 rounded px-2 focus-visible:ring-0 text-white"
-                />
+              
+              <div className="relative" ref={labelsSelectionRef}>
                 <Button 
-                  size="sm" 
-                  onClick={() => addLabel(selectedColor)}
-                  disabled={!newLabelText.trim()}
-                  className={`h-7 px-2 text-[10px] text-white ${selectedColor} hover:opacity-80 transition-opacity`}
+                  variant="ghost" 
+                  onClick={() => setShowLabelsSelection(!showLabelsSelection)}
+                  className={`h-6 w-6 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 p-0 shadow flex items-center justify-center transition-all ${showLabelsSelection ? 'bg-primary/20 text-primary border-primary/40 rotate-45' : ''}`}
+                  title="Adicionar Etiqueta"
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-3.5 h-3.5" />
                 </Button>
+
+                {showLabelsSelection && (
+                  <div className="absolute top-8 left-0 w-64 glass-card border-white/20 p-3 shadow-[0_20px_60px_rgba(0,0,0,1)] z-[99999] animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
+                      <h4 className="text-[11px] font-bold text-white/60">Etiquetas</h4>
+                      <X className="w-4 h-4 cursor-pointer text-white/40 hover:text-white" onClick={() => setShowLabelsSelection(false)} />
+                    </div>
+                    
+                    <Input 
+                      placeholder="Buscar ou criar..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchTerm.trim()) {
+                          handleInternalAddLabel(selectedColor, searchTerm);
+                        }
+                      }}
+                      className="h-8 text-[11px] bg-black/40 border-white/10 mb-3 text-white"
+                    />
+
+                    <h5 className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-2">Sugestões</h5>
+                    <div className="max-h-48 overflow-y-auto custom-scrollbar pr-1 mb-3 flex flex-col gap-1.5">
+                      {filteredLabels.map(l => {
+                        const parts = l.split('|');
+                        const hasColor = parts.length > 1;
+                        const colorClass = hasColor ? parts[0] : 'bg-red-600';
+                        const text = hasColor ? parts.slice(1).join('|') : l;
+                        const isSelected = labels.includes(l);
+                        const isPredefined = predefinedLabels.includes(l);
+                        
+                        return (
+                          <div 
+                            key={l}
+                            className={`flex items-center gap-2 group hover:opacity-80 transition-opacity`}
+                          >
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer ${isSelected ? 'border-primary bg-primary' : 'border-white/20 group-hover:border-white/40'}`} onClick={(e) => {
+                              e.stopPropagation();
+                              if (isSelected) {
+                                removeLabel(l);
+                              } else {
+                                handleInternalAddLabel(colorClass, text);
+                              }
+                            }}>
+                              {isSelected && <CheckCircle2 className="w-3 h-3 text-black" />}
+                            </div>
+                            <div className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold tracking-wider text-white ${colorClass} cursor-pointer`} onClick={(e) => {
+                              e.stopPropagation();
+                              if (isSelected) {
+                                removeLabel(l);
+                              } else {
+                                handleInternalAddLabel(colorClass, text);
+                              }
+                            }}>
+                              {text}
+                            </div>
+                            <button 
+                              type="button" 
+                              className="w-6 h-6 flex items-center justify-center text-white/30 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                              onClick={(e) => handleDeleteGlobalLabel(e, l)}
+                              title="Excluir etiqueta permanentemente"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                      {filteredLabels.length === 0 && (
+                        <div className="text-center text-white/40 text-[10px] py-2">Nenhuma etiqueta encontrada.</div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-white/5 pt-3">
+                      <div className="flex gap-1.5 mb-2 flex-wrap justify-between">
+                        {labelColors.map(c => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setSelectedColor(c)}
+                            className={`w-4 h-4 rounded-full ${c} ${selectedColor === c ? 'ring-2 ring-white ring-offset-1 ring-offset-black scale-110' : 'opacity-50 hover:opacity-100'} transition-all`}
+                            title="Selecionar cor"
+                          />
+                        ))}
+                      </div>
+                      <Button 
+                        size="sm"
+                        className="w-full h-8 text-[11px] bg-white/5 hover:bg-white/10 text-white border border-white/10"
+                        onClick={() => handleInternalAddLabel(selectedColor, searchTerm)}
+                        disabled={!searchTerm.trim()}
+                      >
+                        Criar nova etiqueta
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useOffer, PriceBadgeConfig, DescriptionConfig, ImageConfig } from '../context/OfferContext';
-import { ChevronDown, ChevronRight, Zap, Layers, CreditCard, PenTool, Layout, ChevronLeft, Trash2, Hand, Maximize, Image as ImageIcon, Undo2, Save, CheckCircle, Upload, Plus, X, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap, Layers, CreditCard, PenTool, Layout, ChevronLeft, Trash2, Hand, Maximize, Image as ImageIcon, Undo2, Save, CheckCircle, Upload, Plus, Minus, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 
 type ElemId = 'image' | 'name' | 'badge' | 'currency' | 'value' | 'suffix';
 
-const COLOR_PALETTE = ['#D9254B', '#2563EB', '#16A34A', '#EAB308', '#7C3AED', '#000000', '#FFFFFF', '#64748B'];
+const COLOR_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#000000', '#FFFFFF', '#64748B'];
 
 // SVG generator for complex badge shapes
 const generateShapeSvg = (type: string, color: string): string => {
@@ -67,8 +67,8 @@ const IconPreview = React.memo(({ type, color, isSelected }: { type: string; col
     hexagon: <path d="M26 5L44 15L44 37L26 47L8 37L8 15Z" fill={c} />,
   };
   return (
-    <svg width={52} height={52} viewBox="0 0 52 52" className={`rounded-xl transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0d0d10]' : ''}`}>
-      <rect width="52" height="52" rx="10" fill={isSelected ? 'rgba(217,37,75,0.15)' : 'rgba(255,255,255,0.03)'} />
+    <svg width={52} height={52} viewBox="0 0 52 52" className={`rounded-xl transition-all ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-zinc-950' : ''}`}>
+      <rect width="52" height="52" rx="10" fill={isSelected ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)'} />
       {shapes[type] || <rect x="8" y="8" width="36" height="36" rx="4" fill={c} />}
     </svg>
   );
@@ -96,7 +96,7 @@ const ColorSelector = ({ label, color, onChange }: { label: string; color: strin
           <button 
             key={c} 
             onClick={() => onChange(c)} 
-            className={`w-4 h-4 rounded-full border border-white/10 transition-all hover:scale-125 ${color === c ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0d0d10]' : ''}`} 
+            className={`w-4 h-4 rounded-full border border-white/10 transition-all hover:scale-125 ${color === c ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-zinc-950' : ''}`} 
             style={{ backgroundColor: c }} 
           />
         ))}
@@ -115,13 +115,13 @@ const ColorSelector = ({ label, color, onChange }: { label: string; color: strin
 
 const Section = ({ id, label, icon: Icon, isOpen, onToggle, children }: any) => {
   return (
-    <div className="border border-white/5 rounded-2xl bg-white/[0.02] overflow-hidden mb-3">
-      <button onClick={onToggle} className={`w-full p-4 flex items-center justify-between text-left transition-colors ${isOpen ? 'bg-primary/5' : 'hover:bg-white/[0.04]'}`}>
+    <div className="border border-zinc-800/60 rounded-2xl bg-zinc-900/30 overflow-hidden mb-3">
+      <button onClick={onToggle} className={`w-full p-4 flex items-center justify-between text-left transition-colors ${isOpen ? 'bg-red-500/5' : 'hover:bg-zinc-900/80'}`}>
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl transition-colors ${isOpen ? 'bg-primary text-white' : 'bg-white/5 text-white/30'}`}><Icon className="w-4 h-4" /></div>
-          <span className="text-xs font-black uppercase tracking-widest text-white/60">{label}</span>
+          <div className={`p-2 rounded-xl transition-colors ${isOpen ? 'bg-red-600 text-white shadow-md shadow-red-900/20' : 'bg-zinc-800 text-zinc-400'}`}><Icon className="w-4 h-4" /></div>
+          <span className="text-[13px] font-semibold text-zinc-300">{label}</span>
         </div>
-        {isOpen ? <ChevronDown className="w-4 h-4 text-primary" /> : <ChevronRight className="w-4 h-4 text-white/20" />}
+        {isOpen ? <ChevronDown className="w-4 h-4 text-red-400" /> : <ChevronRight className="w-4 h-4 text-zinc-500" />}
       </button>
       {isOpen && <div className="p-4 pt-0 space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">{children}</div>}
     </div>
@@ -136,11 +136,11 @@ const DragBox = ({ id, children, el, isPrimary, isSel, onStartDrag, onStartResiz
       {children}
       {isSel && (
         <>
-          <rect x={el.x-1} y={el.y-1} width={el.w+2} height={el.h+2} fill="none" stroke={isPrimary ? "#D9254B" : "rgba(217,37,75,0.4)"} strokeWidth={isPrimary ? 3/zoom : 1/zoom} rx={3} pointerEvents="none" />
+          <rect x={el.x-1} y={el.y-1} width={el.w+2} height={el.h+2} fill="none" stroke={isPrimary ? "#ef4444" : "rgba(239,68,68,0.4)"} strokeWidth={isPrimary ? 3/zoom : 1/zoom} rx={3} pointerEvents="none" />
           {isPrimary && !isDragging && (
             <g transform={`translate(${el.x + el.w}, ${el.y + el.h})`} onMouseDown={e => { e.stopPropagation(); onStartResize(e, id); }} style={{ cursor: 'nwse-resize' }}>
-               <circle r={hSize / 2} fill="#D9254B" stroke="white" strokeWidth={2/zoom} />
-               <circle r={hSize / 1.1} fill="rgba(217,37,75,0.15)" />
+               <circle r={hSize / 2} fill="#ef4444" stroke="white" strokeWidth={2/zoom} />
+               <circle r={hSize / 1.1} fill="rgba(239,68,68,0.15)" />
             </g>
           )}
         </>
@@ -182,6 +182,7 @@ export const StepPriceBadge = () => {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [spacePressed, setSpacePressed] = useState(false);
 
   // Custom badge icons state — persisted in Supabase Storage + localStorage cache
   const [customBadgeIcons, setCustomBadgeIcons] = useState<{id: string; name: string; imageUrl: string}[]>(() => {
@@ -236,7 +237,7 @@ export const StepPriceBadge = () => {
 
   const applyStandardIcon = (icon: StandardIcon) => {
     pushHistory();
-    const color = activeCfg.priceBadge.bgColor || '#e11d48';
+    const color = activeCfg.priceBadge.bgColor || '#ef4444';
     const updates: any = { ...icon.config };
     if (icon.isComplex) {
       updates.badgeImageUrl = generateShapeSvg(icon.id, color);
@@ -345,9 +346,27 @@ export const StepPriceBadge = () => {
         }
       }
     };
+    const handleSpaceDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        if (!spacePressed) {
+          e.preventDefault();
+          setSpacePressed(true);
+        }
+      }
+    };
+    const handleSpaceUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpacePressed(false);
+    };
+
     window.addEventListener('keydown', handleKeys);
-    return () => window.removeEventListener('keydown', handleKeys);
-  }, [undo, selectedSlotIndex, selectedSlotIndices, clipboard, getSlotSettings, updateSlotSettings, pushHistory, presets, activePage, slots.length, setSelectedSlotIndices, setSelectedSlotIndex]);
+    window.addEventListener('keydown', handleSpaceDown);
+    window.addEventListener('keyup', handleSpaceUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeys);
+      window.removeEventListener('keydown', handleSpaceDown);
+      window.removeEventListener('keyup', handleSpaceUp);
+    };
+  }, [undo, selectedSlotIndex, selectedSlotIndices, clipboard, getSlotSettings, updateSlotSettings, pushHistory, presets, activePage, slots.length, setSelectedSlotIndices, setSelectedSlotIndex, spacePressed]);
 
   const toSvg = useCallback((e: React.MouseEvent) => {
     const r = svgRef.current?.getBoundingClientRect();
@@ -508,36 +527,42 @@ export const StepPriceBadge = () => {
   };
 
   return (
-    <div className="h-full flex overflow-hidden bg-[#09090b] text-white">
+    <div className="h-full flex overflow-hidden bg-zinc-950 text-zinc-100">
       <FontStyles fonts={customFonts} />
-      <div className="w-[340px] bg-[#0d0d10] border-r border-white/5 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 select-none">
-        <h2 className="text-xs font-black uppercase tracking-widest text-center text-white/50 pb-4 border-b border-white/5">Painel de Edição</h2>
+      <div className="w-[380px] bg-zinc-950 border-r border-zinc-800/60 p-8 overflow-y-auto custom-scrollbar flex flex-col gap-6 select-none">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 text-red-500 rounded-full text-[10px] font-semibold mb-3">
+             <PenTool className="w-3.5 h-3.5" /> Passo 3
+           </div>
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-100">Estilos & Preços</h2>
+          <p className="text-[12px] text-zinc-400 font-medium mt-1">Configure o visual das etiquetas e textos dos produtos.</p>
+        </div>
         
         {/* Sync Button */}
         <button
           onClick={() => setSyncModalOpen(true)}
-          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group border border-indigo-400/30"
+          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-all shadow-md shadow-indigo-900/20 flex items-center justify-center gap-2 group border border-indigo-500/30"
         >
-          <Zap className="w-5 h-5 text-indigo-200 group-hover:scale-125 transition-transform" />
+          <Zap className="w-4 h-4 text-indigo-200 group-hover:scale-125 transition-transform" />
           SINCRONIZAÇÃO MESTRE
         </button>
 
         <div className="flex flex-col gap-3">
           <Section label={`Modelos: ${selectedClientName || 'Geral'}`} icon={Zap} isOpen={openSection === 'presets'} onToggle={() => setOpenSection('presets')}>
-             <button onClick={() => setSaveModalOpen(true)} className="w-full p-3 bg-primary/10 border border-primary/20 rounded-xl text-primary text-[10px] font-black uppercase hover:bg-primary/20 transition-all"><Save className="w-3.5 h-3.5 inline mr-2" /> Salvar em {selectedClientName || 'Geral'}</button>
+             <button onClick={() => setSaveModalOpen(true)} className="w-full p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-[12px] font-semibold hover:bg-blue-500/20 transition-all"><Save className="w-4 h-4 inline mr-2" /> Salvar Modelo</button>
              {filteredPresets?.map((p: any) => (
-                <div key={p.id} className="group flex items-center gap-2 p-2 bg-white/[0.03] border border-white/5 rounded-xl hover:border-primary/40">
-                   <button onClick={() => up({ priceBadge: p.priceBadge, descConfig: p.descConfig })} className="flex-1 text-[10px] uppercase text-white/50 group-hover:text-white text-left px-2 truncate font-bold">{p.name}</button>
-                   <button onClick={() => setPresets(presets.filter((x: any) => x.id !== p.id))} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                <div key={p.id} className="group flex items-center gap-2 p-2 bg-zinc-900/50 border border-zinc-800 rounded-xl hover:border-blue-500/40 transition-all">
+                   <button onClick={() => up({ priceBadge: p.priceBadge, descConfig: p.descConfig })} className="flex-1 text-[12px] text-zinc-400 group-hover:text-zinc-200 text-left px-3 truncate font-medium">{p.name}</button>
+                   <button onClick={() => setPresets(presets.filter((x: any) => x.id !== p.id))} className="opacity-0 group-hover:opacity-100 p-2 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
              ))}
           </Section>
           <Section label="Ícone de Preço" icon={Layers} isOpen={openSection === 'badge'} onToggle={() => setOpenSection('badge')}>
              <div className="space-y-4">
                <Tabs defaultValue="standard" className="w-full">
-                 <TabsList className="w-full bg-white/[0.03] border border-white/5 rounded-xl h-9 p-0.5 grid grid-cols-2">
-                   <TabsTrigger value="standard" className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white text-white/40 transition-all h-full">Padrões</TabsTrigger>
-                   <TabsTrigger value="custom" className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white text-white/40 transition-all h-full">Personalizados</TabsTrigger>
+                 <TabsList className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl h-10 p-1 grid grid-cols-2">
+                   <TabsTrigger value="standard" className="rounded-lg text-[11px] font-semibold data-[state=active]:bg-red-600 data-[state=active]:text-white text-zinc-500 transition-all h-full">Padrões</TabsTrigger>
+                   <TabsTrigger value="custom" className="rounded-lg text-[11px] font-semibold data-[state=active]:bg-red-600 data-[state=active]:text-white text-zinc-500 transition-all h-full">Custom</TabsTrigger>
                  </TabsList>
 
                  <TabsContent value="standard" className="mt-4 space-y-3">
@@ -548,12 +573,12 @@ export const StepPriceBadge = () => {
                          onClick={() => applyStandardIcon(icon)}
                          className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all hover:scale-105 ${
                            activeCfg.priceBadge.badgeType === icon.id
-                             ? 'border-primary/60 bg-primary/10 shadow-lg shadow-primary/10'
-                             : 'border-white/5 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.05]'
+                             ? 'border-red-500 bg-red-500/10 shadow-md shadow-red-900/20'
+                             : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-800'
                          }`}
                        >
                          <IconPreview type={icon.id} color={activeCfg.priceBadge.bgColor} isSelected={activeCfg.priceBadge.badgeType === icon.id} />
-                         <span className={`text-[8px] font-bold uppercase tracking-wider ${activeCfg.priceBadge.badgeType === icon.id ? 'text-primary' : 'text-white/30'}`}>{icon.name}</span>
+                         <span className={`text-[10px] font-semibold tracking-wide ${activeCfg.priceBadge.badgeType === icon.id ? 'text-red-400' : 'text-zinc-500'}`}>{icon.name}</span>
                        </button>
                      ))}
                    </div>
@@ -568,18 +593,18 @@ export const StepPriceBadge = () => {
                            key={icon.id}
                            className={`relative group flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${
                              activeCfg.priceBadge.badgeType === 'custom' && activeCfg.priceBadge.badgeImageUrl === icon.imageUrl
-                               ? 'border-primary/60 bg-primary/10'
-                               : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+                               ? 'border-red-500 bg-red-500/10'
+                               : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
                            }`}
                            onClick={() => applyCustomIcon(icon)}
                          >
                            <img src={icon.imageUrl} alt={icon.name} className="w-12 h-12 object-contain rounded-lg" />
-                           <span className="text-[8px] font-bold uppercase text-white/30 truncate w-full text-center">{icon.name}</span>
+                           <span className="text-[10px] font-medium text-zinc-400 truncate w-full text-center">{icon.name}</span>
                            <button
                              onClick={(e) => { e.stopPropagation(); setIconToDelete({ id: icon.id, name: icon.name }); }}
-                             className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                             className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                            >
-                             <X className="w-3 h-3 text-white" />
+                             <X className="w-3.5 h-3.5 text-white" />
                            </button>
                          </div>
                        ))}
@@ -590,28 +615,28 @@ export const StepPriceBadge = () => {
                    {!showCustomForm ? (
                      <button
                        onClick={() => setShowCustomForm(true)}
-                       className="w-full p-3 bg-white/[0.03] border border-dashed border-white/10 rounded-xl hover:bg-white/[0.06] hover:border-primary/30 transition-all flex items-center justify-center gap-2 text-white/40 hover:text-primary"
+                       className="w-full p-4 bg-zinc-900/30 border border-dashed border-zinc-700 rounded-xl hover:bg-zinc-800 hover:border-red-500/50 transition-all flex items-center justify-center gap-2 text-zinc-400 hover:text-red-400"
                      >
                        <Plus className="w-4 h-4" />
-                       <span className="text-[10px] font-black uppercase tracking-widest">Adicionar novo ícone</span>
+                       <span className="text-[12px] font-semibold">Adicionar novo ícone</span>
                      </button>
                    ) : (
-                     <div className="p-3 bg-white/[0.03] border border-white/10 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                     <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                        <div className="flex items-center justify-between">
-                         <span className="text-[9px] font-black uppercase text-white/40 tracking-widest">Novo Ícone</span>
-                         <button onClick={() => { setShowCustomForm(false); setCustomIconForm({ name: '', imageUrl: '', file: null }); }} className="p-1 hover:bg-white/5 rounded-lg"><X className="w-3 h-3 text-white/30" /></button>
+                         <span className="text-[12px] font-semibold text-zinc-300">Novo Ícone</span>
+                         <button onClick={() => { setShowCustomForm(false); setCustomIconForm({ name: '', imageUrl: '', file: null }); }} className="p-1 hover:bg-zinc-800 rounded-lg transition-colors"><X className="w-4 h-4 text-zinc-500" /></button>
                        </div>
 
                        {customIconForm.imageUrl ? (
-                         <div className="flex items-center gap-3 p-2 bg-black/20 rounded-xl border border-white/5">
-                           <img src={customIconForm.imageUrl} alt="preview" className="w-14 h-14 object-contain rounded-lg bg-white/5 p-1" />
-                           <button onClick={() => setCustomIconForm(prev => ({ ...prev, imageUrl: '' }))} className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase">Trocar</button>
+                         <div className="flex items-center gap-3 p-2 bg-zinc-950 rounded-xl border border-zinc-800">
+                           <img src={customIconForm.imageUrl} alt="preview" className="w-14 h-14 object-contain rounded-lg bg-zinc-900 p-1" />
+                           <button onClick={() => setCustomIconForm(prev => ({ ...prev, imageUrl: '' }))} className="text-[11px] text-red-400 hover:text-red-300 font-semibold px-2">Trocar</button>
                          </div>
                        ) : (
                          <>
                            <input type="file" accept="image/*" onChange={handleCustomIconUpload} className="hidden" id="custom-badge-up" />
-                           <label htmlFor="custom-badge-up" className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/10 rounded-xl hover:bg-primary/20 transition-all text-primary font-black uppercase text-[10px] cursor-pointer justify-center">
-                             <Upload className="w-4 h-4" /> Upload PNG
+                           <label htmlFor="custom-badge-up" className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500/20 transition-all text-red-400 font-semibold text-[12px] cursor-pointer justify-center">
+                             <Upload className="w-4 h-4" /> Fazer Upload de Ícone
                            </label>
                          </>
                        )}
@@ -620,16 +645,16 @@ export const StepPriceBadge = () => {
                          type="text"
                          value={customIconForm.name}
                          onChange={e => setCustomIconForm(prev => ({ ...prev, name: e.target.value }))}
-                         placeholder="Nome do modelo..."
-                         className="w-full bg-black/40 border border-white/10 rounded-xl h-9 px-3 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all"
+                         placeholder="Nome do ícone..."
+                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-10 px-4 text-[12px] font-medium text-zinc-100 outline-none focus:border-red-500/50 transition-all placeholder:text-zinc-600"
                        />
 
                        <button
                          onClick={saveCustomIcon}
                          disabled={!customIconForm.imageUrl || isUploadingIcon}
-                         className="w-full p-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20"
+                         className="w-full p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[12px] font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md shadow-red-900/20"
                        >
-                         {isUploadingIcon ? <Loader2 className="w-3.5 h-3.5 inline mr-2 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 inline mr-2" />} {isUploadingIcon ? 'Enviando...' : 'Salvar e Aplicar'}
+                         {isUploadingIcon ? <Loader2 className="w-4 h-4 inline mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 inline mr-2" />} {isUploadingIcon ? 'Enviando...' : 'Salvar e Aplicar'}
                        </button>
                      </div>
                    )}
@@ -637,80 +662,87 @@ export const StepPriceBadge = () => {
                </Tabs>
 
                {/* Color and radius controls (always visible) */}
-               <div className="pt-3 border-t border-white/5 space-y-4">
+               <div className="pt-4 border-t border-zinc-800/50 space-y-4">
                  <ColorSelector label="Cor do Fundo" color={activeCfg.priceBadge.bgColor} onChange={handleBadgeBgColorChange} />
-                 <div className="space-y-1"><label className="text-[9px] font-black uppercase text-white/30">Arredondamento: {activeCfg.priceBadge.borderRadius}px</label><input type="range" min="0" max="60" value={activeCfg.priceBadge.borderRadius} onChange={e => up({ priceBadge: { borderRadius: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" /></div>
+                 <div className="space-y-2">
+                   <label className="text-[11px] font-semibold text-zinc-500 flex justify-between">Arredondamento <span>{activeCfg.priceBadge.borderRadius}px</span></label>
+                   <input type="range" min="0" max="60" value={activeCfg.priceBadge.borderRadius} onChange={e => up({ priceBadge: { borderRadius: parseInt(e.target.value) } })} className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-full" />
+                 </div>
                </div>
              </div>
           </Section>
           <Section label="Cores dos Textos" icon={CreditCard} isOpen={openSection === 'prices'} onToggle={() => setOpenSection('prices')}>
               <div className="space-y-6">
                  <div className="space-y-4">
-                   <ColorSelector label="RS" color={activeCfg.priceBadge.currencyColor} onChange={c => up({ priceBadge: { currencyColor: c } })} />
-                   <div className="space-y-1">
-                     <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.priceBadge.currencyFontSize)}px</label>
-                     <input type="range" min="10" max="150" value={activeCfg.priceBadge.currencyFontSize} onChange={e => up({ priceBadge: { currencyFontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                   <ColorSelector label="RS (Moeda)" color={activeCfg.priceBadge.currencyColor} onChange={c => up({ priceBadge: { currencyColor: c } })} />
+                   <div className="space-y-2">
+                     <label className="text-[11px] font-semibold text-zinc-500 flex justify-between">Tamanho <span>{Math.round(activeCfg.priceBadge.currencyFontSize)}px</span></label>
+                     <input type="range" min="10" max="150" value={activeCfg.priceBadge.currencyFontSize} onChange={e => up({ priceBadge: { currencyFontSize: parseInt(e.target.value) } })} className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-full" />
                    </div>
                  </div>
                  
-                 <div className="space-y-4 border-t border-white/5 pt-4">
-                   <ColorSelector label="Valor" color={activeCfg.priceBadge.valueColor} onChange={c => up({ priceBadge: { valueColor: c } })} />
-                   <div className="space-y-1">
-                     <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.priceBadge.valueFontSize)}px</label>
-                     <input type="range" min="20" max="250" value={activeCfg.priceBadge.valueFontSize} onChange={e => up({ priceBadge: { valueFontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                 <div className="space-y-4 border-t border-zinc-800/50 pt-5">
+                   <ColorSelector label="Valor Principal" color={activeCfg.priceBadge.valueColor} onChange={c => up({ priceBadge: { valueColor: c } })} />
+                   <div className="space-y-2">
+                     <label className="text-[11px] font-semibold text-zinc-500 flex justify-between">Tamanho <span>{Math.round(activeCfg.priceBadge.valueFontSize)}px</span></label>
+                     <input type="range" min="20" max="250" value={activeCfg.priceBadge.valueFontSize} onChange={e => up({ priceBadge: { valueFontSize: parseInt(e.target.value) } })} className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-full" />
                    </div>
                  </div>
 
-                 <Section label="Nome/Título" icon={PenTool} isOpen={true} onToggle={() => {}} className="border-0 bg-transparent p-0">
-                    <div className="space-y-4 pt-4 border-t border-white/5 mt-4">
-                       <select value={activeCfg.descConfig.fontFamily} onChange={e => up({ descConfig: { fontFamily: e.target.value } })} className="w-full bg-black/60 border border-white/10 rounded-xl h-9 px-3 text-[11px] text-white outline-none"><option value="Montserrat, sans-serif">Montserrat</option>{customFonts.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</select>
+                 <Section label="Nome do Produto" icon={PenTool} isOpen={true} onToggle={() => {}} className="border-0 bg-transparent p-0">
+                    <div className="space-y-4 pt-5 border-t border-zinc-800/50 mt-5">
+                       <select value={activeCfg.descConfig.fontFamily} onChange={e => up({ descConfig: { fontFamily: e.target.value } })} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-3 text-[12px] text-zinc-200 outline-none focus:border-blue-500/50 transition-all"><option value="Montserrat, sans-serif">Montserrat</option>{customFonts.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</select>
                        <ColorSelector label="Cor do Título" color={activeCfg.descConfig.color} onChange={c => up({ descConfig: { color: c } })} />
-                       <div className="space-y-1">
-                         <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.descConfig.fontSize)}px</label>
-                         <input type="range" min="10" max="100" value={activeCfg.descConfig.fontSize} onChange={e => up({ descConfig: { fontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                       <div className="space-y-2">
+                         <label className="text-[11px] font-semibold text-zinc-500 flex justify-between">Tamanho <span>{Math.round(activeCfg.descConfig.fontSize)}px</span></label>
+                         <input type="range" min="10" max="100" value={activeCfg.descConfig.fontSize} onChange={e => up({ descConfig: { fontSize: parseInt(e.target.value) } })} className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-full" />
                        </div>
-                       <div className="flex items-center gap-2 text-[9px] font-black text-white/30 uppercase"><input type="checkbox" checked={activeCfg.descConfig.uppercase} onChange={e => up({ descConfig: { uppercase: e.target.checked } })} /> Maiúsculas</div>
+                       <div className="flex items-center gap-3 text-[12px] font-semibold text-zinc-400 mt-2">
+                         <input type="checkbox" checked={activeCfg.descConfig.uppercase} onChange={e => up({ descConfig: { uppercase: e.target.checked } })} className="w-4 h-4 accent-blue-500 rounded" /> Letras Maiúsculas
+                       </div>
                     </div>
                  </Section>
               </div>
            </Section>
            <Section label="Sufixo (kg/cada)" icon={Layers} isOpen={openSection === 'suffix'} onToggle={() => setOpenSection('suffix')}>
-              <div className="space-y-4">
-                 <div className="flex items-center justify-between p-3 bg-white/[0.03] border border-white/5 rounded-xl">
-                   <span className="text-[10px] font-black uppercase text-white/40">Mostrar Sufixo</span>
-                   <input type="checkbox" checked={activeCfg.priceBadge.showSuffix} onChange={e => up({ priceBadge: { showSuffix: e.target.checked } })} className="w-4 h-4 accent-primary" />
+              <div className="space-y-5">
+                 <div className="flex items-center justify-between p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+                   <span className="text-[12px] font-semibold text-zinc-300">Mostrar Sufixo</span>
+                   <input type="checkbox" checked={activeCfg.priceBadge.showSuffix} onChange={e => up({ priceBadge: { showSuffix: e.target.checked } })} className="w-4 h-4 accent-blue-500 rounded" />
                  </div>
                  <div className="space-y-2">
-                   <label className="text-[9px] font-black uppercase text-white/30 tracking-widest">Texto do Sufixo</label>
-                   <input type="text" value={activeCfg.priceBadge.suffixText} onChange={e => up({ priceBadge: { suffixText: e.target.value } })} placeholder="Ex: cada, kg, un..." className="w-full bg-black/40 border border-white/10 rounded-xl h-10 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all font-mono" />
+                   <label className="text-[11px] font-semibold text-zinc-500">Texto do Sufixo</label>
+                   <input type="text" value={activeCfg.priceBadge.suffixText} onChange={e => up({ priceBadge: { suffixText: e.target.value } })} placeholder="Ex: cada, kg, un..." className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-[12px] font-medium text-zinc-100 outline-none focus:border-blue-500/50 transition-all font-mono" />
                  </div>
                  <ColorSelector label="Cor do Sufixo" color={activeCfg.priceBadge.suffixColor} onChange={c => up({ priceBadge: { suffixColor: c } })} />
-                 <div className="space-y-1">
-                   <label className="text-[9px] font-black uppercase text-white/30">Tamanho: {Math.round(activeCfg.priceBadge.suffixFontSize)}px</label>
-                   <input type="range" min="10" max="100" value={activeCfg.priceBadge.suffixFontSize} onChange={e => up({ priceBadge: { suffixFontSize: parseInt(e.target.value) } })} className="w-full accent-primary h-1 bg-white/5 rounded-full" />
+                 <div className="space-y-2">
+                   <label className="text-[11px] font-semibold text-zinc-500 flex justify-between">Tamanho <span>{Math.round(activeCfg.priceBadge.suffixFontSize)}px</span></label>
+                   <input type="range" min="10" max="100" value={activeCfg.priceBadge.suffixFontSize} onChange={e => up({ priceBadge: { suffixFontSize: parseInt(e.target.value) } })} className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-full" />
                  </div>
               </div>
            </Section>
         </div>
       </div>
 
-      <div ref={containerRef} className={`flex-1 overflow-hidden relative bg-[#060608] flex flex-col items-center justify-center p-6 ${isPanning ? 'cursor-grabbing' : ''}`} onWheel={handleWheel} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={() => onMouseUp({} as any)} onMouseDown={e => { 
-        if (e.button === 1) { e.preventDefault(); setIsPanning(true); setPanStart({ x: e.clientX, y: e.clientY, ox: panOffset.x, oy: panOffset.y }); }
+      <div ref={containerRef} className={`flex-1 overflow-hidden relative bg-zinc-950/80 flex flex-col items-center justify-center p-8 ${isPanning ? 'cursor-grabbing' : spacePressed ? 'cursor-grab' : ''}`} onWheel={handleWheel} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={() => onMouseUp({} as any)} onMouseDown={e => { 
+        if (e.button === 1 || (e.button === 0 && spacePressed)) { e.preventDefault(); setIsPanning(true); setPanStart({ x: e.clientX, y: e.clientY, ox: panOffset.x, oy: panOffset.y }); }
         else if (e.button === 0) {
           const c = toSvg(e);
           setMarquee({ x1: c.x, y1: c.y, x2: c.x, y2: c.y });
         }
       }} onClick={e => { if (!dragging && !resizing && !marquee) { setSelectedElems([]); setSelectedSlotIndex(null); setSelectedSlotIndices([]); setSelectedElem(null); } }}>
-        <div className="absolute top-6 z-20 flex items-center gap-4 bg-[#0d0d10]/95 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-3xl select-none" onClick={e => e.stopPropagation()}>
-           <button onClick={undo} className="p-2 hover:bg-white/10 rounded-xl text-white/40 hover:text-white transition-all"><Undo2 className="w-4 h-4" /></button>
-           <div className="flex items-center gap-2 px-3 border-x border-white/10"><button onClick={() => setActivePage(Math.max(0, activePage-1))} className="p-2 hover:bg-white/5 rounded-lg"><ChevronLeft className="w-4 h-4 text-white/20" /></button><span className="text-[10px] font-black text-white/50 min-w-[60px] text-center">{activePage+1} / {pageCount}</span><button onClick={() => setActivePage(Math.min(pageCount-1, activePage+1))} className="p-2 hover:bg-white/5 rounded-lg"><ChevronLeft className="w-4 h-4 text-white/20 rotate-180" /></button></div>
-           <div className="flex items-center gap-1.5"><button onClick={() => setZoom(zoom-0.1)} className="w-8 h-8 rounded-lg hover:bg-white/10">-</button><span className="text-[10px] font-bold text-white/40 min-w-[35px] text-center">{Math.round(zoom*100)}%</span><button onClick={() => setZoom(zoom+0.1)} className="w-8 h-8 rounded-lg hover:bg-white/10">+</button></div>
-           <button onClick={() => { setZoom(0.8); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-white/10 rounded-xl"><Maximize className="w-4 h-4 text-white/20" /></button>
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-[0.15] z-0 pointer-events-none" />
+
+        <div className="absolute top-6 z-20 flex items-center gap-3 bg-zinc-900/90 backdrop-blur-xl p-2 rounded-2xl border border-zinc-800/80 shadow-2xl select-none" onClick={e => e.stopPropagation()}>
+           <button onClick={undo} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-100 transition-all" title="Desfazer"><Undo2 className="w-4 h-4" /></button>
+           <div className="flex items-center gap-2 px-3 border-x border-zinc-800"><button onClick={() => setActivePage(Math.max(0, activePage-1))} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-zinc-400" /></button><span className="text-[12px] font-semibold text-zinc-300 min-w-[60px] text-center">{activePage+1} / {pageCount}</span><button onClick={() => setActivePage(Math.min(pageCount-1, activePage+1))} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-zinc-400 rotate-180" /></button></div>
+           <div className="flex items-center gap-1.5"><button onClick={() => setZoom(zoom-0.1)} className="w-8 h-8 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400"><Minus className="w-4 h-4" /></button><span className="text-[11px] font-semibold text-zinc-400 min-w-[40px] text-center">{Math.round(zoom*100)}%</span><button onClick={() => setZoom(zoom+0.1)} className="w-8 h-8 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400"><Plus className="w-4 h-4" /></button></div>
+           <button onClick={() => { setZoom(0.8); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors" title="Centralizar"><Maximize className="w-4 h-4 text-zinc-400" /></button>
         </div>
 
-        <div className="relative" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }} onMouseDown={e => e.stopPropagation()}>
-          <svg ref={svgRef} width={config.width} height={config.height} viewBox={`0 0 ${config.width} ${config.height}`} style={{ background: 'white', userSelect: 'none' }} className="shadow-2xl">
-            {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />}
+        <div className="relative z-10" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }} onMouseDown={e => { if (!spacePressed && e.button !== 1) e.stopPropagation(); }}>
+          <svg ref={svgRef} width={config.width} height={config.height} viewBox={`0 0 ${config.width} ${config.height}`} style={{ background: 'white', userSelect: 'none' }} className="shadow-2xl ring-1 ring-zinc-800/50 rounded-lg bg-zinc-900">
+            {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMin slice" />}
             {slots.map((s, idx) => {
               const gIdx = activePage * slots.length + idx; const cfg = getSlotSettings(gIdx); const el = getElems(s, cfg);
               const isSlotSel = selectedSlotIndices.includes(gIdx);
@@ -731,7 +763,7 @@ export const StepPriceBadge = () => {
 
               return (
                 <g key={gIdx} onClick={e => e.stopPropagation()}>
-                  <rect x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={isSlotSel ? '#D9254B' : 'rgba(0,0,0,0.05)'} strokeWidth={isSlotSel ? 4/zoom : 1/zoom} strokeDasharray={isSlotSel ? 'none' : '4,2'} pointerEvents="none" />
+                  <rect x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={isSlotSel ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSlotSel ? 4/zoom : 1/zoom} strokeDasharray={isSlotSel ? 'none' : '4,2'} pointerEvents="none" />
                   
                   <DragBox id="badge" el={v.badge} zoom={zoom} isPrimary={selectedElem === 'badge'} isSel={isSlotSel && selectedElems.includes('badge')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
                      {cfg.priceBadge.badgeImageUrl ? <image href={cfg.priceBadge.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" style={{ borderRadius: cfg.priceBadge.borderRadius + 'px' }} pointerEvents="none" /> 
@@ -739,7 +771,7 @@ export const StepPriceBadge = () => {
                   </DragBox>
                   
                   <DragBox id="image" el={v.image} zoom={zoom} isPrimary={selectedElem === 'image'} isSel={isSlotSel && selectedElems.includes('image')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                    <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} rx={12} fill="rgba(0,0,0,0.03)" stroke="rgba(217,37,75,0.1)" strokeDasharray="3,3" pointerEvents="none" />
+                    <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} rx={12} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" pointerEvents="none" />
                     {p?.images?.[0] && <image href={p.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
                   </DragBox>
                   
@@ -769,8 +801,8 @@ export const StepPriceBadge = () => {
                 y={Math.min(marquee.y1, marquee.y2)} 
                 width={Math.abs(marquee.x1 - marquee.x2)} 
                 height={Math.abs(marquee.y1 - marquee.y2)} 
-                fill="rgba(217,37,75,0.1)" 
-                stroke="#D9254B" 
+                fill="rgba(239,68,68,0.05)" 
+                stroke="#ef4444" 
                 strokeWidth={2/zoom} 
                 strokeDasharray="4,2"
                 pointerEvents="none"
@@ -781,21 +813,24 @@ export const StepPriceBadge = () => {
       </div>
 
       <Dialog open={saveModalOpen} onOpenChange={setSaveModalOpen}>
-        <DialogContent className="bg-[#0d0d10] border-white/10 text-white rounded-2xl shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
-               <Zap className="w-5 h-5 text-primary" /> Salvar Modelo
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100 rounded-[24px] shadow-2xl sm:max-w-md p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-lg font-semibold tracking-tight flex items-center gap-3">
+               <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                 <Save className="w-5 h-5 text-blue-400" />
+               </div>
+               Salvar Modelo
             </DialogTitle>
-            <DialogDescription className="text-white/40 text-[11px] font-bold uppercase tracking-wider">
+            <DialogDescription className="text-zinc-400 text-[13px] font-medium mt-2">
                Escolha um nome para identificar este modelo de estilo para {selectedClientName || 'Geral'}.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6">
+          <div className="py-4">
             <Input
               value={newPresetName}
               onChange={(e) => setNewPresetName(e.target.value)}
               placeholder="Ex: Oferta Fim de Semana, Estilo Carnes..."
-              className="bg-white/5 border-white/10 rounded-xl h-12 text-sm font-bold text-white focus:border-primary/50 transition-all"
+              className="bg-zinc-900/50 border-zinc-800 rounded-xl h-12 text-[13px] font-medium text-zinc-100 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-zinc-600"
               autoFocus
               onKeyDown={(e) => { 
                 if (e.key === 'Enter' && newPresetName) {
@@ -807,8 +842,8 @@ export const StepPriceBadge = () => {
               }}
             />
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setSaveModalOpen(false)} className="rounded-xl text-white/30 hover:text-white hover:bg-white/5 text-[10px] font-black uppercase tracking-widest">
+          <DialogFooter className="gap-3 sm:gap-0 mt-4">
+            <Button variant="ghost" onClick={() => setSaveModalOpen(false)} className="rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 text-[12px] font-medium">
               Cancelar
             </Button>
             <Button 
@@ -821,29 +856,32 @@ export const StepPriceBadge = () => {
                    }
                 }} 
                 disabled={!newPresetName} 
-                className="bg-primary hover:bg-primary/90 rounded-xl px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 transition-all"
+                className="bg-blue-600 hover:bg-blue-500 rounded-xl px-6 text-[12px] font-semibold text-white shadow-md shadow-blue-900/20 transition-all disabled:opacity-50"
             >
               <CheckCircle className="w-4 h-4 mr-2" />
-              Confirmar e Salvar
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
       <AlertDialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
-        <AlertDialogContent className="bg-[#0d0d10] border-white/10 text-white rounded-2xl shadow-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
-               <Zap className="w-5 h-5 text-indigo-500" /> Sincronização Mestre
+        <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100 rounded-[24px] shadow-2xl p-6 sm:max-w-md">
+          <AlertDialogHeader className="mb-2">
+            <AlertDialogTitle className="text-lg font-semibold tracking-tight flex items-center gap-3">
+               <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center">
+                 <Zap className="w-5 h-5 text-indigo-400" />
+               </div>
+               Sincronização Mestre
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-white/50 text-xs font-bold uppercase tracking-wider">
-               Deseja aplicar o visual Deste produto em TODO o projeto?
+            <AlertDialogDescription className="text-zinc-400 text-[13px] font-medium mt-2">
+               Deseja aplicar o visual DESTE produto em TODO o projeto?
                <br/><br/>
-               <span className="text-indigo-400 font-black">As cores e fontes serão copiadas para todos, mas as proporções e tamanhos originais serão mantidos.</span>
+               <span className="text-indigo-400 font-medium">As cores e fontes serão copiadas para todos, mas as proporções e tamanhos originais serão mantidos.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+          <AlertDialogFooter className="mt-4 gap-3 sm:gap-0">
+            <AlertDialogCancel className="bg-transparent border-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 rounded-xl text-[12px] font-medium px-4">
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => {
@@ -853,7 +891,7 @@ export const StepPriceBadge = () => {
               syncAllSlots(style as any, sourceIdx);
               setSyncModalOpen(false);
               toast.success('Visual sincronizado para todos!');
-            }} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-900/20">
+            }} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-6 text-[12px] font-semibold shadow-md shadow-indigo-900/20 transition-all">
               <Zap className="w-4 h-4 mr-2" />
               Sim, Sincronizar Tudo
             </AlertDialogAction>
@@ -863,20 +901,22 @@ export const StepPriceBadge = () => {
 
       {/* Delete Icon Confirmation Modal */}
       <AlertDialog open={!!iconToDelete} onOpenChange={(open) => !open && setIconToDelete(null)}>
-        <AlertDialogContent className="bg-[#121214] border border-white/10 rounded-2xl p-6 w-[400px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-white text-lg font-black uppercase tracking-wider flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-red-500" />
+        <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100 rounded-[24px] shadow-2xl p-6 sm:max-w-md">
+          <AlertDialogHeader className="mb-2">
+            <AlertDialogTitle className="text-lg font-semibold tracking-tight flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </div>
               Excluir Ícone?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-white/60 text-sm font-medium mt-2">
-              Tem certeza que deseja excluir o ícone <strong className="text-white">"{iconToDelete?.name}"</strong>?
+            <AlertDialogDescription className="text-zinc-400 text-[13px] font-medium mt-2">
+              Tem certeza que deseja excluir o ícone <strong className="text-zinc-100">"{iconToDelete?.name}"</strong>?
               <br/><br/>
-              <span className="text-red-400 font-bold">Esta ação não pode ser desfeita e ele será removido do seu painel e do armazenamento na nuvem.</span>
+              <span className="text-red-400 font-medium">Esta ação não pode ser desfeita e ele será removido do seu painel e do armazenamento na nuvem.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6 gap-2">
-            <AlertDialogCancel className="bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-10 px-6">
+          <AlertDialogFooter className="mt-4 gap-3 sm:gap-0">
+            <AlertDialogCancel className="bg-transparent border-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 rounded-xl text-[12px] font-medium px-4">
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
@@ -886,7 +926,7 @@ export const StepPriceBadge = () => {
                   setIconToDelete(null);
                 }
               }}
-              className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-10 px-6 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-900/20"
+              className="bg-red-600 hover:bg-red-500 text-white rounded-xl px-6 text-[12px] font-semibold shadow-md shadow-red-900/20 transition-all"
             >
               Excluir Ícone
             </AlertDialogAction>

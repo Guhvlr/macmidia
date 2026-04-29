@@ -88,7 +88,7 @@ export const ProductImageWithFormat = ({
     return (
       <div className="relative w-full h-full group/preview">
         <img src={previewBase64} className={className} alt="Preview" />
-        <span className="absolute bottom-0 right-0 bg-purple-500/90 text-white text-[7px] font-black px-1.5 rounded-tl-lg uppercase tracking-widest border-t border-l border-purple-400">
+        <span className="absolute bottom-2 right-2 bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-lg border border-purple-400/30">
           PRÉVIA
         </span>
       </div>
@@ -97,16 +97,16 @@ export const ProductImageWithFormat = ({
 
   if (format === 'ERROR') {
     return (
-       <div className={`bg-white/5 flex flex-col items-center justify-center gap-1 border border-dashed border-white/10 ${className}`}>
+       <div className={`bg-zinc-900/50 flex flex-col items-center justify-center gap-2 border border-dashed border-zinc-800 rounded-xl ${className}`}>
          {isFallback ? (
            <>
-             <ImageIcon className="w-5 h-5 text-white/10" />
-             <span className="text-[6px] font-bold text-white/20 uppercase text-center leading-tight tracking-widest">Sem Foto</span>
+             <ImageIcon className="w-6 h-6 text-zinc-700" />
+             <span className="text-[10px] font-semibold text-zinc-600 text-center leading-tight">Sem Foto</span>
            </>
          ) : (
            <>
-             <AlertTriangle className="w-4 h-4 text-amber-500/40" />
-             <span className="text-[6px] font-bold text-white/15 uppercase text-center leading-tight">Link Quebrado</span>
+             <AlertTriangle className="w-5 h-5 text-amber-500/40" />
+             <span className="text-[10px] font-semibold text-zinc-700 text-center leading-tight">Link Quebrado</span>
            </>
          )}
        </div>
@@ -118,13 +118,13 @@ export const ProductImageWithFormat = ({
       <img src={currentUrl} onError={handleError} className={className} alt="Produto" crossOrigin="anonymous"/>
       
       {format === 'JPG' && (
-        <span className="absolute bottom-0 right-0 bg-red-500/90 text-white text-[7px] font-black px-1.5 rounded-tl-lg uppercase tracking-widest border-t border-l border-red-400 flex items-center gap-0.5 shadow-md">
-          <ImageIcon className="w-2 h-2" /> JPG
+        <span className="absolute bottom-1 right-1 bg-amber-500/90 text-amber-950 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-lg border border-amber-400/30 flex items-center gap-1">
+          JPG
         </span>
       )}
       {format === 'PNG' && (
-        <span className="absolute bottom-0 right-0 bg-green-500/90 text-white text-[7px] font-black px-1.5 rounded-tl-lg uppercase tracking-widest border-t border-l border-green-400 flex items-center gap-0.5 shadow-md">
-          <Crop className="w-2 h-2" /> PNG
+        <span className="absolute bottom-1 right-1 bg-emerald-600/90 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-lg border border-emerald-400/30 flex items-center gap-1">
+          PNG
         </span>
       )}
     </div>

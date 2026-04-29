@@ -19,6 +19,7 @@ export interface ProductItem {
   warning?: string;
   suffix?: string;
   mode?: 'barcode' | 'description';
+  client_name?: string;
 }
 
 export interface Slot {

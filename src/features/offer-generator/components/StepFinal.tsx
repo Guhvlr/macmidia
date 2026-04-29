@@ -6,7 +6,7 @@ import JSZip from 'jszip';
 import {
   Loader2, Download, CheckCircle, Monitor, Smartphone,
   FileIcon, Edit2, X, Maximize, ChevronLeft, ChevronRight,
-  Undo2, Save, Move, ZoomIn, ZoomOut, Type, Image as ImageIcon
+  Undo2, Save, Move, ZoomIn, ZoomOut, Type, Image as ImageIcon, Search, Zap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -179,86 +179,62 @@ export const FullEditor = ({ onClose }: EditorProps) => {
   );
 
   return (
-    <div className="fixed inset-0 z-[200] bg-[#09090b] flex flex-col animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[200] bg-zinc-950 flex flex-col animate-in fade-in duration-200">
       <FontStyles />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 bg-[#0d0d10] border-b border-white/8 shrink-0">
+      <div className="flex items-center justify-between px-5 py-3 bg-zinc-900/50 border-b border-zinc-800 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center">
-            <Edit2 className="w-4 h-4 text-primary" />
+          <div className="w-9 h-9 bg-red-500/10 rounded-xl flex items-center justify-center border border-red-500/20">
+            <Edit2 className="w-4 h-4 text-red-400" />
           </div>
           <div>
-            <h2 className="text-sm font-black uppercase tracking-widest text-white">Editor de Artes</h2>
-            <p className="text-[10px] text-white/30 font-bold uppercase">Duplo clique no produto para editar texto e preço</p>
+            <h2 className="text-[14px] font-semibold tracking-tight text-zinc-100">Editor de Artes</h2>
+            <p className="text-[11px] text-zinc-500 font-medium">Duplo clique no produto para editar texto e preço</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={undo} className="p-2 hover:bg-white/8 rounded-xl text-white/40 hover:text-white transition-all" title="Desfazer Ctrl+Z">
+          <button onClick={undo} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-100 transition-all" title="Desfazer Ctrl+Z">
             <Undo2 className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-1 bg-white/5 rounded-xl px-3 py-1.5 border border-white/8">
-            <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} className="text-white/40 hover:text-white w-5 h-5 flex items-center justify-center text-sm">−</button>
-            <span className="text-[10px] font-bold text-white/40 min-w-[36px] text-center">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="text-white/40 hover:text-white w-5 h-5 flex items-center justify-center text-sm">+</button>
+          <div className="flex items-center gap-1 bg-zinc-900/50 rounded-xl px-3 py-1.5 border border-zinc-800">
+               <Button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} variant="ghost" className="h-8 w-8 p-0 rounded-lg text-zinc-400 hover:text-red-500"><ZoomOut className="w-4 h-4" /></Button>
+               <span className="text-[11px] font-bold text-zinc-300 min-w-[40px] text-center">{Math.round(zoom * 100)}%</span>
+               <Button onClick={() => setZoom(z => Math.min(2, z + 0.1))} variant="ghost" className="h-8 w-8 p-0 rounded-lg text-zinc-400 hover:text-red-500"><ZoomIn className="w-4 h-4" /></Button>
           </div>
-          <button onClick={() => { setZoom(0.65); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-white/8 rounded-xl text-white/40 hover:text-white">
+          <button onClick={() => { setZoom(0.65); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-100 transition-all">
             <Maximize className="w-4 h-4" />
           </button>
-          <div className="w-px h-5 bg-white/10" />
-          <Button onClick={handleSaveAndClose} className="h-9 px-5 bg-primary hover:bg-primary/90 rounded-xl text-[10px] font-black uppercase tracking-widest">
-            <Save className="w-3.5 h-3.5 mr-2" /> Salvar e Exportar
+          <div className="w-px h-5 bg-zinc-800 mx-1" />
+          <Button onClick={handleSaveAndClose} className="h-9 px-5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[12px] font-semibold shadow-sm transition-all">
+            <Save className="w-3.5 h-3.5 mr-2" /> Salvar e Voltar
           </Button>
-          <button onClick={onClose} className="p-2 hover:bg-white/8 rounded-xl text-white/30 hover:text-white">
+          <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-100 transition-all ml-1 border border-transparent hover:border-zinc-700">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Abas das telas */}
-      <div className="flex items-center gap-1 px-5 py-2 bg-[#0d0d10] border-b border-white/5 overflow-x-auto shrink-0">
-        <span className="text-[9px] font-black uppercase text-white/20 tracking-widest mr-2 shrink-0">Telas:</span>
+      <div className="flex items-center gap-2 px-5 py-2.5 bg-zinc-900/30 border-b border-zinc-800 overflow-x-auto shrink-0">
+        <span className="text-[11px] font-medium text-zinc-500 mr-2 shrink-0">Telas:</span>
         {Array.from({ length: pageCount }).map((_, i) => (
           <button
             key={i}
             onClick={() => { setActivePage(i); setSelectedSlotIndex(null); setSelectedElem(null); }}
-            className={`shrink-0 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+            className={`shrink-0 px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
               activePage === i
-                ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                : 'bg-white/5 text-white/30 hover:bg-white/10 hover:text-white border border-white/5'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 border border-zinc-800/60'
             }`}
           >
             Tela {i + 1}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setActivePage(p => Math.max(0, p - 1))}
-            className="p-1.5 hover:bg-white/8 rounded-lg text-white/30 hover:text-white"
-            disabled={activePage === 0}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setActivePage(p => Math.min(pageCount - 1, p + 1))}
-            className="p-1.5 hover:bg-white/8 rounded-lg text-white/30 hover:text-white"
-            disabled={activePage === pageCount - 1}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
-      {/* Dica */}
-      <div className="px-5 py-1.5 bg-amber-500/5 border-b border-amber-500/10 text-[10px] text-amber-400/60 font-bold uppercase tracking-wider flex items-center gap-2 shrink-0">
-        <Move className="w-3 h-3" />
-        Arraste imagem, descrição ou preço • Duplo clique para editar texto e preço • Ctrl+Z desfaz
-      </div>
-
-      {/* Canvas */}
       <div
-        className="flex-1 overflow-hidden relative flex items-center justify-center bg-[#060608]"
+        className="flex-1 overflow-hidden relative flex items-center justify-center bg-zinc-950/80"
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
@@ -278,7 +254,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
             className="shadow-2xl"
           >
             {config.backgroundImageUrl && (
-              <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />
+              <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMin slice" />
             )}
 
             {slots.map((slot, sIdx) => {
@@ -287,7 +263,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
               if (!product) return null;
 
               const cfg = getSlotSettings(gIdx);
-              const { priceBadge: pb, descConfig: dc, imageConfig: ic } = cfg;
+              const { priceBadge: pb, descConfig: dc } = cfg;
               const sf = slot.width / 500;
               const el = getElems(slot, cfg);
               const isSelected = selectedSlotIndex === gIdx;
@@ -299,16 +275,14 @@ export const FullEditor = ({ onClose }: EditorProps) => {
 
               return (
                 <g key={gIdx}>
-                  <rect x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="none" stroke={isSelected ? '#D9254B' : 'rgba(0,0,0,0.05)'} strokeWidth={isSelected ? 3 : 1} strokeDasharray={isSelected ? 'none' : '4,2'} pointerEvents="none" />
+                  <rect x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="none" stroke={isSelected ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSelected ? 3 : 1} strokeDasharray={isSelected ? 'none' : '4,2'} pointerEvents="none" />
 
-                  {/* IMAGEM */}
                   <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'image', gIdx)}>
-                    <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} fill="rgba(0,0,0,0.02)" stroke="rgba(217,37,75,0.1)" strokeDasharray="3,3" rx={8} />
+                    <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" rx={8} />
                     {product.images?.[0] && <image href={product.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" />}
-                    {isSelected && selectedElem === 'image' && <rect x={v.image.x - 2} y={v.image.y - 2} width={v.image.w + 4} height={v.image.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={8} pointerEvents="none" />}
+                    {isSelected && selectedElem === 'image' && <rect x={v.image.x - 2} y={v.image.y - 2} width={v.image.w + 4} height={v.image.h + 4} fill="none" stroke="#ef4444" strokeWidth={2} rx={8} pointerEvents="none" />}
                   </g>
 
-                  {/* BADGE */}
                   <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'badge', gIdx)}>
                     {pb.badgeImageUrl
                       ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" />
@@ -317,10 +291,9 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                     <text x={v.badge.x + v.badge.w * pb.currencyOffsetX / 100} y={v.badge.y + v.badge.h * pb.currencyOffsetY / 100} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>
                     <text x={v.badge.x + v.badge.w * pb.valueOffsetX / 100} y={v.badge.y + v.badge.h * pb.valueOffsetY / 100} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
                     {pb.showSuffix && <text x={v.badge.x + v.badge.w * pb.suffixOffsetX / 100} y={v.badge.y + v.badge.h * pb.suffixOffsetY / 100} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{product.suffix || pb.suffixText}</text>}
-                    {isSelected && selectedElem === 'badge' && <rect x={v.badge.x - 2} y={v.badge.y - 2} width={v.badge.w + 4} height={v.badge.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={pb.borderRadius * sf} pointerEvents="none" />}
+                    {isSelected && selectedElem === 'badge' && <rect x={v.badge.x - 2} y={v.badge.y - 2} width={v.badge.w + 4} height={v.badge.h + 4} fill="none" stroke="#ef4444" strokeWidth={2} rx={pb.borderRadius * sf} pointerEvents="none" />}
                   </g>
 
-                  {/* DESCRIÇÃO — duplo clique para editar */}
                   <g
                     style={{ cursor: 'move' }}
                     onMouseDown={e => onStartDrag(e, 'name', gIdx)}
@@ -329,11 +302,11 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                       setEditingProduct({ id: product.id, name: product.name, price: product.price });
                     }}
                   >
-                    <rect x={v.name.x} y={v.name.y} width={v.name.w} height={v.name.h} fill="rgba(217,37,75,0.03)" stroke="rgba(217,37,75,0.15)" strokeDasharray="3,3" rx={4} />
+                    <rect x={v.name.x} y={v.name.y} width={v.name.w} height={v.name.h} fill="rgba(239,68,68,0.03)" stroke="rgba(239,68,68,0.2)" strokeDasharray="3,3" rx={4} />
                     <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="800" fontFamily={dc.fontFamily} pointerEvents="none">
                       {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name, v.name.x + v.name.w / 2, v.name.y + v.name.h / 2, dc.fontSize, sf, slot.width)}
                     </text>
-                    {isSelected && selectedElem === 'name' && <rect x={v.name.x - 2} y={v.name.y - 2} width={v.name.w + 4} height={v.name.h + 4} fill="none" stroke="#D9254B" strokeWidth={2} rx={4} pointerEvents="none" />}
+                    {isSelected && selectedElem === 'name' && <rect x={v.name.x - 2} y={v.name.y - 2} width={v.name.w + 4} height={v.name.h + 4} fill="none" stroke="#ef4444" strokeWidth={2} rx={4} pointerEvents="none" />}
                   </g>
                 </g>
               );
@@ -341,44 +314,43 @@ export const FullEditor = ({ onClose }: EditorProps) => {
           </svg>
         </div>
 
-        {/* Modal edição de texto */}
         {editingProduct && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-[#121214] border border-white/10 rounded-2xl p-6 w-96 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 w-[400px] shadow-2xl animate-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-                  <Type className="w-4 h-4 text-primary" /> Editar Produto
+                <h3 className="text-[15px] font-semibold text-zinc-100 flex items-center gap-2">
+                  <Type className="w-4 h-4 text-red-500" /> Editar Produto
                 </h3>
-                <button onClick={() => setEditingProduct(null)} className="text-white/30 hover:text-white">
+                <button onClick={() => setEditingProduct(null)} className="text-zinc-500 hover:text-zinc-100 p-1 rounded-lg hover:bg-zinc-900 transition-all">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-[9px] font-black uppercase text-white/30 tracking-widest block mb-2">Descrição do Produto</label>
+                  <label className="text-[11px] font-medium text-zinc-400 block mb-1.5 ml-1">Descrição do Produto</label>
                   <textarea
                     value={editingProduct.name}
                     onChange={e => setEditingProduct(p => p ? { ...p, name: e.target.value } : null)}
                     rows={3}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-primary/50 resize-none"
+                    className="w-full bg-zinc-900 border border-zinc-800/60 rounded-xl px-4 py-3 text-[13px] font-semibold text-zinc-100 outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 resize-none shadow-sm"
                     autoFocus
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-black uppercase text-white/30 tracking-widest block mb-2">Preço</label>
+                  <label className="text-[11px] font-medium text-zinc-400 block mb-1.5 ml-1">Preço</label>
                   <input
                     value={editingProduct.price}
                     onChange={e => setEditingProduct(p => p ? { ...p, price: e.target.value } : null)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 h-11 text-sm font-black text-red-400 outline-none focus:border-primary/50"
+                    className="w-full bg-zinc-900 border border-zinc-800/60 rounded-xl px-4 h-11 text-[14px] font-semibold text-red-400 outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 shadow-sm"
                     onKeyDown={e => { if (e.key === 'Enter') saveProductEdit(); if (e.key === 'Escape') setEditingProduct(null); }}
                   />
                 </div>
               </div>
-              <div className="flex gap-3 mt-6">
-                <Button variant="ghost" onClick={() => setEditingProduct(null)} className="flex-1 h-11 bg-white/5 rounded-xl text-[10px] font-black uppercase text-white/40">
+              <div className="flex gap-3 mt-6 pt-2 border-t border-zinc-800/50">
+                <Button variant="ghost" onClick={() => setEditingProduct(null)} className="flex-1 h-11 rounded-xl text-[12px] font-semibold text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900">
                   Cancelar
                 </Button>
-                <Button onClick={saveProductEdit} className="flex-1 h-11 bg-primary hover:bg-primary/90 rounded-xl text-[10px] font-black uppercase">
+                <Button onClick={saveProductEdit} className="flex-1 h-11 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[12px] font-semibold shadow-sm">
                   <Save className="w-3.5 h-3.5 mr-2" /> Salvar
                 </Button>
               </div>
@@ -390,14 +362,12 @@ export const FullEditor = ({ onClose }: EditorProps) => {
   );
 };
 
-// ─── StepFinal Principal ───────────────────────────────────────────────────────
 export const StepFinal = () => {
   const { config, slots, products, pageCount, customFonts, getSlotSettings, customCanvasElements, slotSettings } = useOffer();
-  const navigate = useNavigate(); // ← MUDANÇA: substituiu useState(editorOpen)
+  const navigate = useNavigate();
   const svgRefs = useRef<(SVGSVGElement | null)[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [exportFilename, setExportFilename] = useState('tabloide_macmidia');
-  const [isSingleFile, setIsSingleFile] = useState(true);
 
   const toBase64 = async (url: string): Promise<string> => {
     if (!url) return '';
@@ -415,7 +385,6 @@ export const StepFinal = () => {
 
   const processSvgForExport = async (svg: SVGSVGElement, format: 'svg' | 'png') => {
     const clone = svg.cloneNode(true) as SVGSVGElement;
-    // Set proper SVG namespace attributes for Illustrator compatibility
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     clone.setAttribute('width', config.width.toString());
@@ -423,13 +392,11 @@ export const StepFinal = () => {
     clone.setAttribute('viewBox', `0 0 ${config.width} ${config.height}`);
     clone.removeAttribute('class');
 
-    // Remove @import CSS styles (Illustrator doesn't support them)
     clone.querySelectorAll('style').forEach(s => {
       const text = s.textContent || '';
       if (text.includes('@import')) s.remove();
     });
 
-    // Clean all elements: remove class, data-* attributes, non-visual styles
     clone.querySelectorAll('*').forEach(el => {
       el.removeAttribute('class');
       Array.from(el.attributes).forEach(attr => {
@@ -447,10 +414,8 @@ export const StepFinal = () => {
       }
     });
 
-    // Remove foreignObject (not supported in Illustrator)
     clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
 
-    // Convert all images to base64
     for (const img of Array.from(clone.querySelectorAll('image'))) {
       const href = img.getAttribute('href') || img.getAttribute('xlink:href');
       if (!href) continue;
@@ -469,7 +434,6 @@ export const StepFinal = () => {
     setIsProcessing(true);
     try {
       if (format === 'svg') {
-        // SVG: Always generate a SINGLE file with all pages side by side
         const spacing = 80;
         const totalW = pageCount * config.width + Math.max(0, pageCount - 1) * spacing;
         const combinedSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -479,7 +443,6 @@ export const StepFinal = () => {
         combinedSvg.setAttribute('height', config.height.toString());
         combinedSvg.setAttribute('viewBox', `0 0 ${totalW} ${config.height}`);
 
-        // Master background
         const masterBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         masterBg.setAttribute('x', '0'); masterBg.setAttribute('y', '0');
         masterBg.setAttribute('width', totalW.toString());
@@ -495,7 +458,6 @@ export const StepFinal = () => {
           g.setAttribute('id', `tela-${i + 1}`);
           g.setAttribute('transform', `translate(${i * (config.width + spacing)}, 0)`);
 
-          // Add white background for this artboard
           const pageBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
           pageBg.setAttribute('x', '0'); pageBg.setAttribute('y', '0');
           pageBg.setAttribute('width', config.width.toString());
@@ -508,7 +470,6 @@ export const StepFinal = () => {
         }
         saveAs(new Blob([new XMLSerializer().serializeToString(combinedSvg)], { type: 'image/svg+xml' }), `${exportFilename}.svg`);
       } else {
-        // PNG: ZIP for multiple pages
         const zip = new JSZip();
         for (let i = 0; i < pageCount; i++) {
           const svg = svgRefs.current[i];
@@ -572,15 +533,12 @@ export const StepFinal = () => {
   const handleOpenEditor = () => {
     try {
       const editorData = { config, slots, products, customFonts, pageCount, slotSettings, customCanvasElements };
-      // Inject to window object for direct access by the new tab
       (window as any).__MACMIDIA_EDITOR_DATA__ = editorData;
-      
       try {
         localStorage.setItem('macmidia_offer_editor_data', JSON.stringify(editorData));
       } catch (e) {
         console.warn('Payload too large for localStorage, using window.opener fallback');
       }
-
       window.open('/offer-editor', '_blank');
     } catch (e: any) {
       toast.error('Erro ao abrir editor: ' + e.message);
@@ -588,75 +546,60 @@ export const StepFinal = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b]">
-      {/* Header */}
-      <div className="p-6 border-b border-white/5 bg-[#0d0d10] flex items-center justify-between gap-6">
+    <div className="h-full flex flex-col bg-zinc-950">
+      <div className="p-6 border-b border-zinc-800 bg-zinc-900/30 flex items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
-            <CheckCircle className="w-5 h-5 text-green-500" />
+          <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center border border-red-500/20">
+            <CheckCircle className="w-5 h-5 text-red-400" />
           </div>
           <div>
-            <h2 className="text-sm font-black uppercase tracking-widest text-white">Artes Prontas</h2>
-            <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">{pageCount} telas geradas</p>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 text-red-500 rounded-full text-[10px] font-semibold mb-3">
+              <Monitor className="w-3.5 h-3.5" /> Passo 5
+            </div>
+            <h2 className="text-[15px] font-semibold tracking-tight text-zinc-100">Artes Prontas</h2>
+            <p className="text-[12px] text-zinc-500 font-medium mt-0.5">{pageCount} telas geradas</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          {/* ✅ BOTÃO EDITAR — abre em nova página */}
-          <style>{`
-            @keyframes btn-shine { 0% { left: -100%; } 50%, 100% { left: 120%; } }
-          `}</style>
           <button
             onClick={handleOpenEditor}
-            className="group relative h-11 px-7 rounded-2xl font-black uppercase text-[11px] tracking-[0.15em] text-white overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_rgba(234,179,8,0.25)] active:scale-[0.98]"
-            style={{
-              background: 'linear-gradient(135deg, #b45309 0%, #d97706 40%, #f59e0b 100%)',
-              boxShadow: '0 4px 20px rgba(245,158,11,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-            }}
+            className="h-11 px-6 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 font-semibold text-[13px] rounded-xl shadow-sm border border-zinc-800 transition-all flex items-center gap-2"
           >
-            {/* Shine sweep */}
-            <span className="absolute inset-0 pointer-events-none" style={{ animation: 'btn-shine 3s ease-in-out infinite' }}>
-              <span className="absolute top-0 left-0 w-[60%] h-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)', transform: 'skewX(-20deg)' }} />
-            </span>
-            <span className="relative flex items-center gap-2.5">
-              <Edit2 className="w-4 h-4 drop-shadow-sm" />
-              <span>Editar Telas</span>
-            </span>
+            <Edit2 className="w-4 h-4 text-red-400" />
+            <span>Editar Telas</span>
           </button>
 
-          <div className="flex-1 max-w-sm flex flex-col gap-2">
-            <input value={exportFilename} onChange={e => setExportFilename(e.target.value)} placeholder="Nome do arquivo..." className="bg-black/60 border border-white/10 rounded-lg h-9 px-4 text-[10px] font-bold text-white outline-none focus:border-primary/50 transition-all" />
-            <span className="text-[9px] font-black uppercase tracking-widest text-primary/60">SVG: Arquivo único • PNG: ZIP</span>
+          <div className="flex-1 max-w-sm flex flex-col gap-1.5">
+            <input value={exportFilename} onChange={e => setExportFilename(e.target.value)} placeholder="Nome do arquivo..." className="bg-zinc-900 border-zinc-800/60 rounded-xl h-11 px-4 text-[13px] font-medium text-zinc-100 outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 shadow-sm transition-all" />
+            <span className="text-[11px] font-medium text-zinc-500 ml-1">SVG: Arquivo único • PNG: ZIP</span>
           </div>
 
           <div className="flex gap-3">
-            <Button onClick={() => exportAll('svg')} disabled={isProcessing} className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl h-11 px-6 text-[10px] font-black uppercase tracking-widest">
+            <Button onClick={() => exportAll('svg')} disabled={isProcessing} className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 rounded-xl h-11 px-6 text-[12px] font-semibold text-zinc-300 shadow-sm transition-all">
               <FileIcon className="w-4 h-4 mr-2" /> Exportar SVG
             </Button>
-            <Button onClick={() => exportAll('png')} disabled={isProcessing} className="bg-blue-600 hover:bg-blue-700 rounded-xl h-11 px-8 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-              Baixar PNG
+            <Button onClick={() => exportAll('png')} disabled={isProcessing} className="bg-red-600 hover:bg-red-500 text-white rounded-xl h-11 px-8 text-[12px] font-semibold shadow-md shadow-red-900/20 transition-all">
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4 mr-2" /> Baixar PNG</>}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Grade de artes — SEM clique individual nas telas */}
-      <div className="flex-1 overflow-y-auto p-12 bg-black/40 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-12 bg-zinc-950/50 custom-scrollbar">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
           {Array.from({ length: pageCount }).map((_, i) => (
             <div key={i} className="flex flex-col items-center">
               <div className="mb-4 flex items-center justify-between w-full px-2">
-                <span className="text-[10px] font-black uppercase text-white/20 tracking-widest">Tela {i + 1}</span>
+                <span className="text-[12px] font-semibold text-zinc-500">Tela {i + 1}</span>
                 <div className="flex items-center gap-2">
-                  <Smartphone className="w-3 h-3 text-white/10" />
-                  <Monitor className="w-3 h-3 text-white/10" />
+                  <Smartphone className="w-3.5 h-3.5 text-zinc-600" />
+                  <Monitor className="w-3.5 h-3.5 text-zinc-600" />
                 </div>
               </div>
-              {/* ✅ Removido: onClick, cursor-pointer, overlay de hover */}
-              <div className="relative shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden border border-white/10 transition-all">
+              <div className="relative shadow-xl rounded-2xl overflow-hidden border border-zinc-800 transition-all bg-zinc-900/20">
                 <svg ref={el => svgRefs.current[i] = el} width="100%" viewBox={`0 0 ${config.width} ${config.height}`} className="w-full h-auto block bg-white">
-                  {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMid slice" />}
+                  {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMin slice" />}
                   <defs>{customFonts.map(f => <style key={f.name} type="text/css">{`@font-face { font-family: "${f.name}"; src: url("${f.url}"); }`}</style>)}</defs>
                   {slots.map((slot, sIdx) => renderProduct(products[i * slots.length + sIdx], slot, i * slots.length + sIdx))}
                   
@@ -689,8 +632,6 @@ export const StepFinal = () => {
           ))}
         </div>
       </div>
-
-      {/* ✅ Removido: {editorOpen && <FullEditor onClose={...} />} — agora é página separada */}
     </div>
   );
 };

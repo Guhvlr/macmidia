@@ -917,7 +917,7 @@ export const OfferEditorPage = () => {
     }
 
     targets.forEach(t => {
-      const b = t.isTemplate ? (getElems(t.el, getSlotSettings(t.gIdx)) as any)[t.type] : t;
+      const b = t.isTemplate ? (getElems(t.el, getSlotSettings(slots[t.gIdx].id)) as any)[t.type] : t;
       let dx = 0, dy = 0;
       if (type === 'left') dx = (isArtboard ? 0 : minX) - b.x;
       else if (type === 'right') dx = (isArtboard ? config.width : maxX) - (b.x + b.w);
@@ -943,25 +943,29 @@ export const OfferEditorPage = () => {
 
   /* ── Product font/style update helpers ── */
   const updateProductFont = useCallback((gIdx: number, type: EditElemType, key: string, val: any) => {
+    const slot = slots[gIdx];
+    if (!slot) return;
     pushHistory();
-    const cfg = getSlotSettings(gIdx);
+    const cfg = getSlotSettings(slot.id);
     if (type === 'name') {
-      updateSlotSettings(gIdx, { descConfig: { ...cfg.descConfig, [key]: val } });
+      updateSlotSettings(slot.id, { descConfig: { ...cfg.descConfig, [key]: val } });
     } else if (type === 'badgeValue') {
       const pbKey = key === 'fontFamily' ? 'valueFontFamily' : key === 'fontSize' ? 'valueFontSize' : key === 'color' ? 'valueColor' : key;
-      updateSlotSettings(gIdx, { priceBadge: { ...cfg.priceBadge, [pbKey]: val } });
+      updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, [pbKey]: val } });
     } else if (type === 'badgeCurrency') {
       const pbKey = key === 'fontFamily' ? 'currencyFontFamily' : key === 'fontSize' ? 'currencyFontSize' : key === 'color' ? 'currencyColor' : key;
-      updateSlotSettings(gIdx, { priceBadge: { ...cfg.priceBadge, [pbKey]: val } });
+      updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, [pbKey]: val } });
     } else if (type === 'badgeSuffix') {
       const pbKey = key === 'fontSize' ? 'suffixFontSize' : key === 'color' ? 'suffixColor' : key;
-      updateSlotSettings(gIdx, { priceBadge: { ...cfg.priceBadge, [pbKey]: val } });
+      updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, [pbKey]: val } });
     }
-  }, [pushHistory, getSlotSettings, updateSlotSettings]);
+  }, [pushHistory, slots, getSlotSettings, updateSlotSettings]);
 
   // Get product text style for panel display
   const getProductTextStyle = useCallback((gIdx: number, type: EditElemType) => {
-    const cfg = getSlotSettings(gIdx);
+    const slot = slots[gIdx];
+    if (!slot) return {};
+    const cfg = getSlotSettings(slot.id);
     if (type === 'name') {
       return { fontFamily: cfg.descConfig.fontFamily, fontSize: cfg.descConfig.fontSize, fontWeight: '800', color: cfg.descConfig.color, uppercase: cfg.descConfig.uppercase };
     } else if (type === 'badgeValue') {
@@ -972,7 +976,7 @@ export const OfferEditorPage = () => {
       return { fontFamily: cfg.priceBadge.valueFontFamily || 'Montserrat', fontSize: cfg.priceBadge.suffixFontSize, fontWeight: '600', color: cfg.priceBadge.suffixColor };
     }
     return {};
-  }, [getSlotSettings]);
+  }, [slots, getSlotSettings]);
 
   /* ───────────── BOUNDING BOX + HANDLES RENDERER ───────────── */
   const BBox = ({ b, type, gIdx, isCustom, elId, el }: { b: any; type?: EditElemType; gIdx?: number; isCustom?: boolean; elId?: string; el?: any }) => {
@@ -1551,11 +1555,13 @@ export const OfferEditorPage = () => {
                   {propProductType === 'name' && (
                     <div>
                       <label className="flex items-center gap-2 cursor-pointer" onClick={() => {
+                        const slot = slots[propProductIdx];
+                        if (!slot) return;
                         pushHistory();
-                        const cfg = getSlotSettings(propProductIdx);
-                        updateSlotSettings(propProductIdx, { descConfig: { ...cfg.descConfig, uppercase: !cfg.descConfig.uppercase } });
+                        const cfg = getSlotSettings(slot.id);
+                        updateSlotSettings(slot.id, { descConfig: { ...cfg.descConfig, uppercase: !cfg.descConfig.uppercase } });
                       }}>
-                        <div className={`w-8 h-4 rounded-full transition-colors flex items-center ${getSlotSettings(propProductIdx).descConfig.uppercase ? 'bg-[#007acc] justify-end' : 'bg-[#444] justify-start'}`}><div className="w-3.5 h-3.5 rounded-full bg-white mx-0.5" /></div>
+                        <div className={`w-8 h-4 rounded-full transition-colors flex items-center ${getSlotSettings(slots[propProductIdx].id).descConfig.uppercase ? 'bg-[#007acc] justify-end' : 'bg-[#444] justify-start'}`}><div className="w-3.5 h-3.5 rounded-full bg-white mx-0.5" /></div>
                         <span className="text-[10px] text-[#aaa]">CAIXA ALTA</span>
                       </label>
                     </div>
@@ -1600,8 +1606,9 @@ export const OfferEditorPage = () => {
             )}
 
             {/* ─── PRODUCT BADGE BG PROPERTIES ─── */}
-            {isProductBadgeBg && propProductIdx !== null && products[propProductIdx] && (() => {
-              const cfg = getSlotSettings(propProductIdx);
+            {isProductBadgeBg && propProductIdx !== null && products[propProductIdx] && slots[propProductIdx] && (() => {
+              const slot = slots[propProductIdx];
+              const cfg = getSlotSettings(slot.id);
               return (
                 <div className="space-y-3">
                   <div className="bg-[#1e1e1e] border-l-2 border-[#007acc] rounded p-3">
@@ -1611,8 +1618,8 @@ export const OfferEditorPage = () => {
                   <div>
                     <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Cor de Fundo</label>
                     <div className="flex bg-[#1e1e1e] border border-[#444] rounded h-7 overflow-hidden">
-                      <input type="color" value={cfg.priceBadge.bgColor || '#e11d48'} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, bgColor: e.target.value } }); }} className="w-7 h-full border-0 p-0 bg-transparent cursor-pointer" />
-                      <input type="text" value={cfg.priceBadge.bgColor || '#e11d48'} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, bgColor: e.target.value } }); }} className="flex-1 bg-transparent px-1 text-[10px] text-[#ccc] outline-none uppercase font-mono" />
+                      <input type="color" value={cfg.priceBadge.bgColor || '#e11d48'} onChange={e => { pushHistory(); updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, bgColor: e.target.value } }); }} className="w-7 h-full border-0 p-0 bg-transparent cursor-pointer" />
+                      <input type="text" value={cfg.priceBadge.bgColor || '#e11d48'} onChange={e => { pushHistory(); updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, bgColor: e.target.value } }); }} className="flex-1 bg-transparent px-1 text-[10px] text-[#ccc] outline-none uppercase font-mono" />
                     </div>
                   </div>
                   <div>
@@ -1627,7 +1634,7 @@ export const OfferEditorPage = () => {
                         pushHistory();
                         const val = +e.target.value;
                         const ratio = cfg.priceBadge.badgeHeight / cfg.priceBadge.badgeWidth;
-                        updateSlotSettings(propProductIdx, { 
+                        updateSlotSettings(slot.id, { 
                           priceBadge: { 
                             ...cfg.priceBadge, 
                             badgeWidth: val,
@@ -1640,18 +1647,18 @@ export const OfferEditorPage = () => {
                     <div className="flex gap-2">
                       <div className="flex-1">
                         <label className="text-[7px] text-[#555] uppercase font-bold">Largura</label>
-                        <input type="number" value={cfg.priceBadge.badgeWidth || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, badgeWidth: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc]" />
+                        <input type="number" value={cfg.priceBadge.badgeWidth || 0} onChange={e => { pushHistory(); updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, badgeWidth: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc]" />
                       </div>
                       <div className="flex-1">
                         <label className="text-[7px] text-[#555] uppercase font-bold">Altura</label>
-                        <input type="number" value={cfg.priceBadge.badgeHeight || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, badgeHeight: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc]" />
+                        <input type="number" value={cfg.priceBadge.badgeHeight || 0} onChange={e => { pushHistory(); updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, badgeHeight: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-[10px] text-[#ccc]" />
                       </div>
                     </div>
                   </div>
                   <div>
                     <label className="text-[9px] text-[#888] uppercase font-bold mb-1 block">Arredondamento</label>
-                    <input type="range" min="0" max="100" step="1" value={cfg.priceBadge.borderRadius || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, borderRadius: +e.target.value } }); }} className="w-full accent-[#007acc] mb-1" />
-                    <input type="number" value={cfg.priceBadge.borderRadius || 0} onChange={e => { pushHistory(); updateSlotSettings(propProductIdx, { priceBadge: { ...cfg.priceBadge, borderRadius: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-xs text-[#ccc] outline-none focus:border-[#007acc]" />
+                    <input type="range" min="0" max="100" step="1" value={cfg.priceBadge.borderRadius || 0} onChange={e => { pushHistory(); updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, borderRadius: +e.target.value } }); }} className="w-full accent-[#007acc] mb-1" />
+                    <input type="number" value={cfg.priceBadge.borderRadius || 0} onChange={e => { pushHistory(); updateSlotSettings(slot.id, { priceBadge: { ...cfg.priceBadge, borderRadius: +e.target.value } }); }} className="w-full bg-[#1e1e1e] border border-[#444] rounded h-7 px-2 text-xs text-[#ccc] outline-none focus:border-[#007acc]" />
                   </div>
                 </div>
               );

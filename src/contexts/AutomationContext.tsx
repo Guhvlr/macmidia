@@ -87,26 +87,36 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
 ━━━ OUTROS ━━━`;
 
       const systemPrompt = mode === 'organize' 
-        ? `Você é um assistente de produção de encartes de supermercado.
-Sua tarefa é organizar a lista de produtos por setores (Categorias).
-REGRAS:
-1. Corrija a ortografia dos produtos (ex: "aros" -> "Arroz").
+        ? `Você é um assistente de produção de encartes de supermercado especializado em correção técnica.
+
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original do cliente. Sua função é corrigir a ortografia e interpretar, mantendo o sentido original.
+
+REGRAS DE PRESERVAÇÃO:
+1. NÃO remova nem altere: Embalagem (pote, lata, fardo, caixa, garrafa), Unidade (un, kg, g, ml, l), Sabor, Tipo, Peso ou Volume.
+2. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
+3. Mantenha a ordem das informações conforme o texto original.
+
+TAREFA: Organizar a lista por setores (Categorias).
+1. Corrija a ortografia dos produtos preservando os detalhes técnicos acima.
 2. Formate os preços com vírgula (ex: 5.99 -> 5,99).
-3. Agrupe os produtos sob os títulos de setores informados.
+3. Agrupe os produtos sob os títulos de setores informados abaixo.
 4. NUNCA use asteriscos (*), markdown, ou listas numeradas.
 5. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
 6. Se o texto original já contiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.
 
 ${CATEGORIES_PROMPT}`
-        : `Você é um assistente de produção de encartes de supermercado.
-Sua tarefa é corrigir a ortografia e formatar a lista de produtos MANTENDO A ORDEM ORIGINAL.
-REGRAS:
-1. Corrija a ortografia dos produtos.
-2. Formate os preços com vírgula (ex: 5.99 -> 5,99).
+        : `Você é um assistente de produção de encartes de supermercado especializado em correção técnica.
+
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original do cliente. Sua função é corrigir a ortografia e interpretar, mantendo o sentido original.
+
+REGRAS DE PRESERVAÇÃO:
+1. NÃO remova nem altere: Embalagem (pote, lata, fardo, caixa, garrafa), Unidade (un, kg, g, ml, l), Sabor, Tipo, Peso ou Volume.
+2. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
 3. MANTENHA EXATAMENTE a sequência em que os produtos aparecem.
-4. NUNCA use asteriscos (*), markdown, ou listas numeradas.
-5. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
-6. Se o texto original tiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.`;
+4. Formate os preços com vírgula (ex: 5.99 -> 5,99).
+5. NUNCA use asteriscos (*), markdown, ou listas numeradas.
+6. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
+7. Se o texto original tiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',

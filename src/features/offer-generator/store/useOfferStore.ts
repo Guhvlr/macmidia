@@ -28,6 +28,7 @@ export interface Slot {
   y: number;
   width: number;
   height: number;
+  pageIndex?: number;
 }
 
 export interface PriceBadgeConfig {
@@ -86,7 +87,7 @@ export const defaultPriceBadge: PriceBadgeConfig = {
   badgeWidth: 320,
   badgeHeight: 130,
   badgeOffsetX: 50,
-  badgeOffsetY: 78,
+  badgeOffsetY: 70,
   currencyFontSize: 26,
   currencyOffsetX: 15,
   currencyOffsetY: 52,
@@ -238,7 +239,45 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   selectedSlotId: null,
   setSelectedSlotId: (selectedSlotId) => set({ selectedSlotId }),
   pageCount: 1,
-  setPageCount: (pageCount) => set({ pageCount }),
+  setPageCount: (countOrFn) => {
+    const state = get();
+    const oldCount = state.pageCount;
+    const newCount = typeof countOrFn === 'function' ? countOrFn(oldCount) : countOrFn;
+    
+    if (newCount > oldCount) {
+      // Duplicate slots from the last available page to the new pages
+      const lastPageIdx = oldCount - 1;
+      const lastPageSlots = state.slots.filter(s => (s.pageIndex || 0) === lastPageIdx);
+      const lastPageStartIdx = state.slots.filter(s => (s.pageIndex || 0) < lastPageIdx).length;
+      
+      const newSlots = [...state.slots];
+      const newSettings = { ...state.slotSettings };
+      
+      let currentTotalSlots = state.slots.length;
+      
+      for (let i = oldCount; i < newCount; i++) {
+        lastPageSlots.forEach((s, slotInPageIdx) => {
+          const newSlotId = crypto.randomUUID();
+          newSlots.push({ ...s, id: newSlotId, pageIndex: i });
+          
+          // Copy settings from the corresponding slot on the last page
+          const sourceSlot = lastPageSlots[slotInPageIdx];
+          if (sourceSlot && state.slotSettings[sourceSlot.id]) {
+            newSettings[newSlotId] = { ...state.slotSettings[sourceSlot.id] };
+          }
+          currentTotalSlots++;
+        });
+      }
+      set({ pageCount: newCount, slots: newSlots, slotSettings: newSettings });
+    } else if (newCount < oldCount) {
+      // Remove slots and settings for deleted pages
+      const filteredSlots = state.slots.filter(s => (s.pageIndex || 0) < newCount);
+      // We should also ideally clean up slotSettings, but it's less critical and hard to re-index
+      set({ pageCount: newCount, slots: filteredSlots });
+    } else {
+      set({ pageCount: newCount });
+    }
+  },
   priceBadge: defaultPriceBadge,
   setPriceBadge: (priceBadge) => set({ priceBadge }),
   updatePriceBadge: (p) => set((state) => ({ priceBadge: { ...state.priceBadge, ...p } })),
@@ -295,12 +334,12 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   setIsLoadingPresets: (isLoadingPresets) => set({ isLoadingPresets }),
   slotSettings: {},
   setSlotSettings: (slotSettings) => set((state) => ({ slotSettings: typeof slotSettings === 'function' ? slotSettings(state.slotSettings) : slotSettings })),
-  updateSlotSettings: (index, p) => {
+  updateSlotSettings: (slotId, p) => {
     set((state) => {
-      const current = state.slotSettings[index] || {};
+      const current = state.slotSettings[slotId] || {};
       const updated = { 
         ...state.slotSettings, 
-        [index]: { 
+        [slotId]: { 
           ...current,
           priceBadge: p.priceBadge ? { ...(current.priceBadge || {}), ...p.priceBadge } : current.priceBadge,
           descConfig: p.descConfig ? { ...(current.descConfig || {}), ...p.descConfig } : current.descConfig,
@@ -568,8 +607,21 @@ export const useOfferStore = create<OfferState>((set, get) => ({
     const base = state.pageTemplates.find(t => t.id === id);
     if (!base) return;
     state.pushHistory();
+
+    // Sanitize template slots
+    let sanitizedSlots = base.slots || [];
+    sanitizedSlots = sanitizedSlots.map((slot: any) => ({
+      ...slot,
+      pageIndex: slot.pageIndex !== undefined ? slot.pageIndex : 0
+    }));
+
+    // Calculate page count from slots
+    const maxPageIdx = sanitizedSlots.length > 0 ? Math.max(...sanitizedSlots.map((sl: any) => sl.pageIndex || 0)) : 0;
+    const newPageCount = Math.max(1, maxPageIdx + 1);
+
     set({
-      slots: base.slots || [],
+      slots: sanitizedSlots,
+      pageCount: newPageCount,
       slotSettings: base.slotSettings || {},
       priceBadge: base.priceBadge || state.priceBadge,
       descConfig: base.descConfig || state.descConfig,
@@ -578,9 +630,9 @@ export const useOfferStore = create<OfferState>((set, get) => ({
     toast.success(`Template "${base.name}" carregado!`);
   },
 
-  getSlotSettings: (index: number) => {
+  getSlotSettings: (slotId: string) => {
     const state = get();
-    const s = state.slotSettings[index] || {};
+    const s = state.slotSettings[slotId] || {};
     return {
       priceBadge: { ...state.priceBadge, ...(s.priceBadge || {}) },
       descConfig: { ...state.descConfig, ...(s.descConfig || {}) },
@@ -588,37 +640,63 @@ export const useOfferStore = create<OfferState>((set, get) => ({
     };
   },
 
-  replaceSlotSettings: (index: number, settings: any) => {
-    set((state) => ({ slotSettings: { ...state.slotSettings, [index]: settings } }));
+  replaceSlotSettings: (slotId: string, settings: any) => {
+    set((state) => ({ slotSettings: { ...state.slotSettings, [slotId]: settings } }));
   },
 
   syncAllSlots: async (unused: any, sourceIdx: number) => {
     try {
       const state = get();
-      const totalSlots = (state.pageCount || 1) * (state.slots?.length || 12);
-      const sourceStyle = state.getSlotSettings(sourceIdx);
+      const totalSlotsCount = state.slots.length;
+      if (totalSlotsCount === 0) return;
       
-      const pTemplates: Record<number, any> = {};
-      const pageSlotCount = state.slots.length || 1;
-      
-      for (let i = 0; i < pageSlotCount; i++) {
-          const globalIdx = state.activePage * pageSlotCount + i;
-          pTemplates[i] = { ...state.getSlotSettings(globalIdx) };
-      }
- 
+      const src = state.getSlotSettings(sourceIdx);
       const newSettings: Record<number, any> = {};
-      for (let i = 0; i < totalSlots; i++) {
-          const slotIndex = i % pageSlotCount;
-          newSettings[i] = { ...(pTemplates[slotIndex] || sourceStyle) };
+      
+      // List of positioning properties that should NOT be synced globally
+      const badgePosKeys = [
+        'badgeOffsetX', 'badgeOffsetY', 'badgeWidth', 'badgeHeight',
+        'currencyOffsetX', 'currencyOffsetY', 'currencyFontSize',
+        'valueOffsetX', 'valueOffsetY', 'valueFontSize',
+        'suffixOffsetX', 'suffixOffsetY', 'suffixFontSize'
+      ];
+      const descPosKeys = ['offsetX', 'offsetY', 'fontSize'];
+      const imgPosKeys = ['offsetX', 'offsetY', 'scale'];
+
+      for (let i = 0; i < totalSlotsCount; i++) {
+          const target = state.getSlotSettings(i);
+          
+          // Merge style from source with position from target
+          const priceBadge = { ...src.priceBadge };
+          badgePosKeys.forEach(key => { (priceBadge as any)[key] = (target.priceBadge as any)[key]; });
+
+          const descConfig = { ...src.descConfig };
+          descPosKeys.forEach(key => { (descConfig as any)[key] = (target.descConfig as any)[key]; });
+
+          const imageConfig = { ...src.imageConfig };
+          imgPosKeys.forEach(key => { (imageConfig as any)[key] = (target.imageConfig as any)[key]; });
+
+          newSettings[i] = { priceBadge, descConfig, imageConfig };
       }
       
+      // Update globals but ONLY for style properties (non-positioning)
+      const globalPriceBadge = { ...state.priceBadge };
+      Object.keys(src.priceBadge).forEach(key => {
+        if (!badgePosKeys.includes(key)) (globalPriceBadge as any)[key] = (src.priceBadge as any)[key];
+      });
+
+      const globalDescConfig = { ...state.descConfig };
+      Object.keys(src.descConfig).forEach(key => {
+        if (!descPosKeys.includes(key)) (globalDescConfig as any)[key] = (src.descConfig as any)[key];
+      });
+
       set({
         slotSettings: newSettings,
-        priceBadge: { ...sourceStyle.priceBadge },
-        descConfig: { ...sourceStyle.descConfig }
+        priceBadge: globalPriceBadge,
+        descConfig: globalDescConfig
       });
       
-      toast.success('Visual sincronizado em todas as telas!');
+      toast.success('Estilo sincronizado (mantendo posições de cada tela)!');
     } catch (err) {
       console.error('Sync Error:', err);
       toast.error('Erro ao sincronizar');
@@ -655,11 +733,28 @@ export const useOfferStore = create<OfferState>((set, get) => ({
   loadProjectState: (s: any) => {
     if (!s) return;
     const state = get();
+    
+    // Sanitize slots to ensure they all have a pageIndex
+    let sanitizedSlots = s.slots || state.slots;
+    if (Array.isArray(sanitizedSlots)) {
+      sanitizedSlots = sanitizedSlots.map(slot => ({
+        ...slot,
+        pageIndex: slot.pageIndex !== undefined ? slot.pageIndex : 0
+      }));
+    }
+
+    // Determine correct page count
+    let calculatedPageCount = s.pageCount != null ? s.pageCount : state.pageCount;
+    if (sanitizedSlots.length > 0) {
+      const maxPageIdx = Math.max(...sanitizedSlots.map((sl: any) => sl.pageIndex || 0));
+      calculatedPageCount = Math.max(calculatedPageCount, maxPageIdx + 1);
+    }
+
     set({
       step: s.step != null ? s.step : state.step,
       config: s.config ? { ...defaultConfig, ...s.config } : state.config,
-      slots: s.slots ? s.slots : state.slots,
-      pageCount: s.pageCount != null ? s.pageCount : state.pageCount,
+      slots: sanitizedSlots,
+      pageCount: calculatedPageCount,
       priceBadge: s.priceBadge ? { ...defaultPriceBadge, ...s.priceBadge } : state.priceBadge,
       descConfig: s.descConfig ? { ...defaultDescConfig, ...s.descConfig } : state.descConfig,
       imageConfig: s.imageConfig ? { ...defaultImageConfig, ...s.imageConfig } : state.imageConfig,
@@ -808,13 +903,14 @@ export const useOfferStore = create<OfferState>((set, get) => ({
       const offX = (scx / canvas.width) * 100;
       const offY = (scy / canvas.height) * 100;
 
-      const slot = state.slots[productIdx % state.slots.length] || { width: 500, height: 500 };
+      const slot = state.slots[productIdx];
+      if (!slot) return;
       const scaleX = slot.width / sw;
       const scaleY = slot.height / sh;
       const baseScale = Math.min(scaleX, scaleY) * 0.85;
       
       state.pushHistory();
-      state.updateSlotSettings(productIdx, {
+      state.updateSlotSettings(slot.id, {
         imageConfig: {
           offsetX: offX,
           offsetY: offY,

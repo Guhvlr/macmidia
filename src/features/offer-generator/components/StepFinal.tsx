@@ -13,27 +13,26 @@ import { toast } from 'sonner';
 
 type ElemId = 'image' | 'name' | 'badge' | 'currency' | 'value' | 'suffix';
 
-// ─── Texto com quebra dinâmica ────────────────────────────────────────────────
-const renderWrappedText = (
-  text: string, x: number, y: number,
-  fontSize: number, sFactor: number, slotWidth: number
-) => {
-  const scaledFs = fontSize * sFactor;
-  const charsPerLine = 18;
-  const words = (text || '').split(' ');
-  const lines: string[] = [];
-  let cur = '';
-  words.forEach(w => {
-    if ((cur + w).length > charsPerLine) { if (cur.trim()) lines.push(cur.trim()); cur = w + ' '; }
-    else cur += w + ' ';
-  });
-  if (cur.trim()) lines.push(cur.trim());
-  const lh = scaledFs * 1.1;
-  const startY = y - (lines.length * lh) / 2 + lh / 2;
-  return lines.map((l, i) => i === 0
-    ? <tspan key={i} x={x} y={startY}>{l}</tspan>
-    : <tspan key={i} x={x} dy={lh}>{l}</tspan>
-  );
+// ─── Texto em linha única (Revertido para facilitar edição no Illustrator) ─────
+const renderWrappedText = (text: string) => {
+  return text || "";
+};
+
+// ─── Utilidades de Coordenadas ────────────────────────────────────────────────
+const getElems = (slot: any, cfg: any) => {
+  const sf = (slot?.width || 500) / 500;
+  const { priceBadge: b, imageConfig: ic, descConfig: d } = cfg;
+  const bX = slot.x + (b.badgeOffsetX / 100) * slot.width - (b.badgeWidth * sf) / 2;
+  const bY = slot.y + (b.badgeOffsetY / 100) * slot.height - (b.badgeHeight * sf) / 2;
+  return {
+    image: { x: slot.x + slot.width * ic.offsetX/100 - (slot.width*0.8*ic.scale)/2, y: slot.y + slot.height * ic.offsetY/100 - (slot.height*0.6*ic.scale)/2, w: slot.width*0.8*ic.scale, h: slot.height*0.6*ic.scale },
+    name: { x: slot.x + slot.width * d.offsetX/100 - slot.width*0.4, y: slot.y + slot.height * d.offsetY/100 - (d.fontSize*sf)/2, w: slot.width*0.8, h: d.fontSize*sf*1.5 },
+    badge: { x: bX, y: bY, w: b.badgeWidth * sf, h: b.badgeHeight * sf },
+    currency: { x: bX + (b.badgeWidth * sf) * b.currencyOffsetX / 100, y: bY + (b.badgeHeight * sf) * b.currencyOffsetY / 100 },
+    value: { x: bX + (b.badgeWidth * sf) * b.valueOffsetX / 100, y: bY + (b.badgeHeight * sf) * b.valueOffsetY / 100 },
+    suffix: { x: bX + (b.badgeWidth * sf) * b.suffixOffsetX / 100, y: bY + (b.badgeHeight * sf) * b.suffixOffsetY / 100 },
+    sFactor: sf
+  };
 };
 
 // ─── Editor Visual ─────────────────────────────────────────────────────────────
@@ -103,16 +102,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
     };
   }, [config]);
 
-  const getElems = useCallback((slot: any, cfg: any) => {
-    const sf = (slot?.width || 500) / 500;
-    const { priceBadge: b, imageConfig: ic, descConfig: d } = cfg;
-    return {
-      image: { x: slot.x + slot.width * ic.offsetX / 100 - (slot.width * 0.8 * ic.scale) / 2, y: slot.y + slot.height * ic.offsetY / 100 - (slot.height * 0.6 * ic.scale) / 2, w: slot.width * 0.8 * ic.scale, h: slot.height * 0.6 * ic.scale },
-      name: { x: slot.x + slot.width * d.offsetX / 100 - slot.width * 0.4, y: slot.y + slot.height * d.offsetY / 100 - (d.fontSize * sf) / 2, w: slot.width * 0.8, h: d.fontSize * sf * 1.5 },
-      badge: { x: slot.x + (b.badgeOffsetX / 100) * slot.width - (b.badgeWidth * sf) / 2, y: slot.y + (b.badgeOffsetY / 100) * slot.height - (b.badgeHeight * sf) / 2, w: b.badgeWidth * sf, h: b.badgeHeight * sf },
-      sFactor: sf
-    };
-  }, []);
+
 
   const onStartDrag = (e: React.MouseEvent, id: ElemId, gIdx: number) => {
     if (e.button !== 0) return;
@@ -257,25 +247,29 @@ export const FullEditor = ({ onClose }: EditorProps) => {
               <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMin slice" />
             )}
 
-            {slots.map((slot, sIdx) => {
-              const gIdx = activePage * slots.length + sIdx;
-              const product = products[gIdx];
-              if (!product) return null;
+            {(() => {
+              const pageSlots = slots.filter(s => (s.pageIndex || 0) === activePage);
+              const productStartIdx = slots.filter(s => (s.pageIndex || 0) < activePage).length;
+              
+              return pageSlots.map((slot, sIdx) => {
+                const gIdx = productStartIdx + sIdx;
+                const product = products[gIdx];
+                if (!product) return null;
 
-              const cfg = getSlotSettings(gIdx);
-              const { priceBadge: pb, descConfig: dc } = cfg;
-              const sf = slot.width / 500;
-              const el = getElems(slot, cfg);
-              const isSelected = selectedSlotIndex === gIdx;
+                const cfg = getSlotSettings(gIdx);
+                const { priceBadge: pb, descConfig: dc } = cfg;
+                const sf = slot.width / 500;
+                const el = getElems(slot, cfg);
+                const isSelected = selectedSlotIndex === gIdx;
 
-              const v = { ...el };
-              if (isSelected && dragState && dragging) {
-                (v as any)[dragging] = { ...(v as any)[dragging], x: (v as any)[dragging].x + dragState.dx, y: (v as any)[dragging].y + dragState.dy };
-              }
+                const v = { ...el };
+                if (isSelected && dragState && dragging) {
+                  (v as any)[dragging] = { ...(v as any)[dragging], x: (v as any)[dragging].x + dragState.dx, y: (v as any)[dragging].y + dragState.dy };
+                }
 
-              return (
-                <g key={gIdx}>
-                  <rect x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="none" stroke={isSelected ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSelected ? 3 : 1} strokeDasharray={isSelected ? 'none' : '4,2'} pointerEvents="none" />
+                return (
+                  <g key={gIdx}>
+                    <rect x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="none" stroke={isSelected ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSelected ? 3 : 1} strokeDasharray={isSelected ? 'none' : '4,2'} pointerEvents="none" />
 
                   <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'image', gIdx)}>
                     <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" rx={8} />
@@ -288,9 +282,9 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                       ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" />
                       : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={pb.borderRadius * sf} fill={pb.bgColor} />
                     }
-                    <text x={v.badge.x + v.badge.w * pb.currencyOffsetX / 100} y={v.badge.y + v.badge.h * pb.currencyOffsetY / 100} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>
-                    <text x={v.badge.x + v.badge.w * pb.valueOffsetX / 100} y={v.badge.y + v.badge.h * pb.valueOffsetY / 100} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
-                    {pb.showSuffix && <text x={v.badge.x + v.badge.w * pb.suffixOffsetX / 100} y={v.badge.y + v.badge.h * pb.suffixOffsetY / 100} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{product.suffix || pb.suffixText}</text>}
+                    <text x={v.badge.x + (v.badge.w * pb.currencyOffsetX / 100)} y={v.badge.y + (v.badge.h * pb.currencyOffsetY / 100)} textAnchor="middle" dy=".35em" fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>
+                    <text x={v.badge.x + (v.badge.w * pb.valueOffsetX / 100)} y={v.badge.y + (v.badge.h * pb.valueOffsetY / 100)} dy=".35em" fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
+                    {pb.showSuffix && <text x={v.badge.x + (v.badge.w * pb.suffixOffsetX / 100)} y={v.badge.y + (v.badge.h * pb.suffixOffsetY / 100)} dy=".35em" fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{product.suffix || pb.suffixText}</text>}
                     {isSelected && selectedElem === 'badge' && <rect x={v.badge.x - 2} y={v.badge.y - 2} width={v.badge.w + 4} height={v.badge.h + 4} fill="none" stroke="#ef4444" strokeWidth={2} rx={pb.borderRadius * sf} pointerEvents="none" />}
                   </g>
 
@@ -302,15 +296,28 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                       setEditingProduct({ id: product.id, name: product.name, price: product.price });
                     }}
                   >
-                    <rect x={v.name.x} y={v.name.y} width={v.name.w} height={v.name.h} fill="rgba(239,68,68,0.03)" stroke="rgba(239,68,68,0.2)" strokeDasharray="3,3" rx={4} />
-                    <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="800" fontFamily={dc.fontFamily} pointerEvents="none">
-                      {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name, v.name.x + v.name.w / 2, v.name.y + v.name.h / 2, dc.fontSize, sf, slot.width)}
+                    <text 
+                      x={slot.x + slot.width * dc.offsetX / 100} 
+                      y={slot.y + slot.height * dc.offsetY / 100} 
+                      style={{ textAnchor: 'middle', textAlign: 'center', whiteSpace: 'pre' }}
+                      textAnchor="middle" 
+                      textAlign="center"
+                      dy=".35em" 
+                      fill={dc.color} 
+                      fontSize={dc.fontSize * sf} 
+                      fontWeight="900" 
+                      fontFamily={dc.fontFamily} 
+                      letterSpacing="-0.02em"
+                      pointerEvents="none"
+                    >
+                      {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name)}
                     </text>
                     {isSelected && selectedElem === 'name' && <rect x={v.name.x - 2} y={v.name.y - 2} width={v.name.w + 4} height={v.name.h + 4} fill="none" stroke="#ef4444" strokeWidth={2} rx={4} pointerEvents="none" />}
                   </g>
                 </g>
               );
-            })}
+            });
+          })()}
           </svg>
         </div>
 
@@ -336,6 +343,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                     autoFocus
                   />
                 </div>
+
                 <div>
                   <label className="text-[11px] font-medium text-zinc-400 block mb-1.5 ml-1">Preço</label>
                   <input
@@ -450,10 +458,18 @@ export const StepFinal = () => {
         masterBg.setAttribute('fill', '#e0e0e0');
         combinedSvg.appendChild(masterBg);
 
-        for (let i = 0; i < pageCount; i++) {
-          const svg = svgRefs.current[i];
-          if (!svg) continue;
-          const processed = await processSvgForExport(svg, format);
+          for (let i = 0; i < pageCount; i++) {
+            const svg = svgRefs.current[i];
+            if (!svg) continue;
+            
+            // Check if this page has any slots. If not, it's just a background page.
+            const hasSlots = slots.some(s => (s.pageIndex || 0) === i);
+            if (!hasSlots && pageCount > 1) {
+               // Only skip if there are other pages with slots, or if it's explicitly empty.
+               // Actually, user might want empty pages. Let's keep it.
+            }
+
+            const processed = await processSvgForExport(svg, format);
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           g.setAttribute('id', `tela-${i + 1}`);
           g.setAttribute('transform', `translate(${i * (config.width + spacing)}, 0)`);
@@ -498,33 +514,42 @@ export const StepFinal = () => {
 
   const renderProduct = (product: ProductItem, slot: any, index: number) => {
     if (!product) return null;
-    const { priceBadge: pb, descConfig: dc, imageConfig: ic } = getSlotSettings(index);
-    const sf = (slot?.width || 500) / 500;
-    const imgW = slot.width * 0.8 * ic.scale;
-    const imgH = slot.height * 0.6 * ic.scale;
-    const imgX = slot.x + slot.width * ic.offsetX / 100 - imgW / 2;
-    const imgY = slot.y + slot.height * ic.offsetY / 100 - imgH / 2;
-    const badgeW = pb.badgeWidth * sf;
-    const badgeH = pb.badgeHeight * sf;
-    const badgeX = slot.x + (pb.badgeOffsetX / 100) * slot.width;
-    const badgeY = slot.y + (pb.badgeOffsetY / 100) * slot.height;
-    const nameX = slot.x + (dc.offsetX / 100) * slot.width;
-    const nameY = slot.y + (dc.offsetY / 100) * slot.height;
+    const cfg = getSlotSettings(index);
+    const { priceBadge: pb, descConfig: dc } = cfg;
+    const v = getElems(slot, cfg);
+    const sf = v.sFactor;
 
     return (
       <g key={product.id}>
         {(product.images || []).slice(0, 3).reverse().map((img, iIdx, arr) => {
           const pos = arr.length - 1 - iIdx;
-          return <image key={`img-${pos}`} href={img} x={imgX + pos * 20} y={imgY - pos * 10} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />;
+          return <image key={`img-${pos}`} href={img} x={v.image.x + pos * 20} y={v.image.y - pos * 10} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" />;
         })}
-        <g transform={`translate(${badgeX}, ${badgeY})`}>
-          {pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} preserveAspectRatio="xMidYMid meet" /> : <rect x={-badgeW / 2} y={-badgeH / 2} width={badgeW} height={badgeH} fill={pb.bgColor} rx={pb.borderRadius * sf} />}
-          <text x={-badgeW / 2 + (pb.currencyOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.currencyOffsetY / 100) * badgeH} fill={pb.currencyColor} fontSize={pb.currencyFontSize * sf} fontFamily={pb.currencyFontFamily} fontWeight="900">R$</text>
-          <text x={-badgeW / 2 + (pb.valueOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.valueOffsetY / 100) * badgeH + pb.valueFontSize * sf * 0.15} fill={pb.valueColor} textAnchor="middle" fontSize={pb.valueFontSize * sf} fontFamily={pb.valueFontFamily} fontWeight="900" letterSpacing="-0.05em">{product.price.replace('R$', '').trim()}</text>
-          {pb.showSuffix && <text x={-badgeW / 2 + (pb.suffixOffsetX / 100) * badgeW} y={-badgeH / 2 + (pb.suffixOffsetY / 100) * badgeH + pb.suffixFontSize * sf * 0.5} fill={pb.suffixColor} textAnchor="middle" fontSize={pb.suffixFontSize * sf} fontWeight="bold">{product.suffix || pb.suffixText}</text>}
+        
+        <g>
+          {pb.badgeImageUrl 
+            ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" /> 
+            : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} fill={pb.bgColor} rx={pb.borderRadius * sf} />
+          }
+          <text x={v.badge.x + (v.badge.w * pb.currencyOffsetX / 100)} y={v.badge.y + (v.badge.h * pb.currencyOffsetY / 100)} textAnchor="middle" dy=".35em" fill={pb.currencyColor} fontSize={pb.currencyFontSize * sf} fontFamily={pb.currencyFontFamily} fontWeight="900">R$</text>
+          <text x={v.badge.x + (v.badge.w * pb.valueOffsetX / 100)} y={v.badge.y + (v.badge.h * pb.valueOffsetY / 100)} dy=".35em" fill={pb.valueColor} textAnchor="middle" fontSize={pb.valueFontSize * sf} fontFamily={pb.valueFontFamily} fontWeight="900" letterSpacing="-0.05em">{product.price.replace('R$', '').trim()}</text>
+          {pb.showSuffix && <text x={v.badge.x + (v.badge.w * pb.suffixOffsetX / 100)} y={v.badge.y + (v.badge.h * pb.suffixOffsetY / 100)} dy=".35em" fill={pb.suffixColor} textAnchor="middle" fontSize={pb.suffixFontSize * sf} fontWeight="bold">{product.suffix || pb.suffixText}</text>}
         </g>
-        <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="900" fontFamily={dc.fontFamily} letterSpacing="-0.02em">
-          {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name, nameX, nameY, dc.fontSize, sf, slot.width)}
+
+        <text 
+          x={slot.x + slot.width * dc.offsetX / 100} 
+          y={slot.y + slot.height * dc.offsetY / 100} 
+          style={{ textAnchor: 'middle', textAlign: 'center', whiteSpace: 'pre' }}
+          textAnchor="middle" 
+          textAlign="center"
+          dy=".35em" 
+          fill={dc.color} 
+          fontSize={dc.fontSize * sf} 
+          fontWeight="900" 
+          fontFamily={dc.fontFamily} 
+          letterSpacing="-0.02em"
+        >
+          {renderWrappedText(dc.uppercase ? product.name.toUpperCase() : product.name)}
         </text>
       </g>
     );
@@ -601,7 +626,16 @@ export const StepFinal = () => {
                 <svg ref={el => svgRefs.current[i] = el} width="100%" viewBox={`0 0 ${config.width} ${config.height}`} className="w-full h-auto block bg-white">
                   {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMin slice" />}
                   <defs>{customFonts.map(f => <style key={f.name} type="text/css">{`@font-face { font-family: "${f.name}"; src: url("${f.url}"); }`}</style>)}</defs>
-                  {slots.map((slot, sIdx) => renderProduct(products[i * slots.length + sIdx], slot, i * slots.length + sIdx))}
+                  {(() => {
+                    const pageSlots = slots.filter(s => (s.pageIndex || 0) === i);
+                    const productStartIdx = slots.filter(s => (s.pageIndex || 0) < i).length;
+                    return pageSlots.map((slot, sIdx) => {
+                      const gIdx = productStartIdx + sIdx;
+                      const product = products[gIdx];
+                      if (!product) return null;
+                      return renderProduct(product, slot, gIdx);
+                    });
+                  })()}
                   
                   {/* Custom Canvas Elements */}
                   {(customCanvasElements[i] || []).map(el => {

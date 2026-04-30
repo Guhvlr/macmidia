@@ -21,6 +21,8 @@ export const DescriptionSection = memo( ({
   setIsEditingDesc,
   handleSaveDescription
 }: DescriptionSectionProps) => {
+  const [showOriginal, setShowOriginal] = React.useState(false);
+
   return (
     <div className="pl-10 space-y-10">
       {/* AI REPORT */}
@@ -168,14 +170,25 @@ export const DescriptionSection = memo( ({
         <div className="space-y-4 pt-4 border-t border-white/5 opacity-80 hover:opacity-100 transition-opacity">
           <div className="flex items-center justify-between">
             <h3 className="text-[12px] font-bold flex items-center gap-2 text-emerald-500/80">
-              <Bot className="w-4 h-4" /> Mensagem Original do WhatsApp
+              <Bot className="w-4 h-4" /> Entrada Original ({card.source === 'whatsapp' ? 'WhatsApp' : 'Manual'})
             </h3>
-            <span className="text-[8px] bg-emerald-500/10 text-emerald-500/60 px-1.5 py-0.5 rounded border border-emerald-500/10 font-black tracking-widest uppercase">Consulta</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowOriginal(!showOriginal)}
+              className="h-6 text-[10px] text-white/30 hover:text-white/60 bg-white/5"
+            >
+              {showOriginal ? 'Ocultar' : 'Ver original'}
+            </Button>
           </div>
-          <div className="text-[11px] font-mono leading-relaxed bg-black/30 rounded-xl p-4 border border-white/5 text-white/40 whitespace-pre-wrap max-h-[300px] overflow-y-auto custom-scrollbar italic">
-            {card.originalMessage}
-          </div>
-          <p className="text-[9px] text-white/20 text-center italic">Este é o conteúdo bruto recebido via WhatsApp antes do processamento pela IA.</p>
+          {showOriginal && (
+            <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+              <div className="text-[11px] font-mono leading-relaxed bg-black/30 rounded-xl p-4 border border-white/5 text-white/40 whitespace-pre-wrap max-h-[300px] overflow-y-auto custom-scrollbar italic">
+                {card.originalMessage}
+              </div>
+              <p className="text-[9px] text-white/20 text-center italic">Este é o conteúdo bruto da entrada inicial antes do processamento ou refinamento pela IA.</p>
+            </div>
+          )}
         </div>
       )}
     </div>

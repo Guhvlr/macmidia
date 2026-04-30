@@ -101,8 +101,9 @@ export const OfferEditorPage = () => {
   const isSelected = useCallback((sel: Selection) => selection.some(x => getSelKey(x) === getSelKey(sel)), [selection]);
 
   // ── Drag ──
+  const draggingRef = useRef(false);
   const [dragging, setDragging] = useState(false);
-  const [dragState, setDragState] = useState<{ dx: number; dy: number } | null>(null);
+  const [dragState, setDragState] = useState<{ dx: number; dy: number; startSlotW: number; startSlotH: number } | null>(null);
   const [startMouse, setStartMouse] = useState({ x: 0, y: 0 });
   const [altDragCloned, setAltDragCloned] = useState(false);
 
@@ -143,10 +144,10 @@ export const OfferEditorPage = () => {
     const { priceBadge: b, imageConfig: ic, descConfig: d } = cfg;
     const bX = slot.x + (b.badgeOffsetX / 100) * slot.width - (b.badgeWidth * sf) / 2;
     const bY = slot.y + (b.badgeOffsetY / 100) * slot.height - (b.badgeHeight * sf) / 2;
-    const fw = (v: number) => v * sf * 1.5; const fh = (v: number) => v * sf * 1.3;
+    const fw = (v: number) => v * sf * 1.5; const fh = (v: number) => v * sf * 1.2;
     return {
       image: { x: slot.x + slot.width * ic.offsetX / 100 - (slot.width * ic.scale) / 2, y: slot.y + slot.height * ic.offsetY / 100 - (slot.height * ic.scale) / 2, w: slot.width * ic.scale, h: slot.height * ic.scale },
-      name: { x: slot.x + slot.width * d.offsetX / 100 - slot.width * 0.4, y: slot.y + slot.height * d.offsetY / 100 - (d.fontSize * sf), w: slot.width * 0.8, h: d.fontSize * sf * 2.5 },
+      name: { x: slot.x + slot.width * d.offsetX / 100 - slot.width * 0.4, y: slot.y + slot.height * d.offsetY / 100 - (d.fontSize * sf * 0.7), w: slot.width * 0.8, h: d.fontSize * sf * 1.5 },
       badgeBg: { x: bX, y: bY, w: b.badgeWidth * sf, h: b.badgeHeight * sf },
       badgeCurrency: { x: bX + (b.badgeWidth * sf) * b.currencyOffsetX / 100, y: bY + (b.badgeHeight * sf) * b.currencyOffsetY / 100 - fh(b.currencyFontSize)/2, w: fw(b.currencyFontSize), h: fh(b.currencyFontSize) },
       badgeValue: { x: bX + (b.badgeWidth * sf) * b.valueOffsetX / 100 - fw(b.valueFontSize)/2, y: bY + (b.badgeHeight * sf) * b.valueOffsetY / 100 - fh(b.valueFontSize)/2, w: fw(b.valueFontSize) * 1.2, h: fh(b.valueFontSize) },
@@ -483,7 +484,7 @@ export const OfferEditorPage = () => {
         } else if (s.gIdx !== undefined && s.type) {
           // Product sub-element — clone as independent canvas element
           const prod = products[s.gIdx];
-          const slot = slots[s.gIdx % slots.length];
+          const slot = slots[s.gIdx];
           const cfg = getSlotSettings(s.gIdx);
           if (!prod) return;
           const sf = (slot?.width || 500) / 500;
@@ -583,7 +584,7 @@ export const OfferEditorPage = () => {
           const el = (customCanvasElements[activePage] || []).find((x: any) => x.id === s.id);
           if (el) starts[getSelKey(s)] = JSON.parse(JSON.stringify(el));
         } else if (s.gIdx !== undefined && s.type) {
-          starts[getSelKey(s)] = JSON.parse(JSON.stringify(getSlotSettings(s.gIdx)));
+          starts[getSelKey(s)] = JSON.parse(JSON.stringify(getSlotSettings(slots[s.gIdx].id)));
         }
       });
       setResizeStarts(starts);
@@ -593,12 +594,21 @@ export const OfferEditorPage = () => {
       const svgPtRotate = toSvg(e.clientX, e.clientY);
       setStartMouse(svgPtRotate);
     } else {
-      setDragging(true); setDragState({ dx: 0, dy: 0 });
+      draggingRef.current = true;
+      setDragging(true); 
+      
+      // Capture reference dimensions at start
+      let sw = 500, sh = 500;
+      if (newSel.length === 1 && newSel[0].gIdx !== undefined) {
+        const slot = slots[newSel[0].gIdx];
+        if (slot) { sw = slot.width; sh = slot.height; }
+      }
+      setDragState({ dx: 0, dy: 0, startSlotW: sw, startSlotH: sh });
     }
   };
 
-  const startDragProduct = (e: React.MouseEvent, type: EditElemType, gIdx: number) => startInteraction(e, { type, gIdx }, (getElems(slots[gIdx % slots.length], getSlotSettings(gIdx)) as any)[type]?.w || 100, false);
-  const startResizeProduct = (e: React.MouseEvent, type: EditElemType, gIdx: number, anchor: string) => startInteraction(e, { type, gIdx }, (getElems(slots[gIdx % slots.length], getSlotSettings(gIdx)) as any)[type]?.w || 100, true, anchor);
+  const startDragProduct = (e: React.MouseEvent, type: EditElemType, gIdx: number) => startInteraction(e, { type, gIdx }, (getElems(slots[gIdx], getSlotSettings(slots[gIdx].id)) as any)[type]?.w || 100, false);
+  const startResizeProduct = (e: React.MouseEvent, type: EditElemType, gIdx: number, anchor: string) => startInteraction(e, { type, gIdx }, (getElems(slots[gIdx], getSlotSettings(slots[gIdx].id)) as any)[type]?.w || 100, true, anchor);
   const startDragCustom = (e: React.MouseEvent, id: string, el: any) => startInteraction(e, { id }, el.w, false);
   const startResizeCustom = (e: React.MouseEvent, id: string, anchor: string, el: any) => startInteraction(e, { id }, el.w, true, anchor);
 
@@ -653,7 +663,7 @@ export const OfferEditorPage = () => {
       
       if (selItems.length === 1) {
         const t = selItems[0];
-        const b = t.isTemplate ? (getElems(t.el, getSlotSettings(t.gIdx)) as any)[t.type] : t;
+        const b = t.isTemplate ? (getElems(t.el, getSlotSettings(slots[t.gIdx].id)) as any)[t.type] : t;
         const curX = b.x + dx, curY = b.y + dy;
         
         // Snap to Artboard Center
@@ -663,7 +673,7 @@ export const OfferEditorPage = () => {
         // Snap to other objects
         stack.forEach(other => {
           if (selection.some(s => (s.id || `slot-${s.gIdx}-${s.type}`) === other.id)) return;
-          const ob = other.isTemplate ? (getElems(other.el, getSlotSettings(other.gIdx)) as any)[other.type] : other;
+          const ob = other.isTemplate ? (getElems(other.el, getSlotSettings(slots[other.gIdx].id)) as any)[other.type] : other;
           if (Math.abs(curX - ob.x) < SNAP) dx = ob.x - b.x;
           if (Math.abs(curX + b.w - (ob.x + ob.w)) < SNAP) dx = ob.x + ob.w - b.w - b.x;
           if (Math.abs(curY - ob.y) < SNAP) dy = ob.y - b.y;
@@ -672,42 +682,71 @@ export const OfferEditorPage = () => {
       }
 
       if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+        // Clamp movement to stay within slot boundaries for template elements
+        if (selection.length === 1 && selection[0].gIdx !== undefined) {
+          const sel = selection[0];
+          const slot = slots[sel.gIdx];
+          const cfg = getSlotSettings(slot.id);
+          const b = (getElems(slot, cfg) as any)[sel.type];
+          if (b && slot) {
+            const minDx = slot.x - b.x;
+            const maxDx = (slot.x + slot.width) - (b.x + b.w);
+            const minDy = slot.y - b.y;
+            const maxDy = (slot.y + slot.height) - (b.y + b.h);
+            dx = Math.max(minDx, Math.min(maxDx, dx));
+            dy = Math.max(minDy, Math.min(maxDy, dy));
+          }
+        }
+
         let newArr = [...(customCanvasElements[activePage] || [])]; let changed = false;
-        
-        // Group product updates by gIdx to avoid state race conditions
         const productUpdates: Record<number, any> = {};
 
         selection.forEach(sel => {
           if (sel.id) {
             newArr = newArr.map(x => x.id === sel.id ? { ...x, x: x.x + dx, y: x.y + dy } : x); changed = true;
           } else if (sel.gIdx !== undefined && sel.type) {
-            const slot = slots[sel.gIdx % slots.length]; 
-            const cfg = getSlotSettings(sel.gIdx);
+            const slot = slots[sel.gIdx]; 
+            if (!slot) return;
+            const cfg = getSlotSettings(slot.id);
             if (!productUpdates[sel.gIdx]) productUpdates[sel.gIdx] = {};
             const up = productUpdates[sel.gIdx];
+            const isBadgeBgSelected = selection.some(s => s.gIdx === sel.gIdx && s.type === 'badgeBg');
 
-            if (sel.type === 'image') up.imageConfig = { ...cfg.imageConfig, ...up.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.imageConfig.offsetY + (dy / slot.height) * 100 };
-            else if (sel.type === 'name') up.descConfig = { ...cfg.descConfig, ...up.descConfig, offsetX: cfg.descConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.descConfig.offsetY + (dy / slot.height) * 100 };
-            else if (sel.type === 'badgeBg') {
+            const sw = dragState.startSlotW || slot.width;
+            const sh = dragState.startSlotH || slot.height;
+
+            if (sel.type === 'image') {
+              up.imageConfig = { ...cfg.imageConfig, ...up.imageConfig, offsetX: (cfg.imageConfig.offsetX || 50) + (dx / sw) * 100, offsetY: (cfg.imageConfig.offsetY || 50) + (dy / sh) * 100 };
+            } else if (sel.type === 'name') {
+              up.descConfig = { ...cfg.descConfig, ...up.descConfig, offsetX: (cfg.descConfig.offsetX || 50) + (dx / sw) * 100, offsetY: (cfg.descConfig.offsetY || 50) + (dy / sh) * 100 };
+            } else if (sel.type === 'badgeBg') {
               if (!up.priceBadge) up.priceBadge = { ...cfg.priceBadge };
-              up.priceBadge.badgeOffsetX = cfg.priceBadge.badgeOffsetX + (dx / slot.width) * 100;
-              up.priceBadge.badgeOffsetY = cfg.priceBadge.badgeOffsetY + (dy / slot.height) * 100;
-            } else {
+              up.priceBadge.badgeOffsetX = (cfg.priceBadge.badgeOffsetX || 50) + (dx / sw) * 100;
+              up.priceBadge.badgeOffsetY = (cfg.priceBadge.badgeOffsetY || 80) + (dy / sh) * 100;
+            } else if (!isBadgeBgSelected) {
               if (!up.priceBadge) up.priceBadge = { ...cfg.priceBadge };
               const keyBase = sel.type.replace('badge', '').toLowerCase() || 'value';
-              up.priceBadge[`${keyBase}OffsetX`] = (cfg.priceBadge as any)[`${keyBase}OffsetX`] + (dx / (cfg.priceBadge.badgeWidth * (slot.width/500))) * 100;
-              up.priceBadge[`${keyBase}OffsetY`] = (cfg.priceBadge as any)[`${keyBase}OffsetY`] + (dy / (cfg.priceBadge.badgeHeight * (slot.width/500))) * 100;
+              const sf = (sw / 500);
+              const badgeW = cfg.priceBadge.badgeWidth * sf;
+              const badgeH = cfg.priceBadge.badgeHeight * sf;
+              if (badgeW > 0) up.priceBadge[`${keyBase}OffsetX`] = ((cfg.priceBadge as any)[`${keyBase}OffsetX`] || 0) + (dx / badgeW) * 100;
+              if (badgeH > 0) up.priceBadge[`${keyBase}OffsetY`] = ((cfg.priceBadge as any)[`${keyBase}OffsetY`] || 0) + (dy / badgeH) * 100;
             }
           }
         });
         
-        // Commit product updates
-        Object.entries(productUpdates).forEach(([gIdx, up]) => updateSlotSettings(+gIdx, up));
+        // Reset states FIRST to avoid re-render jumps with both offset and dx
+        draggingRef.current = false;
+        setDragging(false); setDragState(null);
         
+        Object.entries(productUpdates).forEach(([gIdx, up]) => updateSlotSettings(slots[+gIdx].id, up));
         if (changed) setCustomCanvasElements(p => ({ ...p, [activePage]: newArr }));
+      } else {
+        draggingRef.current = false;
+        setDragging(false); setDragState(null);
       }
     }
-    setDragging(false); setDragState(null); setResizeAnchor(null); setResizeState(null); setResizeStartW(0); setResizeStarts({}); setAltDragCloned(false); setIsRotating(false);
+    setResizeAnchor(null); setResizeState(null); setResizeStartW(0); setResizeStarts({}); setAltDragCloned(false); setIsRotating(false);
   };
 
   /* ───────────── SPAWN SHAPE/TEXT ON CANVAS CLICK ───────────── */
@@ -736,10 +775,18 @@ export const OfferEditorPage = () => {
     customEls.forEach(el => {
       if (!el.type || el.type !== 'z_override') stack.push({ ...el, isTemplate: false, zIndex: el.zIndex || 1000 });
     });
+
     const zMap: any = { image: 10, badgeBg: 20, badgeCurrency: 21, badgeValue: 22, badgeSuffix: 23, name: 30 };
-    slots.forEach((slot, sIdx) => {
-      const gIdx = activePage * slots.length + sIdx;
+    
+    // Filter slots for the current active page
+    const pageSlots = slots.filter(s => (s.pageIndex || 0) === activePage);
+    // Calculate how many slots were in previous pages to get the correct product offset
+    const productStartIdx = slots.filter(s => (s.pageIndex || 0) < activePage).length;
+
+    pageSlots.forEach((slot, sIdxInPage) => {
+      const gIdx = productStartIdx + sIdxInPage;
       if (!products[gIdx]) return;
+      
       const baseZ = gIdx * 100;
       Object.keys(zMap).forEach(type => {
         const id = `slot-${gIdx}-${type}`;
@@ -747,6 +794,7 @@ export const OfferEditorPage = () => {
         stack.push({ id, isTemplate: true, gIdx, type, el: slot, zIndex: over ? over.zIndex : baseZ + zMap[type] });
       });
     });
+    
     stack.sort((a, b) => a.zIndex - b.zIndex);
     return stack;
   };
@@ -815,7 +863,7 @@ export const OfferEditorPage = () => {
     // Calculate selection bounding box
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     targets.forEach(t => {
-      const b = t.isTemplate ? (getElems(t.el, getSlotSettings(t.gIdx)) as any)[t.type] : t;
+      const b = t.isTemplate ? (getElems(t.el, getSlotSettings(slots[t.gIdx].id)) as any)[t.type] : t;
       minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
       maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
     });
@@ -826,10 +874,11 @@ export const OfferEditorPage = () => {
 
     const applyUpdate = (id: string, isTemplate: boolean, gIdx: number, typeStr: string, dx: number, dy: number) => {
       if (isTemplate) {
-        const slot = slots[gIdx % slots.length];
-        const cfg = getSlotSettings(gIdx);
+        const slot = slots[gIdx];
+        if (!slot) return;
+        const cfg = getSlotSettings(slot.id);
         let up: any = {};
-        if (typeStr === 'image') up.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.imageConfig.offsetY + (dy / slot.height) * 100 };
+        if (typeStr === 'image') up.imageConfig = { ...cfg.imageConfig, offsetX: (cfg.imageConfig.offsetX || 50) + (dx / slot.width) * 100, offsetY: (cfg.imageConfig.offsetY || 50) + (dy / slot.height) * 100 };
         else if (typeStr === 'name') up.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.descConfig.offsetY + (dy / slot.height) * 100 };
         else if (typeStr === 'badgeBg') up.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx / slot.width) * 100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy / slot.height) * 100 };
         else {
@@ -838,10 +887,10 @@ export const OfferEditorPage = () => {
           const bh = cfg.priceBadge.badgeHeight * sf;
           up.priceBadge = { ...cfg.priceBadge, 
             [`${typeStr.replace('badge', '').toLowerCase() || 'value'}OffsetX`]: cfg.priceBadge[`${typeStr.replace('badge', '').toLowerCase() || 'value'}OffsetX` as keyof typeof cfg.priceBadge] as number + (dx / bw) * 100,
-            [`${typeStr.replace('badge', '').toLowerCase() || 'value'}OffsetY`]: cfg.priceBadge[`${typeStr.replace('badge', '').toLowerCase() || 'value'}OffsetY` as keyof typeof cfg.priceBadge] as number + (dy / bh) * 100 
+            [`${typeStr.replace('badge', '').toLowerCase() || 'value'}OffsetY`]: (cfg.priceBadge[`${typeStr.replace('badge', '').toLowerCase() || 'value'}OffsetY` as keyof typeof cfg.priceBadge] as number || 0) + (dy / bh) * 100 
           };
         }
-        updateSlotSettings(gIdx, up);
+        updateSlotSettings(slot.id, up);
       } else {
         setCustomCanvasElements(p => ({ ...p, [activePage]: (p[activePage] || []).map(el => el.id === id ? { ...el, x: el.x + dx, y: el.y + dy } : el) }));
       }
@@ -850,16 +899,16 @@ export const OfferEditorPage = () => {
     if (type === 'distH' || type === 'distV') {
       if (targets.length < 3) return;
       const sorted = [...targets].sort((a, b) => {
-        const bA = a.isTemplate ? (getElems(a.el, getSlotSettings(a.gIdx)) as any)[a.type] : a;
-        const bB = b.isTemplate ? (getElems(b.el, getSlotSettings(b.gIdx)) as any)[b.type] : b;
+        const bA = a.isTemplate ? (getElems(a.el, getSlotSettings(slots[a.gIdx].id)) as any)[a.type] : a;
+        const bB = b.isTemplate ? (getElems(b.el, getSlotSettings(slots[b.gIdx].id)) as any)[b.type] : b;
         return type === 'distH' ? bA.x - bB.x : bA.y - bB.y;
       });
-      const firstB = sorted[0].isTemplate ? (getElems(sorted[0].el, getSlotSettings(sorted[0].gIdx)) as any)[sorted[0].type] : sorted[0];
-      const lastB = sorted[sorted.length-1].isTemplate ? (getElems(sorted[sorted.length-1].el, getSlotSettings(sorted[sorted.length-1].gIdx)) as any)[sorted[sorted.length-1].type] : sorted[sorted.length-1];
+      const firstB = sorted[0].isTemplate ? (getElems(sorted[0].el, getSlotSettings(slots[sorted[0].gIdx].id)) as any)[sorted[0].type] : sorted[0];
+      const lastB = sorted[sorted.length-1].isTemplate ? (getElems(sorted[sorted.length-1].el, getSlotSettings(slots[sorted[sorted.length-1].gIdx].id)) as any)[sorted[sorted.length-1].type] : sorted[sorted.length-1];
       const totalDist = type === 'distH' ? (lastB.x - firstB.x) : (lastB.y - firstB.y);
       const step = totalDist / (sorted.length - 1);
       sorted.forEach((t, i) => {
-        const b = t.isTemplate ? (getElems(t.el, getSlotSettings(t.gIdx)) as any)[t.type] : t;
+        const b = t.isTemplate ? (getElems(t.el, getSlotSettings(slots[t.gIdx].id)) as any)[t.type] : t;
         const targetPos = (type === 'distH' ? firstB.x : firstB.y) + i * step;
         const delta = targetPos - (type === 'distH' ? b.x : b.y);
         applyUpdate(t.id, t.isTemplate, t.gIdx, t.type, type === 'distH' ? delta : 0, type === 'distV' ? delta : 0);
@@ -1036,12 +1085,12 @@ export const OfferEditorPage = () => {
               {getUniversalStack(customCanvasElements[activePage] || []).map(item => {
                   if (item.isTemplate) {
                     const { gIdx, type } = item;
-                    const sIdx = gIdx % slots.length;
+                    const sIdx = gIdx;
                     const slot = slots[sIdx];
                     const product = products[gIdx];
                     if (!slot || !product) return null;
 
-                    const cfg = getSlotSettings(gIdx);
+                    const cfg = getSlotSettings(slot.id);
                     const { priceBadge: pb, descConfig: dc } = cfg;
                     const sf = slot.width / 500;
                     const elData = getElems(slot, cfg);
@@ -1051,7 +1100,7 @@ export const OfferEditorPage = () => {
                     let f = 1; let bx = box.x; let by = box.y;
                     const sel = selection.find(s => s.gIdx === gIdx && s.type === type);
                     if (sel) {
-                      if (dragging && dragState) { bx += dragState.dx; by += dragState.dy; }
+                      if (draggingRef.current && dragState) { bx += dragState.dx; by += dragState.dy; }
                       if (resizeAnchor && resizeState && resizeStartW > 0) { let dw = resizeState.dw; if (resizeAnchor === 'nw' || resizeAnchor === 'sw') dw = -dw; f = Math.max(0.1, 1 + dw / resizeStartW); }
                     }
                     const isSel = !!sel;
@@ -1089,11 +1138,11 @@ export const OfferEditorPage = () => {
                                 style={{ width: '100%', height: '100%', background: 'transparent', color: pb.valueColor, fontSize: pb.valueFontSize * sf, fontFamily: pb.valueFontFamily, fontWeight: 900, textAlign: 'center', border: 'none', borderRadius: 0, outline: 'none', padding: '0 4px', caretColor: '#007acc' }} />
                             </foreignObject>
                           ) : (
-                            <text x={elData.badgeValue.x + elData.badgeValue.w/2} y={elData.badgeValue.y + elData.badgeValue.h*0.8} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
+                            <text x={elData.badgeValue.x + elData.badgeValue.w/2} y={elData.badgeValue.y + elData.badgeValue.h/2 + (pb.valueFontSize * sf * 0.3)} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
                           )
                         )}
 
-                        {type === 'badgeSuffix' && pb.showSuffix && <text x={elData.badgeSuffix.x + elData.badgeSuffix.w/2} y={elData.badgeSuffix.y + elData.badgeSuffix.h*0.8} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{product.suffix || pb.suffixText}</text>}
+                        {type === 'badgeSuffix' && pb.showSuffix && <text x={elData.badgeSuffix.x + elData.badgeSuffix.w/2} y={elData.badgeSuffix.y + elData.badgeSuffix.h/2 + (pb.suffixFontSize * sf * 0.3)} fontSize={pb.suffixFontSize * sf} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{product.suffix || pb.suffixText}</text>}
                         
                         {type === 'name' && (
                           inlineEdit?.gIdx === gIdx && inlineEdit?.type === 'name' ? (
@@ -1105,7 +1154,7 @@ export const OfferEditorPage = () => {
                             </foreignObject>
                           ) : (
                             <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="800" fontFamily={dc.fontFamily} pointerEvents="none">
-                              {nameLines.map((line, i) => <tspan key={i} x={elData.name.x + elData.name.w / 2} y={nameY - ((nameLines.length - 1) * nameLH / 2) + i * nameLH}>{line}</tspan>)}
+                              {nameLines.map((line, i) => <tspan key={i} x={elData.name.x + elData.name.w / 2} y={nameY - ((nameLines.length - 1) * nameLH / 2) + i * nameLH + (dc.fontSize * sf * 0.3)}>{line}</tspan>)}
                             </text>
                           )
                         )}
@@ -1118,7 +1167,7 @@ export const OfferEditorPage = () => {
                 const s = el.style; const isSel = isSelected({ id: el.id });
                 let cX = el.x; let cY = el.y; let factor = 1;
                 if (isSel) {
-                  if (dragging && dragState) { cX += dragState.dx; cY += dragState.dy; }
+                  if (draggingRef.current && dragState) { cX += dragState.dx; cY += dragState.dy; }
                   if (resizeAnchor && resizeState && resizeStartW > 0) { let dw = resizeState.dw; if (resizeAnchor === 'nw' || resizeAnchor === 'sw') dw = -dw; factor = Math.max(0.1, 1 + dw / resizeStartW); }
                 }
 

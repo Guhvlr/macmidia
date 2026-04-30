@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useOffer, Slot } from '../context/OfferContext';
-import { Trash2, MousePointer, PenTool, Zap, PlusCircle, Plus, Minus, Layers } from 'lucide-react';
+import { Trash2, MousePointer, PenTool, Zap, PlusCircle, Plus, Minus, Layers, Maximize } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -8,7 +8,7 @@ export const StepSlots = () => {
   const { 
     config, slots, setSlots, selectedSlotId, setSelectedSlotId,
     pageTemplates, saveProjectTemplate, loadProjectTemplate, deleteProjectTemplate, isLoadingTemplates, selectedClientName,
-    pageCount, setPageCount
+    pageCount, setPageCount, activePage, setActivePage
   } = useOffer();
 
   const filteredTemplates = React.useMemo(() => {
@@ -18,7 +18,11 @@ export const StepSlots = () => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [templateName, setTemplateName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-
+  const [zoom, setZoom] = useState(0.7);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0, ox: 0, oy: 0 });
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [mode, setMode] = useState<'draw' | 'select'>('draw');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -28,11 +32,18 @@ export const StepSlots = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState<{ origW: number; origH: number; sx: number; sy: number } | null>(null);
+
   const clipboard = useRef<Omit<Slot, 'id'> | null>(null);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Ignore if typing in an input
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+    if (e.code === 'Space') {
+      if (!isSpacePressed) {
+        setIsSpacePressed(true);
+      }
+      e.preventDefault();
+    }
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selectedSlotId) {
@@ -57,9 +68,9 @@ export const StepSlots = () => {
             x: clipboard.current.x + 10,
             y: clipboard.current.y + 10,
             width: clipboard.current.width,
-            height: clipboard.current.height
+            height: clipboard.current.height,
+            pageIndex: activePage
           };
-          // Update clipboard for next paste
           clipboard.current = { ...clipboard.current, x: ns.x, y: ns.y };
           setSlots(prev => [...prev, ns]);
           setSelectedSlotId(ns.id);
@@ -67,12 +78,22 @@ export const StepSlots = () => {
         }
       }
     }
-  }, [selectedSlotId, slots, setSlots, setSelectedSlotId]);
+  }, [selectedSlotId, slots, setSlots, setSelectedSlotId, isSpacePressed, mode, activePage]);
+
+  const handleKeyUp = useCallback((e: KeyboardEvent) => {
+    if (e.code === 'Space') {
+      setIsSpacePressed(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleKeyDown, handleKeyUp]);
 
   React.useEffect(() => {
     if (deletingId) {
@@ -80,6 +101,19 @@ export const StepSlots = () => {
       return () => clearTimeout(timer);
     }
   }, [deletingId]);
+
+  const currentPageSlots = React.useMemo(() => {
+    return slots.filter(s => (s.pageIndex || 0) === activePage);
+  }, [slots, activePage]);
+
+  const setPageSlots = useCallback((newSlotsOrFn: Slot[] | ((prev: Slot[]) => Slot[])) => {
+    setSlots(prev => {
+      const otherPages = prev.filter(s => (s.pageIndex || 0) !== activePage);
+      const currentPage = prev.filter(s => (s.pageIndex || 0) === activePage);
+      const updated = typeof newSlotsOrFn === 'function' ? newSlotsOrFn(currentPage) : newSlotsOrFn;
+      return [...otherPages, ...updated.map(s => ({ ...s, pageIndex: activePage }))];
+    });
+  }, [activePage, setSlots]);
 
   const toSvg = useCallback((e: MouseEvent | React.MouseEvent) => {
     const svg = svgRef.current;
@@ -92,49 +126,66 @@ export const StepSlots = () => {
   }, [config.width, config.height]);
 
   const onMouseDown = (e: React.MouseEvent) => {
+    if (isSpacePressed || e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStart({ x: e.clientX, y: e.clientY, ox: panOffset.x, oy: panOffset.y });
+      return;
+    }
+
+    const target = e.target as HTMLElement;
+    const isSvgClick = target.closest('svg') === svgRef.current;
+
     if (mode !== 'draw') {
-      // In select mode, clicking empty space clears selection
       if (mode === 'select' && !isDragging && !isResizing) {
          setSelectedSlotId(null);
       }
       return;
     }
+
+    if (!isSvgClick) return;
+
     const c = toSvg(e);
     setIsDrawing(true); setDrawStart(c); setDrawCurrent(c);
   };
 
   const onMouseUp = useCallback(() => {
+    if (isPanning) { setIsPanning(false); return; }
     if (isDrawing && drawStart && drawCurrent) {
       const x = Math.min(drawStart.x, drawCurrent.x);
       const y = Math.min(drawStart.y, drawCurrent.y);
       const w = Math.abs(drawCurrent.x - drawStart.x);
       const h = Math.abs(drawCurrent.y - drawStart.y);
       if (w > 30 && h > 30) {
-        const ns: Slot = { id: crypto.randomUUID(), x, y, width: w, height: h };
-        setSlots(prev => [...prev, ns]);
+        const ns: Slot = { id: crypto.randomUUID(), x, y, width: w, height: h, pageIndex: activePage };
+        setPageSlots(prev => [...prev, ns]);
         setSelectedSlotId(ns.id);
-        toast.success(`Slot ${slots.length + 1} criado!`);
+        toast.success(`Slot criado na Tela ${activePage + 1}!`);
       }
     }
     setIsDrawing(false); setDrawStart(null); setDrawCurrent(null);
     setIsDragging(false); setIsResizing(false); setResizeStart(null);
-  }, [isDrawing, drawStart, drawCurrent, slots.length, setSelectedSlotId, setSlots]);
+  }, [isPanning, isDrawing, drawStart, drawCurrent, activePage, setSelectedSlotId, setPageSlots]);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
+    if (isPanning) {
+      setPanOffset({ x: panStart.ox + (e.clientX - panStart.x), y: panStart.oy + (e.clientY - panStart.y) });
+      return;
+    }
     if (isDrawing && mode === 'draw') { setDrawCurrent(toSvg(e)); return; }
     if (isDragging && selectedSlotId) {
       const c = toSvg(e);
-      setSlots(prev => prev.map(s => s.id === selectedSlotId ? { ...s, x: Math.max(0, c.x - dragOffset.x), y: Math.max(0, c.y - dragOffset.y) } : s));
+      setPageSlots(prev => prev.map(s => s.id === selectedSlotId ? { ...s, x: Math.max(0, c.x - dragOffset.x), y: Math.max(0, c.y - dragOffset.y) } : s));
       return;
     }
     if (isResizing && selectedSlotId && resizeStart) {
       const c = toSvg(e);
-      setSlots(prev => prev.map(s => s.id === selectedSlotId ? { ...s, width: Math.max(50, resizeStart.origW + c.x - resizeStart.sx), height: Math.max(50, resizeStart.origH + c.y - resizeStart.sy) } : s));
+      setPageSlots(prev => prev.map(s => s.id === selectedSlotId ? { ...s, width: Math.max(50, resizeStart.origW + c.x - resizeStart.sx), height: Math.max(50, resizeStart.origH + c.y - resizeStart.sy) } : s));
     }
-  }, [isDrawing, isDragging, isResizing, mode, selectedSlotId, dragOffset, resizeStart, toSvg, setSlots]);
+  }, [isPanning, panStart, isDrawing, isDragging, isResizing, mode, selectedSlotId, dragOffset, resizeStart, toSvg, setPageSlots]);
 
   React.useEffect(() => {
-    if (isDragging || isResizing || isDrawing) {
+    if (isDragging || isResizing || isDrawing || isPanning) {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
       return () => {
@@ -142,7 +193,7 @@ export const StepSlots = () => {
         window.removeEventListener('mouseup', onMouseUp);
       };
     }
-  }, [isDragging, isResizing, isDrawing, onMouseMove, onMouseUp]);
+  }, [isDragging, isResizing, isDrawing, isPanning, onMouseMove, onMouseUp]);
 
   const onSlotDown = (e: React.MouseEvent, slot: Slot) => {
     e.stopPropagation();
@@ -166,18 +217,46 @@ export const StepSlots = () => {
     w: Math.abs(drawCurrent.x - drawStart.x), h: Math.abs(drawCurrent.y - drawStart.y),
   } : null;
 
-  const selectedSlot = slots.find(s => s.id === selectedSlotId);
+  const selectedSlot = currentPageSlots.find(s => s.id === selectedSlotId);
 
   return (
     <div className="h-full flex overflow-hidden bg-zinc-950">
       {/* Sidebar */}
       <div className="w-[380px] border-r border-zinc-800/60 bg-zinc-950 p-8 overflow-y-auto custom-scrollbar flex flex-col gap-8">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 text-red-500 rounded-full text-[10px] font-semibold mb-3">
-             <Layers className="w-3.5 h-3.5" /> Passo 2
-           </div>
           <h2 className="text-xl font-semibold tracking-tight text-zinc-100">Grade & Distribuição</h2>
           <p className="text-[12px] text-zinc-400 font-medium mt-1">Desenhe os espaços onde os produtos serão posicionados.</p>
+        </div>
+
+        {/* Visual Screen Selector */}
+        <div className="flex flex-col gap-3">
+          <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest px-1">Navegar pelas Telas</label>
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: pageCount }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setActivePage(i); setSelectedSlotId(null); }}
+                className={`group flex items-center justify-between p-3 rounded-xl border transition-all ${
+                  activePage === i
+                    ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-900/20'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold ${activePage === i ? 'bg-white/20' : 'bg-zinc-800'}`}>
+                    {i + 1}
+                  </div>
+                  <span className="text-[12px] font-bold">TELA {i + 1}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${activePage === i ? 'bg-black/20' : 'bg-zinc-800'}`}>
+                     {slots.filter(s => (s.pageIndex || 0) === i).length} slots
+                   </span>
+                   {activePage === i && <Layers className="w-3.5 h-3.5 animate-pulse" />}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Mode & Basic Actions */}
@@ -194,11 +273,15 @@ export const StepSlots = () => {
               </button>
            </div>
 
-           {slots.length > 0 && (
-             <button onClick={() => { setSlots([]); setSelectedSlotId(null); }} className="w-full mt-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl py-3 text-[11px] font-semibold text-red-400 hover:text-red-300 transition-all">
-                Limpar Grade Completa
-             </button>
-           )}
+           <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 mt-2">
+                <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-500 transition-all"><Minus className="w-4 h-4" /></button>
+                <span className="text-[11px] font-bold text-zinc-300 flex-1 text-center">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-500 transition-all"><Plus className="w-4 h-4" /></button>
+                <button onClick={() => { setZoom(0.7); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-100 transition-all ml-1 border-l border-zinc-800 pl-3">
+                  <Maximize className="w-3.5 h-3.5" />
+                </button>
+           </div>
+           <p className="text-[10px] text-zinc-600 font-medium px-1 text-center italic">Segure ESPAÇO para andar pela arte</p>
         </div>
 
         {/* Templates Section */}
@@ -266,17 +349,17 @@ export const StepSlots = () => {
         {/* Slot list */}
         <div className="space-y-3 pt-4 border-t border-zinc-800/50">
           <label className="text-[11px] font-semibold text-zinc-500 flex justify-between items-center px-1">
-            <span>Slots Individuais</span>
-            <span className="bg-zinc-800 px-2.5 py-0.5 rounded-full text-zinc-300">{slots.length}</span>
+            <span>Slots da Tela {activePage + 1}</span>
+            <span className="bg-zinc-800 px-2.5 py-0.5 rounded-full text-zinc-300">{currentPageSlots.length}</span>
           </label>
           <div className="flex flex-col gap-2">
-            {slots.map((s, i) => (
+            {currentPageSlots.map((s, i) => (
               <div key={s.id} onClick={() => { setSelectedSlotId(s.id); setMode('select'); }}
                 className={`rounded-xl p-2.5 cursor-pointer border flex items-center gap-3 transition-all ${selectedSlotId === s.id ? 'bg-red-500/10 border-red-500/30 ring-1 ring-red-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>
                 <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-semibold ${selectedSlotId === s.id ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800 text-zinc-500'}`}>{i + 1}</div>
-                <p className="text-[11px] text-zinc-400 font-mono flex-1">{Math.round(s.x)},{Math.round(s.y)} · {Math.round(s.width)}×{Math.round(s.height)}</p>
+                <p className="text-[11px] text-zinc-400 font-mono flex-1 text-xs truncate">{Math.round(s.x)},{Math.round(s.y)} · {Math.round(s.width)}×{Math.round(s.height)}</p>
                 <button 
-                  onClick={(e) => { e.stopPropagation(); setSlots(prev => prev.filter(sl => sl.id !== s.id)); if (selectedSlotId === s.id) setSelectedSlotId(null); }} 
+                  onClick={(e) => { e.stopPropagation(); setPageSlots(prev => prev.filter(sl => sl.id !== s.id)); if (selectedSlotId === s.id) setSelectedSlotId(null); }} 
                   className="text-zinc-500 hover:text-red-400 p-1.5 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -288,13 +371,13 @@ export const StepSlots = () => {
 
         {selectedSlot && (
           <div className="pt-4 border-t border-zinc-800/50 space-y-3">
-            <label className="text-[11px] font-semibold text-red-400 px-1">Ajuste Fino — Slot {slots.indexOf(selectedSlot) + 1}</label>
+            <label className="text-[11px] font-semibold text-red-400 px-1">Ajuste Fino — Slot {currentPageSlots.indexOf(selectedSlot) + 1}</label>
             <div className="grid grid-cols-4 gap-2">
               {(['x', 'y', 'width', 'height'] as const).map(k => (
                 <div key={k}>
                   <label className="text-[10px] text-zinc-500 font-medium mb-1 block text-center uppercase">{k === 'width' ? 'W' : k === 'height' ? 'H' : k}</label>
                   <input type="number" value={Math.round(selectedSlot[k])}
-                    onChange={e => setSlots(prev => prev.map(s => s.id === selectedSlot.id ? { ...s, [k]: parseInt(e.target.value) || 0 } : s))}
+                    onChange={e => setPageSlots(prev => prev.map(s => s.id === selectedSlot.id ? { ...s, [k]: parseInt(e.target.value) || 0 } : s))}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-lg h-9 px-1 text-[12px] text-zinc-200 text-center font-mono focus:border-red-500/50 transition-all outline-none" />
                 </div>
               ))}
@@ -302,7 +385,7 @@ export const StepSlots = () => {
           </div>
         )}
 
-        {/* ── Número de Telas ── */}
+        {/* Screen Count Controls */}
         <div className="pt-4 border-t border-zinc-800/50 flex flex-col gap-4">
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex flex-col items-center gap-4">
             <h3 className="text-[12px] font-semibold text-zinc-400 flex items-center gap-2">
@@ -324,7 +407,7 @@ export const StepSlots = () => {
           <div className="bg-red-500/5 rounded-2xl p-5 border border-red-500/20">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
-                <div className="text-xl font-semibold text-zinc-200">{slots.length}</div>
+                <div className="text-xl font-semibold text-zinc-200">{currentPageSlots.length}</div>
                 <div className="text-[10px] text-zinc-500 font-medium mt-1">slots/tela</div>
               </div>
               <div>
@@ -332,58 +415,106 @@ export const StepSlots = () => {
                 <div className="text-[10px] text-zinc-500 font-medium mt-1">telas</div>
               </div>
               <div>
-                <div className="text-xl font-semibold text-red-400">{slots.length * pageCount}</div>
-                <div className="text-[10px] text-zinc-500 font-medium mt-1">total de itens</div>
+                <div className="text-xl font-semibold text-red-400">{slots.length}</div>
+                <div className="text-[10px] text-zinc-500 font-medium mt-1">total slots</div>
               </div>
             </div>
-            <p className="text-[11px] text-zinc-500 text-center mt-4 border-t border-red-500/10 pt-3">
-              A mesma grade será repetida para cada tela.
+            <p className="text-[11px] text-zinc-500 text-center mt-4 border-t border-red-500/10 pt-3 italic">
+              Cada tela agora tem sua grade independente.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 bg-zinc-950/50 flex justify-center p-8 overflow-auto relative">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-[0.15] z-0 pointer-events-none" />
-        <div className="m-auto relative z-10">
-          <svg ref={svgRef} 
-            width={config.width} height={config.height} viewBox={`0 0 ${config.width} ${config.height}`}
-            style={{ width: '100%', maxWidth: '750px', height: 'auto', cursor: mode === 'draw' ? 'crosshair' : 'default', userSelect: 'none' }}
-            className="shadow-2xl ring-1 ring-zinc-800/50 rounded-xl bg-zinc-900"
-            onMouseDown={onMouseDown}>
+      {/* Main Canvas Area */}
+      <div className="flex-1 bg-zinc-950/50 flex flex-col overflow-hidden relative">
+        {/* Floating Page Switcher */}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 p-1.5 bg-zinc-900/90 border border-zinc-800/80 backdrop-blur-md rounded-2xl shadow-2xl">
+          <button 
+            onClick={() => setActivePage(Math.max(0, activePage - 1))}
+            disabled={activePage === 0}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:hover:bg-zinc-800 text-zinc-300 transition-all"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+          
+          <div className="px-6 py-1 flex flex-col items-center min-w-[120px]">
+            <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-0.5">Editando Grade</span>
+            <span className="text-sm font-black text-zinc-100 uppercase tracking-tight">TELA {activePage + 1} de {pageCount}</span>
+          </div>
 
-            {config.backgroundImageUrl ? (
-              <image href={config.backgroundImageUrl} width="100%" height="100%" preserveAspectRatio="xMidYMin slice" pointerEvents="none" />
-            ) : <rect width="100%" height="100%" fill="#18181b" pointerEvents="none" />}
+          <button 
+            onClick={() => {
+              if (activePage < pageCount - 1) setActivePage(activePage + 1);
+              else {
+                setPageCount(pageCount + 1);
+                setActivePage(pageCount);
+              }
+            }}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all"
+          >
+            {activePage < pageCount - 1 ? <Plus className="w-4 h-4" /> : <PlusCircle className="w-4 h-4 text-red-500" />}
+          </button>
+        </div>
 
-          {slots.map((s, i) => {
-            const sel = selectedSlotId === s.id;
-            return (
-              <g key={s.id}>
-                <rect x={s.x} y={s.y} width={s.width} height={s.height}
-                  fill={sel ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.05)'}
-                  stroke={sel ? '#dc2626' : 'rgba(255,255,255,0.3)'}
-                  strokeWidth={sel ? 3 : 1.5}
-                  strokeDasharray={sel ? '' : '8,4'} rx={8}
-                  style={{ cursor: mode === 'select' ? 'move' : 'crosshair' }}
-                  onMouseDown={e => onSlotDown(e, s)}
-                  onClick={e => e.stopPropagation()} />
-                <rect x={s.x + 8} y={s.y + 8} width={24} height={24} rx={6} fill={sel ? '#dc2626' : 'rgba(0,0,0,0.5)'} pointerEvents="none" />
-                <text x={s.x + 20} y={s.y + 24} fontSize={14} fill="#ffffff" fontWeight="600" textAnchor="middle" fontFamily="sans-serif" pointerEvents="none">{i + 1}</text>
-                {sel && (
-                  <g onMouseDown={e => onResizeDown(e, s)} onClick={e => e.stopPropagation()} style={{ cursor: 'nwse-resize' }}>
-                    <circle cx={s.x + s.width} cy={s.y + s.height} r={16} fill="transparent" />
-                    <circle cx={s.x + s.width} cy={s.y + s.height} r={8} fill="#ffffff" stroke="#dc2626" strokeWidth={2} />
+        <div 
+          className="flex-1 flex items-center justify-center overflow-hidden relative"
+          onWheel={e => { setZoom(z => Math.min(3, Math.max(0.1, z + (e.deltaY > 0 ? -0.05 : 0.05)))); }}
+          onMouseDown={onMouseDown}
+          style={{ cursor: isPanning ? 'grabbing' : isSpacePressed ? 'grab' : 'default' }}
+        >
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-[0.15] z-0 pointer-events-none" />
+          <div 
+            className="relative z-10 transition-transform duration-75"
+            style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }}
+          >
+            <svg ref={svgRef} 
+              width={config.width} height={config.height} viewBox={`0 0 ${config.width} ${config.height}`}
+              style={{ width: config.width + 'px', height: config.height + 'px', cursor: isSpacePressed ? 'grabbing' : mode === 'draw' ? 'crosshair' : 'default', userSelect: 'none' }}
+              className="shadow-2xl ring-1 ring-zinc-800/50 rounded-xl bg-zinc-900"
+            >
+              {config.backgroundImageUrl ? (
+                <image href={config.backgroundImageUrl} width="100%" height="100%" preserveAspectRatio="xMidYMin slice" pointerEvents="none" />
+              ) : <rect width="100%" height="100%" fill="#18181b" pointerEvents="none" />}
+
+              {isSpacePressed && (
+                <rect 
+                  width="100%" 
+                  height="100%" 
+                  fill="transparent" 
+                  style={{ cursor: isPanning ? 'grabbing' : 'grab' }} 
+                />
+              )}
+
+              {currentPageSlots.map((s, i) => {
+                const sel = selectedSlotId === s.id;
+                return (
+                  <g key={s.id}>
+                    <rect x={s.x} y={s.y} width={s.width} height={s.height}
+                      fill={sel ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.05)'}
+                      stroke={sel ? '#dc2626' : 'rgba(255,255,255,0.3)'}
+                      strokeWidth={sel ? 3 : 1.5}
+                      strokeDasharray={sel ? '' : '8,4'} rx={8}
+                      style={{ cursor: mode === 'select' ? 'move' : 'crosshair' }}
+                      onMouseDown={e => onSlotDown(e, s)}
+                      onClick={e => e.stopPropagation()} />
+                    <rect x={s.x + 8} y={s.y + 8} width={24} height={24} rx={6} fill={sel ? '#dc2626' : 'rgba(0,0,0,0.5)'} pointerEvents="none" />
+                    <text x={s.x + 20} y={s.y + 24} fontSize={14} fill="#ffffff" fontWeight="600" textAnchor="middle" fontFamily="sans-serif" pointerEvents="none">{i + 1}</text>
+                    {sel && (
+                      <g onMouseDown={e => onResizeDown(e, s)} onClick={e => e.stopPropagation()} style={{ cursor: 'nwse-resize' }}>
+                        <circle cx={s.x + s.width} cy={s.y + s.height} r={16} fill="transparent" />
+                        <circle cx={s.x + s.width} cy={s.y + s.height} r={8} fill="#ffffff" stroke="#dc2626" strokeWidth={2} />
+                      </g>
+                    )}
                   </g>
-                )}
-              </g>
-            );
-          })}
+                );
+              })}
 
-          {isDrawing && dr && (
-            <rect x={dr.x} y={dr.y} width={dr.w} height={dr.h} fill="rgba(220,38,38,0.1)" stroke="#dc2626" strokeWidth={2} strokeDasharray="6,3" rx={8} pointerEvents="none" />
-          )}
-          </svg>
+              {isDrawing && dr && (
+                <rect x={dr.x} y={dr.y} width={dr.w} height={dr.h} fill="rgba(220,38,38,0.1)" stroke="#dc2626" strokeWidth={2} strokeDasharray="6,3" rx={8} pointerEvents="none" />
+              )}
+            </svg>
+          </div>
         </div>
       </div>
     </div>

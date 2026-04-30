@@ -89,16 +89,13 @@ function assessConfidence(
   const overlap = wordOverlap(displayName, matchName);
 
   // REJEIÇÃO 1: Conflito claro de marca.
-  // Se a IA extraiu uma marca e o banco de dados tem uma marca cadastrada, e elas não correspondem: Risco Altíssimo.
   const hasBrandConflict = !brandMatch && normBrand.length >= 2 && normMatchBrand.length >= 2;
   if (hasBrandConflict) {
     return { level: 'low', reason: `Conflito de marcas: Solicitado '${brandHint}', encontrado '${matchBrand}'` };
   }
 
   // REJEIÇÃO 2: Marca exigida mas ignorada.
-  // Se a IA exigiu uma marca, o banco não tinha campo marca cadastrada, e a marca não aparece nem no nome do produto:
   if (!brandMatch && normBrand.length >= 2) {
-    // Reduzimos o rigor: se houver 65% de overlap, aceitamos como Médio
     if (overlap >= 0.65) {
       return { level: 'medium', reason: 'Boa similaridade de texto superou ausência da marca no nome' };
     }
@@ -115,15 +112,11 @@ function assessConfidence(
     return { level: 'medium', reason: 'Marca exata encontrada no nome do produto' };
   }
   
-  // Se nenhuma marca foi citada pela IA e pelo input, exigimos um parentesco maior nas palavras
-  // Reduzido para 0.45 para ser mais inclusivo
   if (overlap >= 0.45) {
     return { level: 'medium', reason: 'Similaridade de texto aceitável' };
   }
 
   // ── LOW ──
-  // Reduzido drasticamente para capturar quase qualquer coisa similar como um candidato
-  // Se bater pelo menos uma palavra chave importante (Arroz, Feijão, etc), o overlap será > 0
   if (overlap >= 0.10) {
     return { level: 'low', reason: `Vínculo automático sugerido (Similaridade: ${(overlap * 100).toFixed(0)}%)` };
   }
@@ -166,7 +159,6 @@ serve(async (req) => {
       })
     }
 
-
     // Get Claude key
     let claudeKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!claudeKey) {
@@ -189,29 +181,37 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'claude-3-haiku-20240307',
           max_tokens: 4096,
-          system: `Você é um parser de listas de compras.
-Analise CADA linha e retorne o JSON com o array "items".
+          system: `Você é um parser de elite para listas de ofertas de supermercados. 
+Sua missão é transformar listas brutas em dados estruturados, seguindo REGRAS RÍGIDAS DE PRESERVAÇÃO.
 
-Para cada linha, extraia:
-1. "mode": "barcode" (se a linha começar com de 12 a 14 dígitos numéricos) ou "description" (caso contrário).
-2. "barcode": o código de barras numérico (se houver). Se não houver, null.
-3. "price": o preço final na linha (ex: "47,99"). Em português os preços usam vírgula para os centavos (ex: 5,99 ou 10,50). Pode ou não ter R$ na frente. Pode estar colado em unidades como "kg" ou "cada" (ex: "15,99kg" -> extraia apenas "15,99"). Se não achar preço, retorne null.
-4. "display_name": para o modo "description", o NOME EXATO do produto como o usuário digitou, MAS SEM O PREÇO. Mantenha a formatação original e as unidades do nome (ex: "Alcatra kg"). Para modo "barcode", retorne null.
-5. "search_name": uma versão mais limpa do nome, apenas palavras chave para ajudar na busca (apenas description).
-6. "brand_hint": a marca, se identificada (apenas description).
-7. "type_hint": a categoria ou tipo básico (apenas description).
+REGRA DE OURO: Preserve fielmente a descrição e o preço. Você é um corretor ortográfico e organizador, não um redator criativo.
 
-Exemplos de extração:
-Entrada: "Alcatra-47,99  kg"
-Saída: { "mode": "description", "barcode": null, "price": "47,99", "display_name": "Alcatra kg", "search_name": "Alcatra", "brand_hint": null, "type_hint": "carne" }
+O QUE VOCÊ PODE ALTERAR:
+- Acentuação e ortografia (ex: "mionesa" -> "maionese").
+- Correções óbvias de abreviação (ex: "hellmas" -> "hellmann's", "refri" -> "refrigerante").
+- Identificação de seções/setores (Açougue, Limpeza, Bebidas, etc).
 
-Entrada: "0000000011136  15,99kg"
-Saída: { "mode": "barcode", "barcode": "0000000011136", "price": "15,99", "display_name": null, "search_name": null, "brand_hint": null, "type_hint": null }
+O QUE VOCÊ JAMAIS PODE FAZER (PROIBIDO):
+- Remover palavras da descrição original.
+- Inventar palavras que não existem no texto original.
+- Trocar ou omitir embalagem, peso, volume ou unidade (pote, lata, fardo, kg, g, ml).
+- Alterar a ordem importante das palavras na descrição.
+- Modificar ou inventar preços. Se não houver preço, retorne null.
+- Substituir um produto por outro similar.
 
-Entrada: "Costela ripa-19,99kg"
-Saída: { "mode": "description", "barcode": null, "price": "19,99", "display_name": "Costela ripa kg", "search_name": "Costela ripa", "brand_hint": null, "type_hint": "carne" }
+Para cada linha da lista, extraia:
+1. "mode": "barcode" (se começar com 12-14 dígitos) ou "description".
+2. "barcode": o código numérico se for modo barcode, senão null.
+3. "price": o preço numérico final (ex: "7,99"). Use o preço original sem alterações.
+4. "display_name": O nome corrigido ortograficamente, mas MANTENDO TODOS OS DETALHES (embalagem, peso, etc). 
+   - Exemplo Correto: "mionesa hellmas pote 400g 7,99" -> "Maionese Hellmann's Pote 400g"
+5. "search_name": Uma versão otimizada para busca (sem preço e sem o setor).
+6. "section": O setor do produto (ex: "Mercearia", "Hortifruti", "Açougue", "Limpeza", "Bebidas", "Padaria"). Identifique pelo contexto da lista ou do produto.
+7. "brand_hint": Marca identificada.
+8. "type_hint": Categoria básica.
 
-Retorne APENAS o JSON no formato: { "items": [...] }`,
+Formato de Saída (JSON APENAS):
+{ "items": [ { "mode": "...", "display_name": "...", "price": "...", "section": "...", ... } ] }`,
           messages: [
             { role: 'user', content: bulkInput }
           ],
@@ -222,30 +222,20 @@ Retorne APENAS o JSON no formato: { "items": [...] }`,
       if (!apiResponse.ok) throw new Error('Anthropic Error: ' + (aiData.error?.message || apiResponse.statusText));
       
       let textContent = aiData.content?.[0]?.text || '{}';
-      
-      // Robust JSON extraction: Find the first { and last }
       const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        textContent = jsonMatch[0];
-      }
+      if (jsonMatch) textContent = jsonMatch[0];
       
       const parsedJson = JSON.parse(textContent);
       parsedItems = parsedJson.items || [];
       console.log('Claude parsed:', parsedItems.length, 'items');
     } catch (aiErr: any) {
-
       console.error('AI parse failed, using fallback:', aiErr.message);
-      // ── FALLBACK: parse without AI ──
       parsedItems = bulkInput.split('\n').filter((l: string) => l.trim()).map((line: string) => {
         const trimmed = line.trim();
         const isBarcode = /^\d{12,14}\b/.test(trimmed);
-        
-        // Pega todos os números formatados como preço (tolerante a sufixos colados)
         const priceMatches = [...trimmed.matchAll(/(?:R\$\s*)?(\d+[,.]\d{2})/gi)];
-        // Prioriza o último match como preço
         const price = priceMatches.length > 0 ? priceMatches[priceMatches.length - 1][1] : null;
 
-        // Limpa apenas a ocorrência que virou o preço (tolerando unidades após ele)
         let cleanName = trimmed;
         if (price) {
           const priceRegex = new RegExp(`\\s*[-–—|]?\\s*(?:R\\$\\s*)?${price.replace('.', '\\.')}(?:\\s*(?:KG|G|MG|ML|L|LT|UN|CX|FD|PCT|CADA)\\b)?\\s*$`, 'i');
@@ -270,18 +260,12 @@ Retorne APENAS o JSON no formato: { "items": [...] }`,
       });
     }
 
-    // ─── STEP 2: Process items in Parallel Chunks ────────
-    // Processamos em grupos de 5 para não sobrecarregar as conexões do banco
     const chunkSize = 5;
     const results = [];
 
     for (let i = 0; i < parsedItems.length; i += chunkSize) {
       const chunk = parsedItems.slice(i, i + chunkSize);
-      
       const chunkPromises = chunk.map(async (item) => {
-        // ════════════════════════════════════════
-        // MODE: BARCODE — exact EAN lookup
-        // ════════════════════════════════════════
         if (item.mode === 'barcode') {
           const ean = String(item.barcode || '').replace(/[^0-9]/g, '');
           let searchEan = ean.replace(/^0+/, ''); 
@@ -319,9 +303,6 @@ Retorne APENAS o JSON no formato: { "items": [...] }`,
           };
         }
 
-        // ════════════════════════════════════════
-        // MODE: DESCRIPTION — fuzzy search + confidence
-        // ════════════════════════════════════════
         const userDisplayName = item.display_name || item.original || '';
         let searchText = (item.search_name || userDisplayName).toLowerCase().trim();
         
@@ -424,13 +405,7 @@ Retorne APENAS o JSON no formato: { "items": [...] }`,
       results.push(...chunkResults);
     }
 
-    console.log('--- Process Products V2 Complete:', results.length, 'items ---');
-    return new Response(JSON.stringify({ 
-      results,
-      meta: {
-        isFallback: parsedItems.some(p => p.mode === 'description' && !p.brand_hint) // Indicador heurístico de que o GPT não refinou os dados
-      }
-    }), {
+    return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 

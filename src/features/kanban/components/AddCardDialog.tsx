@@ -103,9 +103,15 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
     setIsSubmitting(true);
     try {
       await addKanbanCard({
-        clientName, description, images: [],
+        clientName, 
+        description, 
+        images: [],
         column: fixedColumnKey || columnKey || 'para-producao',
-        timeSpent: 0, timerRunning: false, employeeId: selectedEmployeeId || initialEmployeeId || '',
+        timeSpent: 0, 
+        timerRunning: false, 
+        employeeId: selectedEmployeeId || initialEmployeeId || '',
+        source: 'manual',
+        originalMessage: description
       });
 
       toast.success(`Card de ${clientName} criado!`);

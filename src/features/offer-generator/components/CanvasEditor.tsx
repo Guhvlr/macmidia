@@ -13,25 +13,8 @@ const URLImage = ({ src, ...props }: any) => {
 };
 
 const computeWrappedLinesStr = (text: string, fontSize: number, sFactor: number, slotWidth: number) => {
-  const scaledFontSize = fontSize * sFactor;
-  const charsPerLine = Math.min(18, Math.max(8, Math.floor((slotWidth * 0.60) / (scaledFontSize * 0.55))));
-  const manualLines = (text || '').split('\n');
-  const finalLines: string[] = [];
-
-  manualLines.forEach(mLine => {
-    const words = mLine.split(' ');
-    let cur = '';
-    words.forEach(w => {
-      if ((cur + w).length > charsPerLine) { 
-        if (cur.trim()) finalLines.push(cur.trim()); 
-        cur = w + ' '; 
-      } else {
-        cur += w + ' ';
-      }
-    });
-    if (cur.trim()) finalLines.push(cur.trim());
-  });
-  return finalLines.join('\n');
+  // Retorna o texto original em linha única para o editor Konva
+  return (text || '').replace(/\n/g, ' ').trim();
 };
 
 export function CanvasEditor({ pageIndex, onClose }: { pageIndex: number, onClose: () => void }) {

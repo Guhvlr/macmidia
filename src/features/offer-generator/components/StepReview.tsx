@@ -28,9 +28,20 @@ import { ProductDetailPanel } from './review/ProductDetailPanel';
 import { BulkSearchArea } from './review/BulkSearchArea';
 import { ConfidenceBadge } from './review/ConfidenceBadge';
 import { FirstUseTour } from './review/FirstUseTour';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const StepReview = () => {
-  const { products, setProducts, removeProducts, pushHistory, slots, setStep, clients } = useOffer();
+  const { products, setProducts, removeProducts, pushHistory, slots, setStep, clients, pageCount } = useOffer();
   const [bulkInput, setBulkInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [variations, setVariations] = useState<ProductItem[]>([]);
@@ -319,9 +330,12 @@ export const StepReview = () => {
 
         const confidence = res.confidence || 'none';
         
+        // Usar o display_name da IA se disponível, senão limpar o original
         let displayName = res.display_name || res.original || 'Produto sem nome';
-        displayName = displayName.replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '');
-        displayName = displayName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        if (!res.display_name) {
+          displayName = displayName.replace(/\s*[-–—]\s*(R\$\s*)?\d+[,.]\d{2}/gi, '');
+          displayName = displayName.replace(/\s+(R\$\s*)?\d+[,.]\d{2}/gi, '');
+        }
         displayName = displayName.trim();
 
         let extractedEan = res.match?.ean;
@@ -365,7 +379,7 @@ export const StepReview = () => {
           images,
           brand: res.match?.brand,
           line: res.match?.line,
-          category: res.match?.category,
+          category: res.section || res.match?.category, // Usar seção da IA como categoria prioritária
           confidence,
           confidence_reason: res.confidence_reason,
           warning: res.warning,
@@ -879,10 +893,36 @@ export const StepReview = () => {
                 )}
               </button>
 
-              <div className="flex-1" />
-              <span className="text-[12px] font-medium text-zinc-500 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800/60">
-                Total Telas: {Math.ceil(products.length / (slots.length || 1))}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-medium text-zinc-500 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800/60">
+                  Total Telas: {pageCount}
+                </span>
+                {products.length > 0 && slots.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      const slotsFirstPage = slots.filter(s => (s.pageIndex || 0) === 0).length || slots.length;
+                      if (slotsFirstPage === 0) {
+                        toast.error("Nenhuma grade definida na Tela 1");
+                        return;
+                      }
+                      const needed = Math.ceil(products.length / slotsFirstPage);
+                      if (needed !== pageCount) {
+                        const { setPageCount } = useOfferStore.getState();
+                        setPageCount(needed);
+                        toast.success(`Distribuído em ${needed} telas (${slotsFirstPage} produtos por tela)`);
+                      } else {
+                        toast.info("A quantidade de telas já é ideal para o número de produtos.");
+                      }
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-red-400/10 text-[11px] font-bold"
+                  >
+                    <Layers className="w-3.5 h-3.5 mr-1.5" />
+                    Auto-distribuir
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -903,10 +943,44 @@ export const StepReview = () => {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-3 mb-4 mt-2">
+                  <div className="flex items-center justify-between mb-4 mt-2">
                     <h2 className="text-[14px] font-semibold text-zinc-300 flex items-center gap-2 tracking-tight">
                       <CheckCircle2 className="w-4 h-4 text-green-500" /> Confirmar Produtos ({products.length})
                     </h2>
+                    {products.length > 0 && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-3 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 transition-all gap-2 border border-transparent hover:border-red-400/20 group"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                            <span className="text-[11px] font-medium">Excluir Tudo</span>
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-zinc-100">Limpar lista de ofertas?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-zinc-400">
+                              Esta ação removerá todos os {products.length} produtos da sua lista atual. Você pode desfazer esta ação usando o botão de histórico se necessário.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                removeProducts(products.map(p => p.id));
+                                toast.success(`${products.length} produtos removidos.`);
+                              }}
+                              className="bg-red-600 hover:bg-red-500 text-white border-none"
+                            >
+                              Sim, excluir tudo
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </div>
                   <DndContext 
                     sensors={sensors}

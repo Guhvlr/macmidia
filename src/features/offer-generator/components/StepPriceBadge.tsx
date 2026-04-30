@@ -335,12 +335,14 @@ export const StepPriceBadge = () => {
           selectedSlotIndices.forEach(idx => updateSlotSettings(idx, clipboard));
           toast.success('Estilo colado!');
         }
-    if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey)) {
+        if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           const pIndices: number[] = [];
-          for (let i=0; i<slots.length; i++) pIndices.push(activePage * slots.length + i);
+          const productStartIdx = slots.filter(s => (s.pageIndex || 0) < activePage).length;
+          const pageSlotsCount = slots.filter(s => (s.pageIndex || 0) === activePage).length;
+          for (let i = 0; i < pageSlotsCount; i++) pIndices.push(productStartIdx + i);
           setSelectedSlotIndices(pIndices);
-          setSelectedSlotIndex(pIndices[0]);
+          setSelectedSlotIndex(pIndices[0] ?? null);
           setSelectedElems(['badge', 'image', 'name', 'currency', 'value', 'suffix']);
           toast.success('Todos selecionados');
         }
@@ -383,9 +385,9 @@ export const StepPriceBadge = () => {
       image: { x: slot.x + slot.width * i.offsetX/100 - (slot.width*0.8*i.scale)/2, y: slot.y + slot.height * i.offsetY/100 - (slot.height*0.6*i.scale)/2, w: slot.width*0.8*i.scale, h: slot.height*0.6*i.scale },
       name: { x: slot.x + slot.width * d.offsetX/100 - slot.width*0.4, y: slot.y + slot.height * d.offsetY/100 - (d.fontSize*sf)/2, w: slot.width*0.8, h: d.fontSize*sf*1.5 },
       badge: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2, y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2, w: b.badgeWidth*sf, h: b.badgeHeight*sf },
-      currency: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2 + (b.badgeWidth*sf) * b.currencyOffsetX/100 - (b.currencyFontSize*sf)*1.2, y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2 + (b.badgeHeight*sf) * b.currencyOffsetY/100 - (b.currencyFontSize*sf), w: (b.currencyFontSize*sf)*2.4, h: (b.currencyFontSize*sf)+6 },
-      value: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2 + (b.badgeWidth*sf) * b.valueOffsetX/100 - (b.valueFontSize*sf)*1.5, y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2 + (b.badgeHeight*sf) * b.valueOffsetY/100 - (b.valueFontSize*sf), w: (b.valueFontSize*sf)*3, h: (b.valueFontSize*sf)+6 },
-      suffix: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2 + (b.badgeWidth*sf) * b.suffixOffsetX/100 - (b.suffixFontSize*sf)*2, y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2 + (b.badgeHeight*sf) * b.suffixOffsetY/100 - (b.suffixFontSize*sf), w: (b.suffixFontSize*sf)*4, h: (b.suffixFontSize*sf)+6 },
+      currency: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2 + (b.badgeWidth*sf) * b.currencyOffsetX/100 - (b.currencyFontSize*sf)*0.75, y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2 + (b.badgeHeight*sf) * b.currencyOffsetY/100 - (b.currencyFontSize*sf)*0.6, w: (b.currencyFontSize*sf)*1.5, h: (b.currencyFontSize*sf)*1.2 },
+      value: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2 + (b.badgeWidth*sf) * b.valueOffsetX/100 - (b.valueFontSize*sf), y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2 + (b.badgeHeight*sf) * b.valueOffsetY/100 - (b.valueFontSize*sf)*0.6, w: (b.valueFontSize*sf)*2, h: (b.valueFontSize*sf)*1.2 },
+      suffix: { x: slot.x + (b.badgeOffsetX/100)*slot.width - (b.badgeWidth*sf)/2 + (b.badgeWidth*sf) * b.suffixOffsetX/100 - (b.suffixFontSize*sf)*1.5, y: slot.y + (b.badgeOffsetY/100)*slot.height - (b.badgeHeight*sf)/2 + (b.badgeHeight*sf) * b.suffixOffsetY/100 - (b.suffixFontSize*sf)*0.6, w: (b.suffixFontSize*sf)*3, h: (b.suffixFontSize*sf)*1.2 },
       sFactor: sf
     };
   };
@@ -414,13 +416,15 @@ export const StepPriceBadge = () => {
   const onStartDrag = (e: any, id: ElemId, idx: number) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation();
     onSelect(id, idx, e.shiftKey); pushHistory(); setDragging(id);
-    const c = toSvg(e); const el = (getElems(slots[idx % slots.length], getSlotSettings(idx)) as any)[id];
+    const c = toSvg(e); 
+    const ps = slots[idx];
+    const el = (getElems(ps, getSlotSettings(idx)) as any)[id];
     setDragOff({ x: c.x - el.x, y: c.y - el.y }); setDragState({ dx: 0, dy: 0 });
   };
 
   const onStartResize = (e: any, id: ElemId) => {
     if (selectedSlotIndex === null) return; e.preventDefault(); e.stopPropagation(); pushHistory(); setResizing(id);
-    const c = toSvg(e); const ps = slots[selectedSlotIndex % slots.length]; const cfg = getSlotSettings(selectedSlotIndex);
+    const c = toSvg(e); const ps = slots[selectedSlotIndex]; const cfg = getSlotSettings(selectedSlotIndex);
     const el = (getElems(ps, cfg) as any)[id]; setResizeStart({ sx: c.x, sy: c.y, ow: el.w, oh: el.h }); setResizeState({ w: el.w, h: el.h });
   };
 
@@ -429,7 +433,7 @@ export const StepPriceBadge = () => {
     if (!dragging && !resizing) return;
     const c = toSvg(e);
     if (dragging && selectedSlotIndex !== null) {
-      const ps = slots[selectedSlotIndex % slots.length]; const cfg = getSlotSettings(selectedSlotIndex); const el = (getElems(ps, cfg) as any)[dragging];
+      const ps = slots[selectedSlotIndex]; const cfg = getSlotSettings(selectedSlotIndex); const el = (getElems(ps, cfg) as any)[dragging];
       setDragState({ dx: c.x - dragOff.x - el.x, dy: c.y - dragOff.y - el.y });
     }
     if (resizing) setResizeState({ w: Math.max(30, resizeStart.ow + (c.x - resizeStart.sx)), h: Math.max(10, resizeStart.oh + (c.y - resizeStart.sy)) });
@@ -447,8 +451,11 @@ export const StepPriceBadge = () => {
       let newElems = new Set<ElemId>(isShift ? selectedElems : []);
       let foundAny = false;
 
-      slots.forEach((s, i) => {
-        const gIdx = activePage * slots.length + i;
+      const pageSlots = slots.filter(s => (s.pageIndex || 0) === activePage);
+      const productStartIdx = slots.filter(s => (s.pageIndex || 0) < activePage).length;
+
+      pageSlots.forEach((s, i) => {
+        const gIdx = productStartIdx + i;
         const cfg = getSlotSettings(gIdx);
         const elMap = getElems(s, cfg);
         (['image', 'name', 'badge', 'currency', 'value', 'suffix'] as ElemId[]).forEach(id => {
@@ -475,7 +482,7 @@ export const StepPriceBadge = () => {
     if (dragState && selectedSlotIndex !== null) {
       const { dx, dy } = dragState;
       selectedSlotIndices.forEach(idx => {
-        const ps = slots[idx % slots.length]; const cfg = getSlotSettings(idx); let updates: any = {};
+        const ps = slots[idx]; const cfg = getSlotSettings(idx); let updates: any = {};
         selectedElems.forEach(id => {
           if (id === 'image') updates.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.imageConfig.offsetY + (dy/ps.height)*100 };
           else if (id === 'name') updates.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.descConfig.offsetY + (dy/ps.height)*100 };
@@ -733,9 +740,44 @@ export const StepPriceBadge = () => {
       }} onClick={e => { if (!dragging && !resizing && !marquee) { setSelectedElems([]); setSelectedSlotIndex(null); setSelectedSlotIndices([]); setSelectedElem(null); } }}>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-[0.15] z-0 pointer-events-none" />
 
-        <div className="absolute top-6 z-20 flex items-center gap-3 bg-zinc-900/90 backdrop-blur-xl p-2 rounded-2xl border border-zinc-800/80 shadow-2xl select-none" onClick={e => e.stopPropagation()}>
-           <button onClick={undo} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-100 transition-all" title="Desfazer"><Undo2 className="w-4 h-4" /></button>
-           <div className="flex items-center gap-2 px-3 border-x border-zinc-800"><button onClick={() => setActivePage(Math.max(0, activePage-1))} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-zinc-400" /></button><span className="text-[12px] font-semibold text-zinc-300 min-w-[60px] text-center">{activePage+1} / {pageCount}</span><button onClick={() => setActivePage(Math.min(pageCount-1, activePage+1))} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-zinc-400 rotate-180" /></button></div>
+        <div className="absolute top-6 z-20 flex items-center gap-3 bg-zinc-900/90 backdrop-blur-xl p-2 rounded-2xl border border-zinc-800/80 shadow-2xl select-none max-w-[90%] overflow-hidden" onClick={e => e.stopPropagation()}>
+           <button onClick={undo} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-100 transition-all shrink-0" title="Desfazer"><Undo2 className="w-4 h-4" /></button>
+           
+           <div className="flex items-center gap-2 px-3 border-x border-zinc-800">
+             <button onClick={() => setActivePage(Math.max(0, activePage-1))} className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors shrink-0">
+               <ChevronLeft className="w-4 h-4" />
+             </button>
+             
+             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-[400px] py-1">
+               {Array.from({ length: pageCount }).map((_, i) => (
+                 <button
+                   key={i}
+                   onClick={() => { setActivePage(i); setSelectedSlotIndex(null); setSelectedElem(null); }}
+                   className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                     activePage === i
+                       ? 'bg-red-600 text-white shadow-sm scale-105'
+                       : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                   }`}
+                 >
+                   {i + 1}
+                 </button>
+               ))}
+             </div>
+
+             <button onClick={() => setActivePage(Math.min(pageCount-1, activePage+1))} className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors shrink-0">
+               <ChevronLeft className="w-4 h-4 rotate-180" />
+             </button>
+             
+             <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
+             
+             <button 
+               onClick={() => { if (selectedSlotIndex !== null) syncAllSlots(null, selectedSlotIndex); else toast.info('Selecione um produto para sincronizar seu estilo'); }} 
+               className="p-1.5 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-colors shrink-0"
+               title="Sincronizar este estilo para todas as telas"
+             >
+               <Zap className="w-4 h-4" />
+             </button>
+           </div>
            <div className="flex items-center gap-1.5"><button onClick={() => setZoom(zoom-0.1)} className="w-8 h-8 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400"><Minus className="w-4 h-4" /></button><span className="text-[11px] font-semibold text-zinc-400 min-w-[40px] text-center">{Math.round(zoom*100)}%</span><button onClick={() => setZoom(zoom+0.1)} className="w-8 h-8 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400"><Plus className="w-4 h-4" /></button></div>
            <button onClick={() => { setZoom(0.8); setPanOffset({ x: 0, y: 0 }); }} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors" title="Centralizar"><Maximize className="w-4 h-4 text-zinc-400" /></button>
         </div>
@@ -743,58 +785,65 @@ export const StepPriceBadge = () => {
         <div className="relative z-10" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }} onMouseDown={e => { if (!spacePressed && e.button !== 1) e.stopPropagation(); }}>
           <svg ref={svgRef} width={config.width} height={config.height} viewBox={`0 0 ${config.width} ${config.height}`} style={{ background: 'white', userSelect: 'none' }} className="shadow-2xl ring-1 ring-zinc-800/50 rounded-lg bg-zinc-900">
             {config.backgroundImageUrl && <image href={config.backgroundImageUrl} width={config.width} height={config.height} preserveAspectRatio="xMidYMin slice" />}
-            {slots.map((s, idx) => {
-              const gIdx = activePage * slots.length + idx; const cfg = getSlotSettings(gIdx); const el = getElems(s, cfg);
-              const isSlotSel = selectedSlotIndices.includes(gIdx);
-              const p = products?.[gIdx]; const name = p?.name || "NOME PRODUTO"; const price = p?.price || "10,99";
-              const v = { ...el };
-              if (isSlotSel && dragState) { selectedElems.forEach(id => { (v as any)[id].x += dragState.dx; (v as any)[id].y += dragState.dy; }); }
-              if (isSlotSel && resizeState && resizeStart) { 
-                const kf = resizeState.w / resizeStart.ow;
-                selectedElems.forEach(id => {
-                  const el = (v as any)[id];
-                  const oldW = el.w; const oldH = el.h;
-                  el.w *= kf; el.h *= kf;
-                  // Adjust x/y to scale from center/anchor
-                  el.x -= (el.w - oldW) / 2;
-                  el.y -= (el.h - oldH) / 2;
-                });
-              }
+            {(() => {
+              const pageSlots = slots.filter(s => (s.pageIndex || 0) === activePage);
+              const productStartIdx = slots.filter(s => (s.pageIndex || 0) < activePage).length;
+              
+              return pageSlots.map((s, idx) => {
+                const gIdx = productStartIdx + idx; 
+                const cfg = getSlotSettings(gIdx); 
+                const el = getElems(s, cfg);
+                const isSlotSel = selectedSlotIndices.includes(gIdx);
+                const p = products?.[gIdx]; const name = p?.name || "NOME PRODUTO"; const price = p?.price || "10,99";
+                const v = { ...el };
+                if (isSlotSel && dragState) { selectedElems.forEach(id => { (v as any)[id].x += dragState.dx; (v as any)[id].y += dragState.dy; }); }
+                if (isSlotSel && resizeState && resizeStart) { 
+                  const kf = resizeState.w / resizeStart.ow;
+                  selectedElems.forEach(id => {
+                    const el = (v as any)[id];
+                    const oldW = el.w; const oldH = el.h;
+                    el.w *= kf; el.h *= kf;
+                    // Adjust x/y to scale from center/anchor
+                    el.x -= (el.w - oldW) / 2;
+                    el.y -= (el.h - oldH) / 2;
+                  });
+                }
 
-              return (
-                <g key={gIdx} onClick={e => e.stopPropagation()}>
-                  <rect x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={isSlotSel ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSlotSel ? 4/zoom : 1/zoom} strokeDasharray={isSlotSel ? 'none' : '4,2'} pointerEvents="none" />
-                  
-                  <DragBox id="badge" el={v.badge} zoom={zoom} isPrimary={selectedElem === 'badge'} isSel={isSlotSel && selectedElems.includes('badge')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                     {cfg.priceBadge.badgeImageUrl ? <image href={cfg.priceBadge.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" style={{ borderRadius: cfg.priceBadge.borderRadius + 'px' }} pointerEvents="none" /> 
-                                                   : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={cfg.priceBadge.borderRadius * el.sFactor} fill={cfg.priceBadge.bgColor} pointerEvents="none" />}
-                  </DragBox>
-                  
-                  <DragBox id="image" el={v.image} zoom={zoom} isPrimary={selectedElem === 'image'} isSel={isSlotSel && selectedElems.includes('image')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                    <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} rx={12} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" pointerEvents="none" />
-                    {p?.images?.[0] && <image href={p.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
-                  </DragBox>
-                  
-                  <DragBox id="name" el={v.name} zoom={zoom} isPrimary={selectedElem === 'name'} isSel={isSlotSel && selectedElems.includes('name')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                    <text x={v.name.x+v.name.w/2} y={v.name.y+v.name.h/2} fontSize={cfg.descConfig.fontSize*el.sFactor} fill={cfg.descConfig.color} fontWeight="800" textAnchor="middle" fontFamily={cfg.descConfig.fontFamily} pointerEvents="none" style={cfg.descConfig.uppercase ? {textTransform:'uppercase'}:{}}>{renderTextWrap(name, v.name.x+v.name.w/2, v.name.y+v.name.h/2, cfg.descConfig.fontSize*el.sFactor)}</text>
-                  </DragBox>
-                  
-                  <DragBox id="currency" el={v.currency} zoom={zoom} isPrimary={selectedElem === 'currency'} isSel={isSlotSel && selectedElems.includes('currency')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                    <text x={v.currency.x+v.currency.w/2} y={v.currency.y+cfg.priceBadge.currencyFontSize*el.sFactor} fontSize={cfg.priceBadge.currencyFontSize*el.sFactor} fill={cfg.priceBadge.currencyColor} fontWeight="900" textAnchor="middle" pointerEvents="none">R$</text>
-                  </DragBox>
-                  
-                  <DragBox id="value" el={v.value} zoom={zoom} isPrimary={selectedElem === 'value'} isSel={isSlotSel && selectedElems.includes('value')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                    <text x={v.value.x+v.value.w/2} y={v.value.y+cfg.priceBadge.valueFontSize*el.sFactor} fontSize={cfg.priceBadge.valueFontSize*el.sFactor} fill={cfg.priceBadge.valueColor} fontWeight="900" textAnchor="middle" pointerEvents="none">{price}</text>
-                  </DragBox>
-
-                  {cfg.priceBadge.showSuffix && (
-                    <DragBox id="suffix" el={v.suffix} zoom={zoom} isPrimary={selectedElem === 'suffix'} isSel={isSlotSel && selectedElems.includes('suffix')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
-                      <text x={v.suffix.x+v.suffix.w/2} y={v.suffix.y+cfg.priceBadge.suffixFontSize*el.sFactor} fontSize={cfg.priceBadge.suffixFontSize*el.sFactor} fill={cfg.priceBadge.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{cfg.priceBadge.suffixText}</text>
+                return (
+                  <g key={gIdx} onClick={e => e.stopPropagation()}>
+                    <rect x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={isSlotSel ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSlotSel ? 4/zoom : 1/zoom} strokeDasharray={isSlotSel ? 'none' : '4,2'} pointerEvents="none" />
+                    
+                    <DragBox id="badge" el={v.badge} zoom={zoom} isPrimary={selectedElem === 'badge'} isSel={isSlotSel && selectedElems.includes('badge')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                       {cfg.priceBadge.badgeImageUrl ? <image href={cfg.priceBadge.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" style={{ borderRadius: cfg.priceBadge.borderRadius + 'px' }} pointerEvents="none" /> 
+                                                     : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={cfg.priceBadge.borderRadius * el.sFactor} fill={cfg.priceBadge.bgColor} pointerEvents="none" />}
                     </DragBox>
-                  )}
-                </g>
-              );
-            })}
+                    
+                    <DragBox id="image" el={v.image} zoom={zoom} isPrimary={selectedElem === 'image'} isSel={isSlotSel && selectedElems.includes('image')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                      <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} rx={12} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" pointerEvents="none" />
+                      {p?.images?.[0] && <image href={p.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
+                    </DragBox>
+                    
+                    <DragBox id="name" el={v.name} zoom={zoom} isPrimary={selectedElem === 'name'} isSel={isSlotSel && selectedElems.includes('name')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                      <text x={v.name.x+v.name.w/2} y={v.name.y+v.name.h/2} fontSize={cfg.descConfig.fontSize*el.sFactor} fill={cfg.descConfig.color} fontWeight="800" textAnchor="middle" fontFamily={cfg.descConfig.fontFamily} pointerEvents="none" style={cfg.descConfig.uppercase ? {textTransform:'uppercase'}:{}}>{renderTextWrap(name, v.name.x+v.name.w/2, v.name.y+v.name.h/2, cfg.descConfig.fontSize*el.sFactor)}</text>
+                    </DragBox>
+                    
+                    <DragBox id="currency" el={v.currency} zoom={zoom} isPrimary={selectedElem === 'currency'} isSel={isSlotSel && selectedElems.includes('currency')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                      <text x={v.currency.x + v.currency.w/2} y={v.currency.y + v.currency.h/2} fontSize={cfg.priceBadge.currencyFontSize*el.sFactor} fill={cfg.priceBadge.currencyColor} fontWeight="900" textAnchor="middle" dominantBaseline="central" pointerEvents="none">R$</text>
+                    </DragBox>
+                    
+                    <DragBox id="value" el={v.value} zoom={zoom} isPrimary={selectedElem === 'value'} isSel={isSlotSel && selectedElems.includes('value')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                      <text x={v.value.x + v.value.w/2} y={v.value.y + v.value.h/2} fontSize={cfg.priceBadge.valueFontSize*el.sFactor} fill={cfg.priceBadge.valueColor} fontWeight="900" textAnchor="middle" dominantBaseline="central" pointerEvents="none">{price}</text>
+                    </DragBox>
+
+                    {cfg.priceBadge.showSuffix && (
+                      <DragBox id="suffix" el={v.suffix} zoom={zoom} isPrimary={selectedElem === 'suffix'} isSel={isSlotSel && selectedElems.includes('suffix')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                        <text x={v.suffix.x + v.suffix.w/2} y={v.suffix.y + v.suffix.h/2} fontSize={cfg.priceBadge.suffixFontSize*el.sFactor} fill={cfg.priceBadge.suffixColor} fontWeight="600" textAnchor="middle" dominantBaseline="central" pointerEvents="none">{cfg.priceBadge.suffixText}</text>
+                      </DragBox>
+                    )}
+                  </g>
+                );
+              });
+            })()}
             {marquee && (
               <rect 
                 x={Math.min(marquee.x1, marquee.x2)} 

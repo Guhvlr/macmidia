@@ -108,7 +108,11 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   };
 
   const handleSaveDescription = () => {
-    saveUpdates({ description }, "Atualizou a descrição do card");
+    const updates: Partial<KanbanCardType> = { description };
+    if (!card.originalMessage) {
+      updates.originalMessage = description;
+    }
+    saveUpdates(updates, "Atualizou a descrição do card");
     setIsEditingDesc(false);
   };
 

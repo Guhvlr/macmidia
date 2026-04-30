@@ -213,11 +213,13 @@ const WhatsAppInbox = () => {
 
       // 5. Prompt muda conforme o modo escolhido
       const systemPrompt = mode === 'sections'
-        ? `Você é um extrator de dados de ofertas de supermercado.
+        ? `Você é um extrator de dados de ofertas de supermercado especializado em precisão técnica.
 Receberá o conteúdo bruto de uma planilha Excel.
 
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original. Mantenha detalhes de embalagem, unidade, sabor, peso e volume.
+
 REGRAS:
-1. Extraia TODOS os produtos e preços.
+1. Extraia TODOS os produtos e preços preservando detalhes (pote, lata, fardo, kg, ml, etc.).
 2. Formate cada produto como: NOME DO PRODUTO - R$ PREÇO
 3. Agrupe obrigatoriamente por categorias usando exatamente estes títulos:
    ═══ CARNES ═══
@@ -234,11 +236,13 @@ REGRAS:
 5. NUNCA use asteriscos ou markdown.
 6. Se houver data, coloque no topo como: DATA XX/XX/XX
 7. Retorne APENAS o texto formatado.`
-        : `Você é um extrator de dados de ofertas de supermercado.
+        : `Você é um extrator de dados de ofertas de supermercado especializado em precisão técnica.
 Receberá o conteúdo bruto de uma planilha Excel.
 
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original. Mantenha detalhes de embalagem, unidade, sabor, peso e volume.
+
 REGRAS:
-1. Extraia TODOS os produtos e preços NA ORDEM ORIGINAL da planilha.
+1. Extraia TODOS os produtos e preços NA ORDEM ORIGINAL da planilha preservando detalhes (pote, lata, fardo, kg, ml, etc.).
 2. Formate cada produto como: NOME DO PRODUTO - R$ PREÇO
 3. MANTENHA EXATAMENTE a sequência em que aparecem. NÃO reorganize.
 4. NUNCA altere os preços.
@@ -337,16 +341,18 @@ REGRAS:
         return;
       }
 
-        const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA.
+        const standardPrompt = `Você é um Analista de Dados Sênior da Agência MAC MIDIA especializado em precisão técnica.
 Transforme a mensagem bruta em uma DESCRIÇÃO PROFISSIONAL para um card de produção no Kanban.
 
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original do cliente. Mantenha detalhes de embalagem (pote, lata, fardo, caixa), unidade, sabor, peso e volume.
+
 REGRAS:
-1. Corrija ortografia e gramática
-2. Organize o conteúdo de forma clara e estruturada
-3. Se houver lista de produtos com preços, organize por categorias
-4. NUNCA altere preços — mantenha exatamente como recebidos
-5. NUNCA USE formatação markdown (asteriscos, negrito, etc.)
-6. Retorne APENAS o texto processado, sem comentários
+1. Corrija ortografia e gramática mantendo os detalhes técnicos originais.
+2. Organize o conteúdo de forma clara e estruturada.
+3. Se houver lista de produtos com preços, organize por categorias.
+4. NUNCA altere preços — mantenha exatamente como recebidos.
+5. NUNCA USE formatação markdown (asteriscos, negrito, etc.).
+6. Retorne APENAS o texto processado, sem comentários.
 7. PRESERVE o Nome do Cliente recebido como remetente se ele já parecer um nome de grupo ou empresa.
 
 Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto processado..." }`;

@@ -103,7 +103,7 @@ export const OfferEditorPage = () => {
   // ── Drag ──
   const draggingRef = useRef(false);
   const [dragging, setDragging] = useState(false);
-  const [dragState, setDragState] = useState<{ dx: number; dy: number; startSlotW: number; startSlotH: number } | null>(null);
+  const [dragState, setDragState] = useState<{ dx: number; dy: number } | null>(null);
   const [startMouse, setStartMouse] = useState({ x: 0, y: 0 });
   const [altDragCloned, setAltDragCloned] = useState(false);
 
@@ -597,13 +597,7 @@ export const OfferEditorPage = () => {
       draggingRef.current = true;
       setDragging(true); 
       
-      // Capture reference dimensions at start
-      let sw = 500, sh = 500;
-      if (newSel.length === 1 && newSel[0].gIdx !== undefined) {
-        const slot = slots[newSel[0].gIdx];
-        if (slot) { sw = slot.width; sh = slot.height; }
-      }
-      setDragState({ dx: 0, dy: 0, startSlotW: sw, startSlotH: sh });
+      setDragState({ dx: 0, dy: 0 });
     }
   };
 
@@ -712,21 +706,21 @@ export const OfferEditorPage = () => {
             const up = productUpdates[sel.gIdx];
             const isBadgeBgSelected = selection.some(s => s.gIdx === sel.gIdx && s.type === 'badgeBg');
 
-            const sw = dragState.startSlotW || slot.width;
-            const sh = dragState.startSlotH || slot.height;
+            const currentSlotW = slot.width;
+            const currentSlotH = slot.height;
 
             if (sel.type === 'image') {
-              up.imageConfig = { ...cfg.imageConfig, ...up.imageConfig, offsetX: (cfg.imageConfig.offsetX || 50) + (dx / sw) * 100, offsetY: (cfg.imageConfig.offsetY || 50) + (dy / sh) * 100 };
+              up.imageConfig = { ...cfg.imageConfig, ...up.imageConfig, offsetX: (cfg.imageConfig.offsetX || 50) + (dx / currentSlotW) * 100, offsetY: (cfg.imageConfig.offsetY || 50) + (dy / currentSlotH) * 100 };
             } else if (sel.type === 'name') {
-              up.descConfig = { ...cfg.descConfig, ...up.descConfig, offsetX: (cfg.descConfig.offsetX || 50) + (dx / sw) * 100, offsetY: (cfg.descConfig.offsetY || 50) + (dy / sh) * 100 };
+              up.descConfig = { ...cfg.descConfig, ...up.descConfig, offsetX: (cfg.descConfig.offsetX || 50) + (dx / currentSlotW) * 100, offsetY: (cfg.descConfig.offsetY || 50) + (dy / currentSlotH) * 100 };
             } else if (sel.type === 'badgeBg') {
               if (!up.priceBadge) up.priceBadge = { ...cfg.priceBadge };
-              up.priceBadge.badgeOffsetX = (cfg.priceBadge.badgeOffsetX || 50) + (dx / sw) * 100;
-              up.priceBadge.badgeOffsetY = (cfg.priceBadge.badgeOffsetY || 80) + (dy / sh) * 100;
+              up.priceBadge.badgeOffsetX = (cfg.priceBadge.badgeOffsetX || 50) + (dx / currentSlotW) * 100;
+              up.priceBadge.badgeOffsetY = (cfg.priceBadge.badgeOffsetY || 80) + (dy / currentSlotH) * 100;
             } else if (!isBadgeBgSelected) {
               if (!up.priceBadge) up.priceBadge = { ...cfg.priceBadge };
               const keyBase = sel.type.replace('badge', '').toLowerCase() || 'value';
-              const sf = (sw / 500);
+              const sf = (currentSlotW / 500);
               const badgeW = cfg.priceBadge.badgeWidth * sf;
               const badgeH = cfg.priceBadge.badgeHeight * sf;
               if (badgeW > 0) up.priceBadge[`${keyBase}OffsetX`] = ((cfg.priceBadge as any)[`${keyBase}OffsetX`] || 0) + (dx / badgeW) * 100;

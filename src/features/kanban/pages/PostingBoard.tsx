@@ -81,18 +81,19 @@ const PostingBoard = () => {
         <main 
           ref={scrollRef as any}
           onMouseDown={onMouseDown}
-          className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-6 flex gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+          className="flex-1 overflow-x-auto overflow-y-hidden min-h-0 p-4 md:p-6 flex gap-4 md:gap-5 items-start custom-scrollbar cursor-grab active:cursor-grabbing select-none snap-x snap-mandatory md:snap-none no-scrollbar md:custom-scrollbar"
         >
           {KANBAN_COLUMNS.map(col => (
-            <KanbanColumn
-              key={col.key}
-              id={col.key}
-              title={col.title}
-              color={col.color}
-              cards={cardsByColumn[col.key] || []}
-              count={(cardsByColumn[col.key] || []).length}
-              employeeId=""
-            />
+            <div key={col.key} className="snap-center shrink-0">
+              <KanbanColumn
+                id={col.key}
+                title={col.title}
+                color={col.color}
+                cards={cardsByColumn[col.key] || []}
+                count={(cardsByColumn[col.key] || []).length}
+                employeeId=""
+              />
+            </div>
           ))}
         </main>
       </KanbanBoardDndContext>

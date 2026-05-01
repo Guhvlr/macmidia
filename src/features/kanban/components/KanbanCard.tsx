@@ -112,7 +112,7 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         onClick={handleOpenDetail}
         {...dragAttributes}
         {...dragListeners}
-        className={`kanban-card bg-[#1C1C1E] border border-white/5 rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
+        className={`kanban-card bg-[#1C1C1E] border border-white/5 rounded-xl p-4 md:p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual ${isDragOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-black scale-[1.02] bg-[#252528]' : ''}`}
       >
         {isDragOver && !isProcessing && (
           <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm border-2 border-dashed border-primary/50 animate-in fade-in duration-200 pointer-events-none rounded-xl">

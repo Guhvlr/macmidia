@@ -88,6 +88,39 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     }
   }, [kanbanCards, card.id, open]);
 
+  // Swipe Logic for Dialog and Preview
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const minSwipeDistance = 70;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, button, .custom-scrollbar, .checklist-item, .reorder-handle')) return;
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = (action: 'close' | 'navigate') => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (action === 'close' && isLeftSwipe) {
+      onOpenChange(false);
+    } else if (action === 'navigate' && previewIndex !== null) {
+      if (isLeftSwipe) {
+        setPreviewIndex(prev => prev! === localImages.length - 1 ? 0 : prev! + 1);
+      } else if (isRightSwipe) {
+        setPreviewIndex(prev => prev! === 0 ? localImages.length - 1 : prev! - 1);
+      }
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (previewIndex === null || localImages.length <= 1) return;
@@ -354,12 +387,15 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="p-0 border-white/5 bg-[#161618] text-white max-w-5xl rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="p-0 border-white/5 bg-[#161618] text-white w-full h-[100dvh] md:h-auto md:max-w-5xl md:max-h-[90vh] md:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col left-0 top-0 translate-x-0 translate-y-0 md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] border-none md:border"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           data-no-dnd="true"
           onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={() => handleTouchEnd('close')}
         >
           <div className="sr-only">
             <DialogTitle>Detalhes do Card: {clientName || 'Sem nome'}</DialogTitle>
@@ -403,9 +439,9 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             saveUpdates={saveUpdates}
           />
 
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
             {/* Left Column (Main Content) */}
-            <div className={`flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 ${coverImage ? 'pt-4' : 'pt-2'}`}>
+            <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-6 ${coverImage ? 'pt-4' : 'pt-2'}`}>
               <MembersSection 
                 card={card}
                 labels={labels}
@@ -461,7 +497,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             </div>
 
             {/* Right Column (Sidebar / Activity) */}
-            <div className="w-[30%] min-w-[320px] bg-[#1a1a1c] border-l border-white/5 flex flex-col pt-8">
+            <div className="w-full md:w-[30%] md:min-w-[320px] bg-[#1a1a1c] border-t md:border-t-0 md:border-l border-white/5 flex flex-col pt-4 md:pt-8 overflow-y-auto md:overflow-y-visible">
               <HistorySection 
                 card={card}
                 comments={comments}
@@ -484,7 +520,12 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
       </Dialog>
 
       <Dialog open={previewIndex !== null} onOpenChange={(open) => !open && setPreviewIndex(null)}>
-        <DialogContent className="bg-black/95 max-w-[85vw] p-0 border-none shadow-2xl flex items-center justify-center">
+        <DialogContent 
+          className="bg-black/95 max-w-[85vw] p-0 border-none shadow-2xl flex items-center justify-center"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={() => handleTouchEnd('navigate')}
+        >
           <div className="sr-only">
             <DialogTitle>Pré-visualização de Imagem</DialogTitle>
             <DialogDescription>Visualização em tela cheia do anexo selecionado.</DialogDescription>

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragStartEvent,
@@ -42,15 +43,17 @@ export function KanbanBoardDndContext({ children }: Props) {
   }, [kanbanCards, activeId]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 10,
-        // Block drag if clicking on interactive elements or inside dialogs with data-no-dnd
-        predicate: (event) => {
-          const target = event.nativeEvent.target as HTMLElement;
-          // Se o clique for em um botão, input, etc, OU dentro de algo com data-no-dnd="true"
-          return !target.closest('button, input, textarea, a, [role="button"], [contenteditable="true"], [data-no-dnd="true"]');
-        },
+        distance: 8,
+        predicate: (event) => ! (event.nativeEvent.target as HTMLElement).closest('button, input, textarea, a, [role="button"], [contenteditable="true"], [data-no-dnd="true"]')
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+        predicate: (event) => ! (event.nativeEvent.target as HTMLElement).closest('button, input, textarea, a, [role="button"], [contenteditable="true"], [data-no-dnd="true"]')
       },
     })
   );

@@ -33,21 +33,21 @@ const KanbanColumnInner = ({ id, title, color, cards, count, employeeId, onEdit,
   }, [cards]);
 
   return (
-    <div className="flex flex-col h-fit max-h-full min-w-[300px] w-[320px] flex-shrink-0 mb-10">
+    <div className="flex flex-col h-fit max-h-full w-[85vw] md:w-[320px] flex-shrink-0 mb-10">
       {/* Column header */}
       <div className="flex items-center gap-2.5 mb-3 px-1 group flex-shrink-0">
         <div className={`w-2.5 h-2.5 rounded-full ${color} shadow-sm`} />
-        <h3 className="font-semibold text-[13px] tracking-wide text-foreground uppercase">{title}</h3>
+        <h3 className="font-semibold text-[14px] md:text-[13px] tracking-wide text-foreground uppercase">{title}</h3>
         <span className="text-[11px] text-muted-foreground bg-secondary/60 px-2.5 py-0.5 rounded-full font-medium border border-border/30">{count}</span>
         <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {onEdit && (
-            <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-secondary hover:text-primary transition-all">
-              <Pencil className="w-3.5 h-3.5" />
+            <button onClick={onEdit} className="p-2 md:p-1.5 rounded-lg hover:bg-secondary hover:text-primary transition-all">
+              <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" />
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all">
-              <Trash2 className="w-3.5 h-3.5" />
+            <button onClick={onDelete} className="p-2 md:p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all">
+              <Trash2 className="w-4 h-4 md:w-3.5 md:h-3.5" />
             </button>
           )}
         </div>
@@ -56,7 +56,7 @@ const KanbanColumnInner = ({ id, title, color, cards, count, employeeId, onEdit,
       {/* Cards container */}
       <div 
         ref={setNodeRef}
-        className={`flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-24 rounded-2xl border transition-all duration-200 max-h-[calc(100vh-200px)]
+        className={`flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-32 md:pb-24 rounded-2xl border transition-all duration-200 max-h-[calc(100vh-160px)] md:max-h-[calc(100vh-200px)]
         ${isOver
           ? 'bg-primary/5 border-primary/25 shadow-[inset_0_0_20px_hsl(0_80%_52%/0.05)]'
           : 'bg-secondary/15 border-border/25'

@@ -40,8 +40,58 @@ const MainLayout = ({ children, title }: Props) => {
     document.title = `Mac Mídia | ${title || pageLabel}`;
   }, [location.pathname, title, id, employees]);
 
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const minSwipeDistance = 70;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    
+    // Lista de elementos que devem ignorar o swipe (campos editáveis, cards, áreas de scroll horizontal, etc.)
+    const ignoreSelectors = [
+      'input', 'textarea', 'button', 'a', 
+      '[contenteditable="true"]', 
+      '.kanban-card', 
+      '.custom-scrollbar', 
+      '.trello-scrollbar',
+      '[role="dialog"]',
+      '.no-swipe'
+    ];
+
+    if (ignoreSelectors.some(selector => target.closest(selector))) {
+      return;
+    }
+
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    // Apenas processa se o movimento for predominantemente horizontal
+    // (Não queremos disparar o swipe se o usuário estiver rolando verticalmente)
+    // Isso é uma simplificação, mas funciona bem na maioria dos casos.
+
+    if (isLeftSwipe && !collapsed) {
+      setCollapsed(true);
+      toast.info('Painel recolhido', { duration: 1000, position: 'bottom-center' });
+    } else if (isRightSwipe && collapsed) {
+      setCollapsed(false);
+      toast.info('Painel expandido', { duration: 1000, position: 'bottom-center' });
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-[#020202]">
+    <div className="flex min-h-screen bg-[#020202] overflow-hidden">
       {/* Sidebar fixed overlay for consistency */}
       <div className="fixed inset-0 bg-[#020202] -z-10" />
 
@@ -54,6 +104,9 @@ const MainLayout = ({ children, title }: Props) => {
       
       {/* Main Content Area with dynamic margin based on sidebar state */}
       <main
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className={`flex-1 transition-all duration-300 print:ml-0 flex flex-col h-screen overflow-y-auto ${
           collapsed ? 'ml-[68px]' : 'ml-[220px]'
         }`}

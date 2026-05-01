@@ -352,27 +352,29 @@ const ClientCalendar = () => {
     <div className="min-h-screen gradient-bg">
       {/* Header */}
       <div className="page-header sticky top-0 z-50">
-        <div className="flex items-center gap-4 px-6 py-3.5">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary rounded-xl">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-3">
-             {client.logoUrl ? (
-               <img src={client.logoUrl} className="w-9 h-9 rounded-full object-cover border border-white/10" alt="" />
-             ) : (
-               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs shrink-0">
-                 {client.name.substring(0, 2).toUpperCase()}
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 px-4 md:px-6 py-3 md:py-3.5">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary rounded-xl shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-3 min-w-0">
+               {client.logoUrl ? (
+                 <img src={client.logoUrl} className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border border-white/10 shrink-0" alt="" />
+               ) : (
+                 <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-[10px] md:text-xs shrink-0">
+                   {client.name.substring(0, 2).toUpperCase()}
+                 </div>
+               )}
+               <div className="min-w-0">
+                 <h1 className="text-sm md:text-lg font-bold text-foreground truncate uppercase">{client.name}</h1>
+                 <p className="text-[9px] md:text-[11px] text-muted-foreground uppercase tracking-widest font-black opacity-50">Planejamento</p>
                </div>
-             )}
-             <div>
-               <h1 className="text-lg font-bold text-foreground">{client.name}</h1>
-               <p className="text-[11px] text-muted-foreground">Calendário de conteúdo</p>
-             </div>
+            </div>
           </div>
-          <div className="ml-auto flex items-center gap-3 text-xs">
+          <div className="md:ml-auto flex flex-wrap items-center gap-2 md:gap-3 text-[9px] md:text-xs w-full md:w-auto">
             {Object.entries(statusCounts as Record<string, number>).map(([status, count]) => (
-              <span key={status} className="flex items-center gap-1.5">
-                <span className={`inline-block w-2 h-2 rounded-full ${
+              <span key={status} className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${
                   status === 'pendente' ? 'bg-zinc-400' :
                   status === 'em produção' || status === 'em producao' ? 'bg-yellow-400' :
                   status === 'alteracao' || status === 'alteração' ? 'bg-orange-400' :
@@ -380,8 +382,8 @@ const ClientCalendar = () => {
                   status === 'concluido' || status === 'concluído' ? 'bg-green-400' :
                   'bg-primary'
                 }`} />
-                <span className="text-muted-foreground tabular-nums">{String(count)}</span>
-                <span className="text-muted-foreground capitalize">{status}</span>
+                <span className="text-white font-bold tabular-nums">{String(count)}</span>
+                <span className="text-white/40 capitalize font-medium">{status}</span>
               </span>
             ))}
           </div>
@@ -390,46 +392,35 @@ const ClientCalendar = () => {
 
       <div className="p-4 md:p-6">
         {/* View toggle + Month navigation */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
+          <div className="flex items-center gap-3 bg-[#121214] p-1 rounded-2xl border border-white/5">
             {(viewMode === 'calendar' || viewMode === 'weekly') && (
               <>
-                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month - 1))} className="rounded-[1rem] hover:bg-white/5">
+                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month - 1))} className="rounded-xl hover:bg-white/10 w-9 h-9">
                   <ChevronLeft className="w-5 h-5" />
                 </Button>
-                <h2 className="text-lg font-semibold min-w-[180px] text-center">{monthNames[month]} {year}</h2>
-                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month + 1))} className="rounded-[1rem] hover:bg-white/5">
+                <h2 className="text-sm font-bold min-w-[120px] md:min-w-[180px] text-center uppercase tracking-widest">{monthNames[month]} {year}</h2>
+                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month + 1))} className="rounded-xl hover:bg-white/10 w-9 h-9">
                   <ChevronRight className="w-5 h-5" />
                 </Button>
               </>
             )}
             {viewMode === 'feed' && (
-              <h2 className="text-lg font-semibold">Feed</h2>
+              <h2 className="text-lg font-semibold px-4">Feed de Posts</h2>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             {viewMode === 'calendar' && (
-              <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())} className="rounded-xl text-xs bg-white/5 border-white/10 hover:bg-white/10">
+              <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())} className="rounded-xl text-[10px] font-bold uppercase tracking-wider bg-white/5 border-white/10 hover:bg-white/10 h-8 px-4">
                 Hoje
               </Button>
             )}
-            <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/10 mr-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isRefreshing}
-                className="h-7 px-3 text-[10px] uppercase font-bold rounded-lg text-white/50 hover:text-primary hover:bg-white/5"
-                onClick={handleManualRefresh}
-              >
-                <RefreshCw className={`w-3 h-3 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Atualizar
-              </Button>
-            </div>
-            <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/10">
+            
+            <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/5">
               <Button
                 size="sm"
                 variant={viewMode === 'calendar' ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs rounded-lg ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                className={`h-7 px-3 text-[10px] font-bold uppercase rounded-lg transition-all ${viewMode === 'calendar' ? 'bg-primary text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                 onClick={() => setViewMode('calendar')}
               >
                 <CalendarDays className="w-3.5 h-3.5 mr-1" />
@@ -438,7 +429,7 @@ const ClientCalendar = () => {
               <Button
                 size="sm"
                 variant={viewMode === 'weekly' ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs rounded-lg ${viewMode === 'weekly' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                className={`h-7 px-3 text-[10px] font-bold uppercase rounded-lg transition-all ${viewMode === 'weekly' ? 'bg-primary text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                 onClick={() => setViewMode('weekly')}
               >
                 <LayoutList className="w-3.5 h-3.5 mr-1" />
@@ -447,7 +438,7 @@ const ClientCalendar = () => {
               <Button
                 size="sm"
                 variant={viewMode === 'feed' ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs rounded-lg ${viewMode === 'feed' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                className={`h-7 px-3 text-[10px] font-bold uppercase rounded-lg transition-all ${viewMode === 'feed' ? 'bg-primary text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                 onClick={() => setViewMode('feed')}
               >
                 <Grid3X3 className="w-3.5 h-3.5 mr-1" />
@@ -466,7 +457,7 @@ const ClientCalendar = () => {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
             {cells.map((cell, i) => {
               const tasks = cell.isCurrentMonth ? getTasksForDate(cell.dateStr) : [];
               const isToday = cell.dateStr === todayStr && cell.isCurrentMonth;
@@ -476,13 +467,13 @@ const ClientCalendar = () => {
                   key={i}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => handleDayDrop(e, cell.dateStr)}
-                  className={`min-h-[140px] rounded-2xl p-2 transition-all duration-300 group relative flex flex-col border
-                    ${!cell.isCurrentMonth ? 'bg-white/[0.01] border-transparent opacity-40' : 'bg-[#18181b]/50 border-white/5 hover:bg-[#18181b] hover:border-white/10'}
+                  className={`min-h-[100px] md:min-h-[140px] rounded-xl md:rounded-2xl p-1 md:p-2 transition-all duration-300 group relative flex flex-col border
+                    ${!cell.isCurrentMonth ? 'bg-white/[0.01] border-transparent opacity-40 invisible md:visible h-0 md:h-auto overflow-hidden md:overflow-visible' : 'bg-[#18181b]/50 border-white/5 hover:bg-[#18181b] hover:border-white/10'}
                     ${isToday ? 'ring-1 ring-inset ring-red-500/50 bg-red-500/5' : ''}
                   `}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-[11px] font-bold w-6 h-6 flex items-center justify-center rounded-full
+                  <div className="flex items-center justify-between mb-1 md:mb-2">
+                    <span className={`text-[9px] md:text-[11px] font-bold w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full
                       ${isToday ? 'bg-red-500 text-white' : 'text-white/50'}
                     `}>
                       {cell.day}
@@ -490,14 +481,14 @@ const ClientCalendar = () => {
                     {cell.isCurrentMonth && loggedUserRole !== 'GUEST' && (
                       <button
                         onClick={() => openAdd(cell.dateStr)}
-                        className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 text-white/50 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                        className="w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full bg-white/5 text-white/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <Plus className="w-3 md:w-3.5 h-3 md:h-3.5" />
                       </button>
                     )}
                   </div>
 
-                  <div className="space-y-1.5 overflow-y-auto max-h-[110px] flex-1 custom-scrollbar pr-1">
+                  <div className="space-y-1 md:space-y-1.5 overflow-y-auto max-h-[70px] md:max-h-[110px] flex-1 custom-scrollbar pr-0.5">
                     {tasks.map(task => (
                       <ContextMenu key={task.id}>
                         <ContextMenuTrigger asChild>
@@ -735,9 +726,9 @@ const ClientCalendar = () => {
 
       {/* Add Task Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="bg-[#121214] text-white border-white/10 max-w-[950px] p-0 rounded-2xl overflow-hidden flex h-[700px] max-h-[90vh]">
+        <DialogContent className="bg-[#121214] text-white border-white/10 w-full h-[100dvh] md:max-w-[950px] p-0 md:rounded-2xl overflow-hidden flex flex-col md:flex-row md:h-[700px] md:max-h-[90vh] left-0 top-0 translate-x-0 translate-y-0 md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] border-none md:border">
           {/* Left Instagram Preview */}
-          <div className="w-[380px] bg-[#0c0c0e] border-r border-white/10 flex flex-col items-center p-6 shrink-0 h-full overflow-y-auto custom-scrollbar">
+          <div className="w-full md:w-[380px] bg-[#0c0c0e] border-b md:border-b-0 md:border-r border-white/10 flex flex-col items-center p-4 md:p-6 shrink-0 h-auto md:h-full overflow-y-auto custom-scrollbar">
              <div className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl overflow-hidden flex flex-col mt-4">
                {/* Header */}
                <div className="flex items-center justify-between p-3.5 border-b border-white/5">
@@ -967,11 +958,11 @@ const ClientCalendar = () => {
 
       {/* Edit Task Detail Dialog (Unified Design) */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
-        <DialogContent className="bg-[#121214] text-white border-white/10 max-w-[950px] p-0 rounded-2xl overflow-hidden flex h-[700px] max-h-[90vh]">
+        <DialogContent className="bg-[#121214] text-white border-white/10 w-full h-[100dvh] md:max-w-[950px] p-0 md:rounded-2xl overflow-hidden flex flex-col md:flex-row md:h-[700px] md:max-h-[90vh] left-0 top-0 translate-x-0 translate-y-0 md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] border-none md:border">
           {editTask && (
             <>
               {/* Left Instagram Preview */}
-              <div className="w-[380px] bg-[#0c0c0e] border-r border-white/10 flex flex-col items-center p-6 shrink-0 h-full overflow-y-auto custom-scrollbar">
+              <div className="w-full md:w-[380px] bg-[#0c0c0e] border-b md:border-b-0 md:border-r border-white/10 flex flex-col items-center p-4 md:p-6 shrink-0 h-auto md:h-full overflow-y-auto custom-scrollbar">
                  <div className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl overflow-hidden flex flex-col mt-4">
                    {/* Header */}
                    <div className="flex items-center justify-between p-3.5 border-b border-white/5">

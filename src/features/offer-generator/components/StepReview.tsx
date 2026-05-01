@@ -358,7 +358,7 @@ export const StepReview = () => {
           confidence_reason: res.confidence_reason,
           warning: res.warning,
           mode: res.mode || 'description',
-          client_name: res.match?.client_name,
+          client_name: res.match?.client_name || (res.match === null ? (selectedClientName || undefined) : res.match?.client_name),
         } as ProductItem;
       });
 
@@ -645,41 +645,21 @@ export const StepReview = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = async (e: any) => {
+    input.onchange = (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
       
       const p = products.find(x => x.id === id);
       if (!p) return;
 
-      const toastId = toast.loading('Processando imagem...');
-      try {
-        const cleanEan = p.ean?.replace(/[^0-9]/g, '');
-        if (cleanEan && cleanEan !== '' && cleanEan !== '0' && p.ean !== 'N/A' && p.ean !== 'NA') {
-          await handleOfficialImageUpload(id, file);
-          toast.dismiss(toastId);
-          return;
-        }
-
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${crypto.randomUUID()}.${fileExt}`;
-        const filePath = `product-manual/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-
-        setProducts(prev => prev.map(old => old.id === id ? { ...old, images: [publicUrl, ...old.images] } : old));
-        toast.success('Foto adicionada à oferta!', { id: toastId });
-      } catch (err: any) {
-        toast.error('Erro no upload: ' + err.message, { id: toastId });
-      }
+      const previewUrl = URL.createObjectURL(file);
+      setProducts(prev => prev.map(old => old.id === id ? { 
+        ...old, 
+        images: [previewUrl, ...old.images],
+        pendingImageFile: file 
+      } : old));
+      
+      toast.success('Foto selecionada! Clique em "Salvar no BD" para confirmar.');
     };
     input.click();
   };
@@ -694,52 +674,87 @@ export const StepReview = () => {
   };
   
   const handleUpdateProduct = async (id: string, updates: Partial<ProductItem>, saveToDb: boolean = false) => {
+    // Primeiro atualiza localmente para garantir feedback visual imediato
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     
     if (saveToDb) {
       const product = products.find(p => p.id === id);
-      if (product && updates.ean && updates.name) {
-        const cleanEan = updates.ean.replace(/[^0-9]/g, '');
-        if (cleanEan && cleanEan !== '0000000000000') {
-          const clientNameVal = updates.client_name || product.client_name || null;
-          let query = supabase.from('products').select('id').eq('ean', cleanEan);
-          if (clientNameVal) query = query.eq('client_name', clientNameVal);
-          else query = query.is('client_name', null);
-          
-          const { data: existing } = await query;
-          let error = null;
+      const targetName = updates.name || product?.name;
+      const targetEan = updates.ean || product?.ean;
 
-          if (existing && existing.length > 0) {
-            const { error: updateError } = await supabase.from('products').update({
-              name: updates.name.toUpperCase(),
-              price: updates.price ? parseFloat(updates.price.replace(/[^\d,]/g, '').replace(',', '.')) : null,
-              unit: updates.suffix
-            }).eq('id', existing[0].id);
-            error = updateError;
-          } else {
-            const { error: insertError } = await supabase.from('products').insert({
-              ean: cleanEan,
-              name: updates.name.toUpperCase(),
-              price: updates.price ? parseFloat(updates.price.replace(/[^\d,]/g, '').replace(',', '.')) : null,
-              client_name: clientNameVal,
-              unit: updates.suffix
-            });
-            error = insertError;
-          }
-          
-          if (error) {
-            toast.error('Erro ao salvar no banco: ' + error.message);
-            return;
-          }
-          toast.success('Produto salvo no banco de dados!');
-          return;
-        }
+      if (!product || !targetEan || !targetName) {
+        toast.error('Dados insuficientes para salvar no banco.');
+        return;
       }
-      toast.error('EAN inválido para salvar no banco.');
-      return;
+
+      const cleanEan = targetEan.replace(/[^0-9]/g, '');
+      const paddedEan = padEan(cleanEan);
+      const clientNameVal = updates.client_name !== undefined ? (updates.client_name || null) : (product.client_name || null);
+
+      try {
+        const toastId = toast.loading('Sincronizando com o banco de dados...');
+        let finalImagePath = product.images[0]?.split('?')[0]?.split('/').pop(); 
+
+        // Se existe uma imagem pendente de upload (selecionada via "Trocar Foto")
+        if (product.pendingImageFile) {
+          const file = product.pendingImageFile;
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          const clientSuffix = clientNameVal ? '_' + clientNameVal.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+          const fileName = `${paddedEan}${clientSuffix}.${ext === 'png' ? 'png' : 'jpg'}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('product-images')
+            .upload(fileName, file, { upsert: true, contentType: file.type });
+            
+          if (uploadError) throw uploadError;
+          finalImagePath = fileName;
+        }
+
+        let query = supabase.from('products').select('id').eq('ean', paddedEan).eq('name', targetName.toUpperCase());
+        if (clientNameVal) query = query.eq('client_name', clientNameVal);
+        else query = query.is('client_name', null);
+        
+        const { data: existing } = await query;
+        let error = null;
+
+        const dbData = {
+          name: targetName.toUpperCase(),
+          price: updates.price !== undefined ? (updates.price ? parseFloat(String(updates.price).replace(/[^\d,]/g, '').replace(',', '.')) : null) : (product.price ? parseFloat(String(product.price).replace(/[^\d,]/g, '').replace(',', '.')) : null),
+          unit: updates.suffix || product.suffix,
+          image_path: finalImagePath
+        };
+
+        if (existing && existing.length > 0) {
+          const { error: updateError } = await supabase.from('products').update(dbData).eq('id', existing[0].id);
+          error = updateError;
+        } else {
+          const { error: insertError } = await supabase.from('products').insert({
+            ...dbData,
+            ean: paddedEan,
+            client_name: clientNameVal
+          });
+          error = insertError;
+        }
+        
+        if (error) throw error;
+
+        // Se houve upload, atualiza a URL local definitiva (com cache buster) e remove o pending
+        if (product.pendingImageFile) {
+          const publicUrl = `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${finalImagePath}?t=${Date.now()}`;
+          setProducts(prev => prev.map(p => p.id === id ? { 
+            ...p, 
+            images: [publicUrl], 
+            pendingImageFile: undefined 
+          } : p));
+        }
+
+        toast.success('Produto salvo no banco de dados!', { id: toastId });
+      } catch (err: any) {
+        toast.error('Erro ao salvar no banco: ' + err.message);
+      }
+    } else {
+      toast.success('Produto atualizado localmente!');
     }
-    
-    toast.success('Produto atualizado localmente!');
   };
 
   const handleCreateProduct = async (productId: string) => {

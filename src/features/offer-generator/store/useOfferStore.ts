@@ -20,6 +20,7 @@ export interface ProductItem {
   suffix?: string;
   mode?: 'barcode' | 'description';
   client_name?: string;
+  pendingImageFile?: File;
 }
 
 export interface Slot {

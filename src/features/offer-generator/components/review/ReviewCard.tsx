@@ -142,7 +142,10 @@ export const ReviewCard = React.memo(({
             {product.name}
           </h3>
           <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-red-500 font-semibold text-[12px] bg-red-500/10 px-2 py-0.5 rounded-lg border border-red-500/20 whitespace-nowrap">
+            <span 
+              onClick={(e) => { e.stopPropagation(); toggleSuffix(product.id); }}
+              className="text-red-500 font-semibold text-[12px] bg-red-500/10 px-2 py-0.5 rounded-lg border border-red-500/20 whitespace-nowrap cursor-pointer hover:bg-red-500/20 transition-all"
+            >
               {product.price}
               <span className="text-[10px] text-red-500/50 ml-1">/{product.suffix}</span>
             </span>

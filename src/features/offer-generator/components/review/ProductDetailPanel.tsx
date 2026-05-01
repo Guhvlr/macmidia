@@ -537,6 +537,8 @@ export const ProductDetailPanel = React.memo(({
                             name: v.name,
                             ean: v.ean,
                             client_name: v.client_name || '',
+                            price: v.price ? `R$ ${Number(v.price).toFixed(2).replace('.', ',')}` : product.price,
+                            suffix: v.unit || 'cada',
                             images: v.image_path ? [`https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${v.image_path}?t=${Date.now()}`] : product.images
                           });
                           toast.success('Produto atualizado para a variação de ' + (v.client_name || 'Global'));

@@ -27,6 +27,8 @@ export interface SystemUser {
 export interface KanbanCard {
   id: string;
   clientName: string;
+  calendarClientId?: string;
+  calendarClientName?: string;
   description: string;
   notes?: string;
   images?: string[];

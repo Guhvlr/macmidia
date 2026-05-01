@@ -176,6 +176,12 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
             </div>
           )}
           <h4 className="font-bold text-[13px] text-white leading-tight uppercase line-clamp-2">{card.clientName}</h4>
+          {card.calendarClientName && (
+            <div className="flex items-center gap-1 text-[10px] text-orange-500/80 font-bold uppercase tracking-wider">
+              <span className="opacity-40">Cliente:</span>
+              <span className="truncate">{card.calendarClientName}</span>
+            </div>
+          )}
           {card.aiStatus === 'analyzing' && (
             <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -280,6 +286,8 @@ const KanbanCard = memo(KanbanCardInner, (prev, next) => {
     prev.card.timerRunning === next.card.timerRunning &&
     prev.card.timeSpent === next.card.timeSpent &&
     prev.card.employeeId === next.card.employeeId &&
+    prev.card.calendarClientId === next.card.calendarClientId &&
+    prev.card.calendarClientName === next.card.calendarClientName &&
     prev.employees === next.employees &&
     prev.updateKanbanCard === next.updateKanbanCard &&
     prev.triggerAICorrection === next.triggerAICorrection

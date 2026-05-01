@@ -26,8 +26,10 @@ interface Props {
 }
 
 const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
-  const { updateKanbanCard, deleteKanbanCard, triggerAICorrection, fixDescriptionWithAI, customAICommand, employees, systemUsers, loggedUserId, loggedUserName } = useApp();
+  const { updateKanbanCard, deleteKanbanCard, triggerAICorrection, fixDescriptionWithAI, customAICommand, employees, systemUsers, loggedUserId, loggedUserName, calendarClients } = useApp();
   const [clientName, setClientName] = useState(card.clientName);
+  const [calendarClientId, setCalendarClientId] = useState(card.calendarClientId || '');
+  const [calendarClientName, setCalendarClientName] = useState(card.calendarClientName || '');
 
   // Description
   const [description, setDescription] = useState(card.description);
@@ -72,6 +74,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
   useEffect(() => {
     setClientName(card.clientName || '');
+    setCalendarClientId(card.calendarClientId || '');
+    setCalendarClientName(card.calendarClientName || '');
     setDescription(card.description || '');
     setLocalImages(Array.isArray(card.images) ? card.images : []);
     setCoverImage(card.coverImage || null);
@@ -79,7 +83,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     setChecklists(Array.isArray(card.checklists) ? card.checklists : []);
     setComments(Array.isArray(card.comments) ? card.comments : []);
     setAssignedUsers(Array.isArray(card.assignedUsers) ? card.assignedUsers : []);
-  }, [card.id, card.clientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history]);
+  }, [card.id, card.clientName, card.calendarClientId, card.calendarClientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history]);
 
   const { kanbanCards } = useApp();
   useEffect(() => {
@@ -396,6 +400,11 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
             card={card}
             clientName={clientName}
             setClientName={setClientName}
+            calendarClientId={calendarClientId}
+            setCalendarClientId={setCalendarClientId}
+            calendarClientName={calendarClientName}
+            setCalendarClientName={setCalendarClientName}
+            calendarClients={calendarClients}
             coverImage={coverImage}
             setAsCover={setAsCover}
             localImages={localImages}

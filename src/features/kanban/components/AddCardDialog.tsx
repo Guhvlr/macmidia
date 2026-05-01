@@ -25,9 +25,10 @@ interface Props {
 }
 
 const AddCardDialog = ({ employeeId: initialEmployeeId, fixedColumnKey, columnKey, trigger, open, onOpenChange, showEmployeeSelect }: Props) => {
-  const { addKanbanCard, uploadKanbanAsset, employees } = useApp();
+  const { addKanbanCard, uploadKanbanAsset, employees, calendarClients } = useApp();
   const [internalOpen, setInternalOpen] = useState(false);
   const [clientName, setClientName] = useState('');
+  const [selectedCalendarClientId, setSelectedCalendarClientId] = useState('');
   const [description, setDescription] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployeeId || '');
   const [aiLoading, setAiLoading] = useState(false);
@@ -101,9 +102,13 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
     if (!clientName.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
+    const selectedClient = calendarClients.find(c => c.id === selectedCalendarClientId);
+
     try {
       await addKanbanCard({
         clientName, 
+        calendarClientId: selectedCalendarClientId || undefined,
+        calendarClientName: selectedClient?.name || undefined,
         description, 
         images: [],
         column: fixedColumnKey || columnKey || 'para-producao',
@@ -116,6 +121,7 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
 
       toast.success(`Card de ${clientName} criado!`);
       setClientName(''); 
+      setSelectedCalendarClientId('');
       setDescription(''); 
       setDialogOpen(false);
     } catch (err: any) {
@@ -145,12 +151,26 @@ Retorne JSON: {"clientName": "...", "description": "..."}`;
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            placeholder="Nome do cliente"
+            placeholder="Nome do card"
             value={clientName}
             onChange={e => setClientName(e.target.value)}
             className="bg-secondary/40 border-border/50 rounded-xl h-11"
             autoFocus
           />
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Cliente Vinculado</label>
+            <Select value={selectedCalendarClientId} onValueChange={setSelectedCalendarClientId}>
+              <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl">
+                <SelectValue placeholder="Selecione o cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {calendarClients.map(client => (
+                  <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1 relative">
             <div className="flex items-center justify-between mb-1 px-1">
                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Descrição</label>

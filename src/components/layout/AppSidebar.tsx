@@ -15,7 +15,8 @@ import {
   ChevronRight, 
   LucideIcon,
   Zap,
-  BrainCircuit
+  BrainCircuit,
+  FileText
 } from 'lucide-react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
@@ -31,6 +32,7 @@ export const navItems: NavItem[] = [
   { path: '/equipe', icon: Users, label: 'Equipe' },
   { path: '/correcao', icon: FileEdit, label: 'Correções' },
   { path: '/postagem', icon: LayoutGrid, label: 'Postagens' },
+  { path: '/relatorios', icon: FileText, label: 'Relatórios' },
   { path: '/calendario', icon: Calendar, label: 'Calendário' },
   { path: '/cofre', icon: Folder, label: 'Banco de Dados' },
   { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp' },

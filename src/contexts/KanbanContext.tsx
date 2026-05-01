@@ -74,6 +74,8 @@ function mapKanbanCard(row: any): KanbanCard {
   return {
     id: row.id || '',
     clientName: row.client_name || 'Sem Nome',
+    calendarClientId: row.calendar_client_id || undefined,
+    calendarClientName: row.calendar_client_name || undefined,
     description: row.description || '',
     notes: row.notes || undefined,
     images: Array.isArray(row.images) ? row.images : [],
@@ -401,6 +403,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     return await monitoring.trackPerformance('ADD_KANBAN_CARD', async () => {
       const { data, error } = await supabase.from('kanban_cards').insert({
         employee_id: card.employeeId, client_name: card.clientName, description: card.description || '',
+        calendar_client_id: card.calendarClientId || null, calendar_client_name: card.calendarClientName || null,
         images: card.images || [], image_url: card.imageUrl || null, cover_image: card.coverImage || null,
         labels: card.labels || [], checklists: card.checklists || [], comments: card.comments || [],
         assigned_users: card.assignedUsers || [], column: card.column, time_spent: card.timeSpent ?? 0,
@@ -440,6 +443,8 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     setKanbanCards(prev => prev.map(c => c.id === id ? { ...c, ...op } : c));
 
     if (updates.clientName !== undefined) db.client_name = updates.clientName;
+    if (updates.calendarClientId !== undefined) db.calendar_client_id = updates.calendarClientId;
+    if (updates.calendarClientName !== undefined) db.calendar_client_name = updates.calendarClientName;
     if (updates.description !== undefined) db.description = updates.description;
     if ('notes' in updates) db.notes = updates.notes || null;
     if (updates.images !== undefined) db.images = updates.images;

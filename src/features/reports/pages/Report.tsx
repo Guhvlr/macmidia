@@ -72,7 +72,8 @@ const Report = () => {
 
   const metrics = useMemo(() => {
     const safeTasks = Array.isArray(filteredTasks) ? filteredTasks : [];
-    const safeKanban = Array.isArray(kanbanCards) ? kanbanCards : [];
+    const allKanban = Array.isArray(kanbanCards) ? kanbanCards : [];
+    const safeKanban = clientId === 'all' ? allKanban : allKanban.filter(c => c.calendarClientId === clientId);
 
     const cTasks = safeTasks.filter(t => {
       if (!t.date) return false;
@@ -150,8 +151,11 @@ const Report = () => {
   const teamMetrics = useMemo(() => {
     return employees.map(emp => {
       const empCompleted = metrics.currMonthTasks.filter(t => t.employeeId === emp.id).length;
-      const empInProd = kanbanCards.filter(c => c.employeeId === emp.id && c.column === 'em-producao').length;
-      const empChanges = kanbanCards.filter(c => c.employeeId === emp.id && c.column === 'alteracao').length;
+      const allEmpKanban = Array.isArray(kanbanCards) ? kanbanCards : [];
+      const safeEmpKanban = clientId === 'all' ? allEmpKanban : allEmpKanban.filter(c => c.calendarClientId === clientId);
+      
+      const empInProd = safeEmpKanban.filter(c => c.employeeId === emp.id && c.column === 'em-producao').length;
+      const empChanges = safeEmpKanban.filter(c => c.employeeId === emp.id && c.column === 'alteracao').length;
       const total = empCompleted + empInProd + empChanges;
       const score = total === 0 ? 100 : Math.round((empCompleted / total) * 100);
       return {

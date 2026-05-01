@@ -42,7 +42,7 @@ const hasExtractedContent = (msg: InboxMessage) => {
 
 const WhatsAppInbox = () => {
   const navigate = useNavigate();
-  const { employees, addKanbanCard } = useApp();
+  const { employees, addKanbanCard, calendarClients } = useApp();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,6 +59,7 @@ const WhatsAppInbox = () => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [extractMode, setExtractMode] = useState<'order' | 'sections' | null>(null);
   const [extractTargetMsg, setExtractTargetMsg] = useState<InboxMessage | null>(null);
+  const [selectedCalendarClientId, setSelectedCalendarClientId] = useState('');
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -307,6 +308,7 @@ REGRAS:
       ? msg.sender_name.trim()
       : msg.sender.replace(/@.*/, '') || 'Cliente WhatsApp';
     setEditClientName(defaultName);
+    setSelectedCalendarClientId('');
     setIsSequencia(false);
 
     // ✅ Pré-preenche a descrição com o texto da mensagem (texto, documento extraído, etc.)
@@ -429,8 +431,12 @@ Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto criati
       let finalText = aiResult || selectedMessage.message_text;
       if (isSequencia) finalText = `✅ SEQUÊNCIA ✅\n\n${finalText}`;
 
+      const selectedClient = calendarClients.find(c => c.id === selectedCalendarClientId);
+
       addKanbanCard({
         clientName: editClientName.trim() || 'Cliente WhatsApp',
+        calendarClientId: selectedCalendarClientId || undefined,
+        calendarClientName: selectedClient?.name || undefined,
         description: finalText,
         notes: `Via WhatsApp — ${new Date(selectedMessage.created_at).toLocaleString('pt-BR')}`,
         column: 'para-producao',
@@ -641,6 +647,20 @@ Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto criati
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest ml-1">Cliente Vinculado</label>
+                    <Select value={selectedCalendarClientId} onValueChange={setSelectedCalendarClientId}>
+                      <SelectTrigger className="bg-white/5 border-white/10 h-11 rounded-xl">
+                        <SelectValue placeholder="Selecione o cliente" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
+                        {calendarClients.map(client => (
+                          <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-3">

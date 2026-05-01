@@ -27,6 +27,7 @@ const WhatsAppInbox = lazy(() => import("@/features/automation/pages/WhatsAppInb
 const Products = lazy(() => import("@/features/products/pages/Products"));
 const OfferStudio = lazy(() => import("@/features/offer-generator/pages/OfferStudio"));
 const Report = lazy(() => import("@/features/reports/pages/Report"));
+const ReportsHub = lazy(() => import("@/features/reports/pages/ReportsHub"));
 const IntelligenceCenter = lazy(() => import("@/features/intelligence/pages/IntelligenceCenter"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -79,6 +80,7 @@ const AppRoutes = () => (
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppInbox /></ProtectedRoute>} />
       <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
       <Route path="/gerador-artes" element={<ProtectedRoute><OfferStudio /></ProtectedRoute>} />
+      <Route path="/relatorios" element={<ProtectedRoute><ReportsHub /></ProtectedRoute>} />
       <Route path="/relatorio" element={<ProtectedRoute><Report /></ProtectedRoute>} />
       <Route path="/admin/inteligencia" element={<ProtectedRoute><IntelligenceCenter /></ProtectedRoute>} />
       <Route path="/offer-editor" element={<FullScreenProtectedRoute><OfferEditorPage /></FullScreenProtectedRoute>} />

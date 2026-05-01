@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
+import { KanbanSearch } from '@/features/kanban/components/KanbanSearch';
 
 const KANBAN_COLUMNS = [
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
@@ -59,6 +60,10 @@ const PostingBoard = () => {
                 <h1 className="text-lg font-bold text-foreground">Quadros de Postagem</h1>
                 <p className="text-[11px] text-muted-foreground">Gerencie conteúdos para publicação</p>
               </div>
+            </div>
+            
+            <div className="flex-1 max-w-4xl mx-8">
+              <KanbanSearch />
             </div>
           </div>
           <Button 

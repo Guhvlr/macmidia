@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import { useDraggableScroll } from '@/hooks/useDraggableScroll';
 import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
+import { KanbanSearch } from '@/features/kanban/components/KanbanSearch';
 
 const KANBAN_COLUMNS = [
   { key: 'para-producao', title: 'Para Produção', color: 'bg-info' },
@@ -62,6 +63,10 @@ const CorrectionBoard = () => {
                 <h1 className="text-lg font-bold text-foreground">Quadros de Correção</h1>
                 <p className="text-[11px] text-muted-foreground">Gerencie artes que precisam de ajustes</p>
               </div>
+            </div>
+            
+            <div className="flex-1 max-w-4xl mx-8">
+              <KanbanSearch />
             </div>
           </div>
           <Button 

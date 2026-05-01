@@ -51,7 +51,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0, ox: 0, oy: 0 });
-  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [selectedElem, setSelectedElem] = useState<ElemId | null>(null);
   const [dragging, setDragging] = useState<ElemId | null>(null);
   const [dragOff, setDragOff] = useState({ x: 0, y: 0 });
@@ -104,16 +104,17 @@ export const FullEditor = ({ onClose }: EditorProps) => {
 
 
 
-  const onStartDrag = (e: React.MouseEvent, id: ElemId, gIdx: number) => {
+  const onStartDrag = (e: React.MouseEvent, id: ElemId, slotId: string) => {
     if (e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
     pushHistory();
-    setSelectedSlotIndex(gIdx);
+    setSelectedSlotId(slotId);
     setSelectedElem(id);
     setDragging(id);
     const c = toSvg(e);
-    const slotIdx = gIdx % slots.length;
-    const el = (getElems(slots[slotIdx], getSlotSettings(gIdx)) as any)[id];
+    const ps = slots.find(s => s.id === slotId);
+    if (!ps) return;
+    const el = (getElems(ps, getSlotSettings(slotId)) as any)[id];
     setDragOff({ x: c.x - el.x, y: c.y - el.y });
     setDragState({ dx: 0, dy: 0 });
   };
@@ -123,25 +124,26 @@ export const FullEditor = ({ onClose }: EditorProps) => {
       setPanOffset({ x: panStart.ox + (e.clientX - panStart.x), y: panStart.oy + (e.clientY - panStart.y) });
       return;
     }
-    if (!dragging || selectedSlotIndex === null) return;
+    if (!dragging || selectedSlotId === null) return;
     const c = toSvg(e);
-    const slotIdx = selectedSlotIndex % slots.length;
-    const el = (getElems(slots[slotIdx], getSlotSettings(selectedSlotIndex)) as any)[dragging];
+    const ps = slots.find(s => s.id === selectedSlotId);
+    if (!ps) return;
+    const el = (getElems(ps, getSlotSettings(selectedSlotId)) as any)[dragging];
     setDragState({ dx: c.x - dragOff.x - el.x, dy: c.y - dragOff.y - el.y });
   };
 
   const onMouseUp = () => {
     if (isPanning) { setIsPanning(false); return; }
-    if (dragState && selectedSlotIndex !== null && dragging) {
+    if (dragState && selectedSlotId !== null && dragging) {
       const { dx, dy } = dragState;
-      const slotIdx = selectedSlotIndex % slots.length;
-      const slot = slots[slotIdx];
-      const cfg = getSlotSettings(selectedSlotIndex);
+      const ps = slots.find(s => s.id === selectedSlotId);
+      if (!ps) return;
+      const cfg = getSlotSettings(selectedSlotId);
       let up: any = {};
-      if (dragging === 'image') up.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.imageConfig.offsetY + (dy / slot.height) * 100 };
-      else if (dragging === 'name') up.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx / slot.width) * 100, offsetY: cfg.descConfig.offsetY + (dy / slot.height) * 100 };
-      else if (dragging === 'badge') up.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx / slot.width) * 100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy / slot.height) * 100 };
-      if (Object.keys(up).length > 0) updateSlotSettings(selectedSlotIndex, up);
+      if (dragging === 'image') up.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx / ps.width) * 100, offsetY: cfg.imageConfig.offsetY + (dy / ps.height) * 100 };
+      else if (dragging === 'name') up.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx / ps.width) * 100, offsetY: cfg.descConfig.offsetY + (dy / ps.height) * 100 };
+      else if (dragging === 'badge') up.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx / ps.width) * 100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy / ps.height) * 100 };
+      if (Object.keys(up).length > 0) updateSlotSettings(selectedSlotId, up);
     }
     setDragging(null);
     setDragState(null);
@@ -211,7 +213,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
         {Array.from({ length: pageCount }).map((_, i) => (
           <button
             key={i}
-            onClick={() => { setActivePage(i); setSelectedSlotIndex(null); setSelectedElem(null); }}
+            onClick={() => { setActivePage(i); setSelectedSlotId(null); setSelectedElem(null); }}
             className={`shrink-0 px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
               activePage === i
                 ? 'bg-red-600 text-white shadow-sm'
@@ -256,11 +258,11 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                 const product = products[gIdx];
                 if (!product) return null;
 
-                const cfg = getSlotSettings(gIdx);
+                const cfg = getSlotSettings(slot.id);
                 const { priceBadge: pb, descConfig: dc } = cfg;
                 const sf = slot.width / 500;
                 const el = getElems(slot, cfg);
-                const isSelected = selectedSlotIndex === gIdx;
+                const isSelected = selectedSlotId === slot.id;
 
                 const v = { ...el };
                 if (isSelected && dragState && dragging) {
@@ -271,13 +273,13 @@ export const FullEditor = ({ onClose }: EditorProps) => {
                   <g key={gIdx}>
                     <rect x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="none" stroke={isSelected ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSelected ? 3 : 1} strokeDasharray={isSelected ? 'none' : '4,2'} pointerEvents="none" />
 
-                  <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'image', gIdx)}>
+                  <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'image', slot.id)}>
                     <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" rx={8} />
                     {product.images?.[0] && <image href={product.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" />}
                     {isSelected && selectedElem === 'image' && <rect x={v.image.x - 2} y={v.image.y - 2} width={v.image.w + 4} height={v.image.h + 4} fill="none" stroke="#ef4444" strokeWidth={2} rx={8} pointerEvents="none" />}
                   </g>
 
-                  <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'badge', gIdx)}>
+                  <g style={{ cursor: 'move' }} onMouseDown={e => onStartDrag(e, 'badge', slot.id)}>
                     {pb.badgeImageUrl
                       ? <image href={pb.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" />
                       : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={pb.borderRadius * sf} fill={pb.bgColor} />
@@ -290,7 +292,7 @@ export const FullEditor = ({ onClose }: EditorProps) => {
 
                   <g
                     style={{ cursor: 'move' }}
-                    onMouseDown={e => onStartDrag(e, 'name', gIdx)}
+                    onMouseDown={e => onStartDrag(e, 'name', slot.id)}
                     onDoubleClick={e => {
                       e.stopPropagation();
                       setEditingProduct({ id: product.id, name: product.name, price: product.price });
@@ -512,9 +514,9 @@ export const StepFinal = () => {
     }
   };
 
-  const renderProduct = (product: ProductItem, slot: any, index: number) => {
+  const renderProduct = (product: ProductItem, slot: any, gIdx: number) => {
     if (!product) return null;
-    const cfg = getSlotSettings(index);
+    const cfg = getSlotSettings(slot.id);
     const { priceBadge: pb, descConfig: dc } = cfg;
     const v = getElems(slot, cfg);
     const sf = v.sFactor;

@@ -164,13 +164,13 @@ export interface OfferState {
   setPresets: (presets: any[] | ((prev: any[]) => any[])) => void;
   isLoadingPresets: boolean;
   setIsLoadingPresets: (b: boolean) => void;
-  slotSettings: Record<number, any>;
-  setSlotSettings: (s: Record<number, any>) => void;
-  updateSlotSettings: (index: number, p: any) => void;
-  selectedSlotIndex: number | null;
-  setSelectedSlotIndex: (idx: number | null) => void;
-  selectedSlotIndices: number[];
-  setSelectedSlotIndices: (idx: number[]) => void;
+  slotSettings: Record<string, any>;
+  setSlotSettings: (s: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
+  updateSlotSettings: (slotId: string, p: any) => void;
+  selectedSlotId: string | null;
+  setSelectedSlotId: (id: string | null) => void;
+  selectedSlotIds: string[];
+  setSelectedSlotIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   zoom: number;
   setZoom: (z: number | ((prev: number) => number)) => void;
   panOffset: { x: number; y: number };
@@ -213,9 +213,9 @@ export interface OfferState {
   saveProjectTemplate: (name: string) => Promise<void>;
   deleteProjectTemplate: (template: { id?: string; name: string }) => Promise<void>;
   loadProjectTemplate: (id: string) => void;
-  getSlotSettings: (index: number) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
-  replaceSlotSettings: (index: number, settings: any) => void;
-  syncAllSlots: (settings: any, sourceIdx: number) => void;
+  getSlotSettings: (slotId: string) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig };
+  replaceSlotSettings: (slotId: string, settings: any) => void;
+  syncAllSlots: (settings: any, sourceId: string) => void;
   getProjectStateSnapshot: () => any;
   loadProjectState: (state: any) => void;
   createAndOpenProject: (name: string, date: string) => Promise<void>;
@@ -349,10 +349,10 @@ export const useOfferStore = create<OfferState>((set, get) => ({
       return { slotSettings: updated };
     });
   },
-  selectedSlotIndex: null,
-  setSelectedSlotIndex: (selectedSlotIndex) => set({ selectedSlotIndex }),
-  selectedSlotIndices: [],
-  setSelectedSlotIndices: (selectedSlotIndices) => set((state) => ({ selectedSlotIndices: typeof selectedSlotIndices === 'function' ? selectedSlotIndices(state.selectedSlotIndices) : selectedSlotIndices })),
+  selectedSlotId: null,
+  setSelectedSlotId: (selectedSlotId) => set({ selectedSlotId }),
+  selectedSlotIds: [],
+  setSelectedSlotIds: (selectedSlotIds) => set((state) => ({ selectedSlotIds: typeof selectedSlotIds === 'function' ? selectedSlotIds(state.selectedSlotIds) : selectedSlotIds })),
   zoom: 0.8,
   setZoom: (z) => set((state) => ({ zoom: typeof z === 'function' ? z(state.zoom) : z })),
   panOffset: { x: 0, y: 0 },
@@ -644,62 +644,52 @@ export const useOfferStore = create<OfferState>((set, get) => ({
     set((state) => ({ slotSettings: { ...state.slotSettings, [slotId]: settings } }));
   },
 
-  syncAllSlots: async (unused: any, sourceIdx: number) => {
+  syncAllSlots: async (unused: any, unusedSourceId: string) => {
     try {
       const state = get();
-      const totalSlotsCount = state.slots.length;
-      if (totalSlotsCount === 0) return;
+      if (state.slots.length === 0) return;
       
-      const src = state.getSlotSettings(sourceIdx);
-      const newSettings: Record<number, any> = {};
-      
-      // List of positioning properties that should NOT be synced globally
-      const badgePosKeys = [
-        'badgeOffsetX', 'badgeOffsetY', 'badgeWidth', 'badgeHeight',
-        'currencyOffsetX', 'currencyOffsetY', 'currencyFontSize',
-        'valueOffsetX', 'valueOffsetY', 'valueFontSize',
-        'suffixOffsetX', 'suffixOffsetY', 'suffixFontSize'
-      ];
-      const descPosKeys = ['offsetX', 'offsetY', 'fontSize'];
-      const imgPosKeys = ['offsetX', 'offsetY', 'scale'];
-
-      for (let i = 0; i < totalSlotsCount; i++) {
-          const target = state.getSlotSettings(i);
-          
-          // Merge style from source with position from target
-          const priceBadge = { ...src.priceBadge };
-          badgePosKeys.forEach(key => { (priceBadge as any)[key] = (target.priceBadge as any)[key]; });
-
-          const descConfig = { ...src.descConfig };
-          descPosKeys.forEach(key => { (descConfig as any)[key] = (target.descConfig as any)[key]; });
-
-          const imageConfig = { ...src.imageConfig };
-          imgPosKeys.forEach(key => { (imageConfig as any)[key] = (target.imageConfig as any)[key]; });
-
-          newSettings[i] = { priceBadge, descConfig, imageConfig };
+      const page0Slots = state.slots.filter(s => (s.pageIndex || 0) === 0);
+      if (page0Slots.length === 0) {
+        toast.error('Nenhum slot na primeira tela para usar como base.');
+        return;
       }
+
+      const newSettings: Record<string, any> = { ...state.slotSettings };
       
-      // Update globals but ONLY for style properties (non-positioning)
-      const globalPriceBadge = { ...state.priceBadge };
-      Object.keys(src.priceBadge).forEach(key => {
-        if (!badgePosKeys.includes(key)) (globalPriceBadge as any)[key] = (src.priceBadge as any)[key];
+      // We will map each page's slots to Page 0 slots by their order (index)
+      const pages = Array.from({ length: state.pageCount }, (_, i) => i);
+      
+      pages.forEach(pIdx => {
+        const pageSlots = state.slots.filter(s => (s.pageIndex || 0) === pIdx);
+        pageSlots.forEach((slot, sIdx) => {
+          // Find corresponding slot in Page 0 by index
+          // If the current page has more slots than Page 0, use the last slot of Page 0 or the first one
+          const sourceSlot = page0Slots[sIdx] || page0Slots[0];
+          const src = state.getSlotSettings(sourceSlot.id);
+          
+          newSettings[slot.id] = { 
+            priceBadge: { ...src.priceBadge }, 
+            descConfig: { ...src.descConfig }, 
+            imageConfig: { ...src.imageConfig } 
+          };
+        });
       });
-
-      const globalDescConfig = { ...state.descConfig };
-      Object.keys(src.descConfig).forEach(key => {
-        if (!descPosKeys.includes(key)) (globalDescConfig as any)[key] = (src.descConfig as any)[key];
-      });
-
+      
+      // Update globals based on the very first slot
+      const firstSrc = state.getSlotSettings(page0Slots[0].id);
+      
       set({
         slotSettings: newSettings,
-        priceBadge: globalPriceBadge,
-        descConfig: globalDescConfig
+        priceBadge: { ...firstSrc.priceBadge },
+        descConfig: { ...firstSrc.descConfig },
+        imageConfig: { ...firstSrc.imageConfig }
       });
       
-      toast.success('Estilo sincronizado (mantendo posições de cada tela)!');
+      toast.success('Visual da Tela 1 sincronizado para todas as outras telas!');
     } catch (err) {
       console.error('Sync Error:', err);
-      toast.error('Erro ao sincronizar');
+      toast.error('Erro ao sincronizar estilos.');
     }
   },
 
@@ -928,7 +918,7 @@ export const useOfferStore = create<OfferState>((set, get) => ({
     set({
       step: 1, config: defaultConfig, slots: [], selectedSlotId: null, pageCount: 1,
       priceBadge: defaultPriceBadge, descConfig: defaultDescConfig, imageConfig: defaultImageConfig,
-      products: [], layouts: [], slotSettings: {}, selectedSlotIndex: null, selectedSlotIndices: [],
+      products: [], layouts: [], slotSettings: {}, selectedSlotId: null, selectedSlotIds: [],
       zoom: 0.8, panOffset: { x: 0, y: 0 }, activePage: 0, customCanvasElements: {}, history: [], historyIndex: -1
     });
   },

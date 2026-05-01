@@ -496,6 +496,13 @@ export const ProductDetailPanel = React.memo(({
                   className={`p-4 rounded-2xl border transition-all ${isCurrent ? 'bg-red-500/5 border-red-500/30 ring-1 ring-red-500/20' : 'bg-zinc-900/30 border-zinc-800 hover:bg-zinc-900/60 hover:border-zinc-700'}`}
                 >
                   <div className="flex items-start justify-between gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-zinc-800/50 border border-zinc-800 shrink-0 flex items-center justify-center overflow-hidden p-1">
+                      <ProductImageWithFormat 
+                        src={v.image_path ? `https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${v.image_path}` : ''} 
+                        className="w-full h-full object-contain"
+                        isFallback={!v.image_path}
+                      />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="text-[12px] font-bold text-zinc-100 truncate">{v.name}</h4>

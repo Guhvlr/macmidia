@@ -491,10 +491,10 @@ export const StepSlots = () => {
                 return (
                   <g key={s.id}>
                     <rect x={s.x} y={s.y} width={s.width} height={s.height}
-                      fill={sel ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.05)'}
-                      stroke={sel ? '#dc2626' : 'rgba(255,255,255,0.3)'}
-                      strokeWidth={sel ? 3 : 1.5}
-                      strokeDasharray={sel ? '' : '8,4'} rx={8}
+                      fill={sel ? 'rgba(220,38,38,0.15)' : 'rgba(0,0,0,0.1)'}
+                      stroke={sel ? '#dc2626' : '#2563eb'}
+                      strokeWidth={sel ? 3 : 2}
+                      strokeDasharray={sel ? '' : '6,3'} rx={12}
                       style={{ cursor: mode === 'select' ? 'move' : 'crosshair' }}
                       onMouseDown={e => onSlotDown(e, s)}
                       onClick={e => e.stopPropagation()} />

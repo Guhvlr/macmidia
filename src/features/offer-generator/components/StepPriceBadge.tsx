@@ -152,8 +152,8 @@ const DragBox = ({ id, children, el, isPrimary, isSel, onStartDrag, onStartResiz
 export const StepPriceBadge = () => {
   const { 
     priceBadge, updatePriceBadge, descConfig, updateDescConfig, imageConfig, updateImageConfig,
-    slots, pageCount, config, selectedSlotIndex, setSelectedSlotIndex,
-    selectedSlotIndices, setSelectedSlotIndices, zoom, setZoom,
+    slots, pageCount, config, selectedSlotId, setSelectedSlotId,
+    selectedSlotIds, setSelectedSlotIds, zoom, setZoom,
     panOffset, setPanOffset, getSlotSettings, updateSlotSettings, replaceSlotSettings, syncAllSlots,
     undo, pushHistory, products, customFonts, presets, setPresets, activePage, setActivePage,
     selectedClientName
@@ -200,16 +200,16 @@ export const StepPriceBadge = () => {
 
   const up = useCallback((updates: any) => {
     pushHistory();
-    if (selectedSlotIndices.length > 0) {
-      selectedSlotIndices.forEach(idx => updateSlotSettings(idx, updates));
-    } else if (selectedSlotIndex !== null) {
-      updateSlotSettings(selectedSlotIndex, updates);
+    if (selectedSlotIds.length > 0) {
+      selectedSlotIds.forEach(id => updateSlotSettings(id, updates));
+    } else if (selectedSlotId !== null) {
+      updateSlotSettings(selectedSlotId, updates);
     } else {
       if (updates.priceBadge) updatePriceBadge(updates.priceBadge);
       if (updates.descConfig) updateDescConfig(updates.descConfig);
       if (updates.imageConfig) updateImageConfig(updates.imageConfig);
     }
-  }, [selectedSlotIndex, selectedSlotIndices, updateSlotSettings, updatePriceBadge, updateDescConfig, updateImageConfig, pushHistory]);
+  }, [selectedSlotId, selectedSlotIds, updateSlotSettings, updatePriceBadge, updateDescConfig, updateImageConfig, pushHistory]);
 
   // Load saved icons from Supabase Storage on mount
   useEffect(() => {
@@ -324,25 +324,24 @@ export const StepPriceBadge = () => {
     const handleKeys = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey)) {
         if (e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
-        if (e.key.toLowerCase() === 'c' && selectedSlotIndex !== null) {
+        if (e.key.toLowerCase() === 'c' && selectedSlotId !== null) {
           e.preventDefault();
-          setClipboard(getSlotSettings(selectedSlotIndex));
+          setClipboard(getSlotSettings(selectedSlotId));
           toast.success('Estilo copiado!');
         }
-        if (e.key.toLowerCase() === 'v' && clipboard && selectedSlotIndices.length > 0) {
+        if (e.key.toLowerCase() === 'v' && clipboard && selectedSlotIds.length > 0) {
           e.preventDefault();
           pushHistory();
-          selectedSlotIndices.forEach(idx => updateSlotSettings(idx, clipboard));
+          selectedSlotIds.forEach(id => updateSlotSettings(id, clipboard));
           toast.success('Estilo colado!');
         }
         if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
-          const pIndices: number[] = [];
-          const productStartIdx = slots.filter(s => (s.pageIndex || 0) < activePage).length;
-          const pageSlotsCount = slots.filter(s => (s.pageIndex || 0) === activePage).length;
-          for (let i = 0; i < pageSlotsCount; i++) pIndices.push(productStartIdx + i);
-          setSelectedSlotIndices(pIndices);
-          setSelectedSlotIndex(pIndices[0] ?? null);
+          const pIds: string[] = [];
+          const pageSlots = slots.filter(s => (s.pageIndex || 0) === activePage);
+          pageSlots.forEach(s => pIds.push(s.id));
+          setSelectedSlotIds(pIds);
+          setSelectedSlotId(pIds[0] ?? null);
           setSelectedElems(['badge', 'image', 'name', 'currency', 'value', 'suffix']);
           toast.success('Todos selecionados');
         }
@@ -368,7 +367,7 @@ export const StepPriceBadge = () => {
       window.removeEventListener('keydown', handleSpaceDown);
       window.removeEventListener('keyup', handleSpaceUp);
     };
-  }, [undo, selectedSlotIndex, selectedSlotIndices, clipboard, getSlotSettings, updateSlotSettings, pushHistory, presets, activePage, slots.length, setSelectedSlotIndices, setSelectedSlotIndex, spacePressed]);
+  }, [undo, selectedSlotId, selectedSlotIds, clipboard, getSlotSettings, updateSlotSettings, pushHistory, presets, activePage, slots.length, setSelectedSlotIds, setSelectedSlotId, spacePressed]);
 
   const toSvg = useCallback((e: React.MouseEvent) => {
     const r = svgRef.current?.getBoundingClientRect();
@@ -376,7 +375,7 @@ export const StepPriceBadge = () => {
     return { x: (e.clientX - r.left) * config.width / r.width, y: (e.clientY - r.top) * config.height / r.height };
   }, [config.width, config.height]);
 
-  const activeCfg = useMemo(() => selectedSlotIndex === null ? { priceBadge, descConfig, imageConfig } : getSlotSettings(selectedSlotIndex), [selectedSlotIndex, priceBadge, descConfig, imageConfig, getSlotSettings]);
+  const activeCfg = useMemo(() => selectedSlotId === null ? { priceBadge, descConfig, imageConfig } : getSlotSettings(selectedSlotId), [selectedSlotId, priceBadge, descConfig, imageConfig, getSlotSettings]);
 
   const getElems = (slot: any, cfg: any) => {
     const sf = (slot?.width || 500) / 500;
@@ -392,39 +391,42 @@ export const StepPriceBadge = () => {
     };
   };
 
-  const onSelect = (id: ElemId, idx: number, isShift?: boolean) => {
-    const isAlreadySelected = selectedElems.includes(id) && selectedSlotIndices.includes(idx);
+  const onSelect = (id: ElemId, slotId: string, isShift?: boolean) => {
+    const isAlreadySelected = selectedElems.includes(id) && selectedSlotIds.includes(slotId);
     
     if (isShift) {
        setSelectedElems(prev => prev.includes(id) ? (prev.length > 1 ? prev.filter(x => x !== id) : prev) : [...prev, id]); 
-       setSelectedSlotIndices(prev => prev.includes(idx) ? (prev.length > 1 ? prev.filter(x => x !== idx) : prev) : [...prev, idx]);
-       setSelectedSlotIndex(idx);
+       setSelectedSlotIds(prev => prev.includes(slotId) ? (prev.length > 1 ? prev.filter(x => x !== slotId) : prev) : [...prev, slotId]);
+       setSelectedSlotId(slotId);
        setSelectedElem(id);
     } else if (!isAlreadySelected) { 
       // Only reset selection if we click something NOT already in the selection
-      setSelectedSlotIndex(idx); 
+      setSelectedSlotId(slotId); 
       setSelectedElem(id);
       setSelectedElems([id]); 
-      setSelectedSlotIndices([idx]); 
+      setSelectedSlotIds([slotId]); 
     } else {
       // If already selected, just make it the primary focus for the panel
-      setSelectedSlotIndex(idx);
+      setSelectedSlotId(slotId);
       setSelectedElem(id);
     }
   };
 
-  const onStartDrag = (e: any, id: ElemId, idx: number) => {
+  const onStartDrag = (e: any, id: ElemId, slotId: string) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation();
-    onSelect(id, idx, e.shiftKey); pushHistory(); setDragging(id);
+    onSelect(id, slotId, e.shiftKey); pushHistory(); setDragging(id);
     const c = toSvg(e); 
-    const ps = slots[idx];
-    const el = (getElems(ps, getSlotSettings(idx)) as any)[id];
+    const ps = slots.find(s => s.id === slotId);
+    if (!ps) return;
+    const el = (getElems(ps, getSlotSettings(slotId)) as any)[id];
     setDragOff({ x: c.x - el.x, y: c.y - el.y }); setDragState({ dx: 0, dy: 0 });
   };
 
   const onStartResize = (e: any, id: ElemId) => {
-    if (selectedSlotIndex === null) return; e.preventDefault(); e.stopPropagation(); pushHistory(); setResizing(id);
-    const c = toSvg(e); const ps = slots[selectedSlotIndex]; const cfg = getSlotSettings(selectedSlotIndex);
+    if (selectedSlotId === null) return; e.preventDefault(); e.stopPropagation(); pushHistory(); setResizing(id);
+    const c = toSvg(e); const ps = slots.find(s => s.id === selectedSlotId); 
+    if (!ps) return;
+    const cfg = getSlotSettings(selectedSlotId);
     const el = (getElems(ps, cfg) as any)[id]; setResizeStart({ sx: c.x, sy: c.y, ow: el.w, oh: el.h }); setResizeState({ w: el.w, h: el.h });
   };
 
@@ -432,8 +434,11 @@ export const StepPriceBadge = () => {
     if (isPanning) { setPanOffset({ x: panStart.ox + (e.clientX - panStart.x), y: panStart.oy + (e.clientY - panStart.y) }); return; }
     if (!dragging && !resizing) return;
     const c = toSvg(e);
-    if (dragging && selectedSlotIndex !== null) {
-      const ps = slots[selectedSlotIndex]; const cfg = getSlotSettings(selectedSlotIndex); const el = (getElems(ps, cfg) as any)[dragging];
+    if (dragging && selectedSlotId !== null) {
+      const ps = slots.find(s => s.id === selectedSlotId); 
+      if (!ps) return;
+      const cfg = getSlotSettings(selectedSlotId); 
+      const el = (getElems(ps, cfg) as any)[dragging];
       setDragState({ dx: c.x - dragOff.x - el.x, dy: c.y - dragOff.y - el.y });
     }
     if (resizing) setResizeState({ w: Math.max(30, resizeStart.ow + (c.x - resizeStart.sx)), h: Math.max(10, resizeStart.oh + (c.y - resizeStart.sy)) });
@@ -447,7 +452,7 @@ export const StepPriceBadge = () => {
       const w = Math.abs(marquee.x1 - marquee.x2); const h = Math.abs(marquee.y1 - marquee.y2);
       const isShift = e.shiftKey || e.ctrlKey;
       
-      let newSlots = new Set<number>(isShift ? selectedSlotIndices : []);
+      let newIds = new Set<string>(isShift ? selectedSlotIds : []);
       let newElems = new Set<ElemId>(isShift ? selectedElems : []);
       let foundAny = false;
 
@@ -471,48 +476,51 @@ export const StepPriceBadge = () => {
       });
 
       if (foundAny || !isShift) {
-        setSelectedSlotIndices(Array.from(newSlots));
+        setSelectedSlotIds(Array.from(newIds));
         setSelectedElems(Array.from(newElems));
-        if (newSlots.size > 0) setSelectedSlotIndex(Array.from(newSlots)[0]);
+        if (newIds.size > 0) setSelectedSlotId(Array.from(newIds)[0]);
         if (newElems.size > 0) setSelectedElem(Array.from(newElems)[0]);
       }
       setMarquee(null);
       return;
     }
-    if (dragState && selectedSlotIndex !== null) {
+    if (dragState && selectedSlotId !== null) {
       const { dx, dy } = dragState;
-      selectedSlotIndices.forEach(idx => {
-        const ps = slots[idx]; const cfg = getSlotSettings(idx); let updates: any = {};
-        selectedElems.forEach(id => {
-          if (id === 'image') updates.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.imageConfig.offsetY + (dy/ps.height)*100 };
-          else if (id === 'name') updates.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.descConfig.offsetY + (dy/ps.height)*100 };
-          else if (id === 'badge') updates.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx/ps.width)*100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy/ps.height)*100 };
+      selectedSlotIds.forEach(id => {
+        const ps = slots.find(s => s.id === id); 
+        if (!ps) return;
+        const cfg = getSlotSettings(id); 
+        let updates: any = {};
+        selectedElems.forEach(elemId => {
+          if (elemId === 'image') updates.imageConfig = { ...cfg.imageConfig, offsetX: cfg.imageConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.imageConfig.offsetY + (dy/ps.height)*100 };
+          else if (elemId === 'name') updates.descConfig = { ...cfg.descConfig, offsetX: cfg.descConfig.offsetX + (dx/ps.width)*100, offsetY: cfg.descConfig.offsetY + (dy/ps.height)*100 };
+          else if (elemId === 'badge') updates.priceBadge = { ...cfg.priceBadge, badgeOffsetX: cfg.priceBadge.badgeOffsetX + (dx/ps.width)*100, badgeOffsetY: cfg.priceBadge.badgeOffsetY + (dy/ps.height)*100 };
           else {
             const bw = cfg.priceBadge.badgeWidth * (ps.width/500); const bh = cfg.priceBadge.badgeHeight * (ps.width/500);
-            if (id === 'currency') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), currencyOffsetX: cfg.priceBadge.currencyOffsetX + (dx/bw)*100, currencyOffsetY: cfg.priceBadge.currencyOffsetY + (dy/bh)*100 };
-            else if (id === 'value') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), valueOffsetX: cfg.priceBadge.valueOffsetX + (dx/bw)*100, valueOffsetY: cfg.priceBadge.valueOffsetY + (dy/bh)*100 };
-            else if (id === 'suffix') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), suffixOffsetX: cfg.priceBadge.suffixOffsetX + (dx/bw)*100, suffixOffsetY: cfg.priceBadge.suffixOffsetY + (dy/bh)*100 };
+            if (elemId === 'currency') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), currencyOffsetX: cfg.priceBadge.currencyOffsetX + (dx/bw)*100, currencyOffsetY: cfg.priceBadge.currencyOffsetY + (dy/bh)*100 };
+            else if (elemId === 'value') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), valueOffsetX: cfg.priceBadge.valueOffsetX + (dx/bw)*100, valueOffsetY: cfg.priceBadge.valueOffsetY + (dy/bh)*100 };
+            else if (elemId === 'suffix') updates.priceBadge = { ...(updates.priceBadge || cfg.priceBadge), suffixOffsetX: cfg.priceBadge.suffixOffsetX + (dx/bw)*100, suffixOffsetY: cfg.priceBadge.suffixOffsetY + (dy/bh)*100 };
           }
         });
-        updateSlotSettings(idx, updates);
+        updateSlotSettings(id, updates);
       });
     }
-    if (resizeState && selectedSlotIndex !== null) {
+    if (resizeState && selectedSlotId !== null) {
       const { w } = resizeState; 
       const kf = w / resizeStart.ow;
       
-      selectedSlotIndices.forEach(idx => {
-        const c = getSlotSettings(idx);
+      selectedSlotIds.forEach(id => {
+        const c = getSlotSettings(id);
         let up: any = {};
-        selectedElems.forEach(id => {
-           if (id === 'image') up.imageConfig = { ...c.imageConfig, scale: c.imageConfig.scale * kf };
-           else if (id === 'name') up.descConfig = { ...c.descConfig, fontSize: c.descConfig.fontSize * kf };
-           else if (id === 'badge') up.priceBadge = { ...c.priceBadge, badgeWidth: Math.round(c.priceBadge.badgeWidth * kf), badgeHeight: Math.round(c.priceBadge.badgeHeight * kf) };
-           else if (id === 'currency') up.priceBadge = { ...(up.priceBadge || c.priceBadge), currencyFontSize: (up.priceBadge?.currencyFontSize || c.priceBadge.currencyFontSize) * kf };
-           else if (id === 'value') up.priceBadge = { ...(up.priceBadge || c.priceBadge), valueFontSize: (up.priceBadge?.valueFontSize || c.priceBadge.valueFontSize) * kf };
-           else if (id === 'suffix') up.priceBadge = { ...(up.priceBadge || c.priceBadge), suffixFontSize: (up.priceBadge?.suffixFontSize || c.priceBadge.suffixFontSize) * kf };
+        selectedElems.forEach(elemId => {
+           if (elemId === 'image') up.imageConfig = { ...c.imageConfig, scale: c.imageConfig.scale * kf };
+           else if (elemId === 'name') up.descConfig = { ...c.descConfig, fontSize: c.descConfig.fontSize * kf };
+           else if (elemId === 'badge') up.priceBadge = { ...c.priceBadge, badgeWidth: Math.round(c.priceBadge.badgeWidth * kf), badgeHeight: Math.round(c.priceBadge.badgeHeight * kf) };
+           else if (elemId === 'currency') up.priceBadge = { ...(up.priceBadge || c.priceBadge), currencyFontSize: (up.priceBadge?.currencyFontSize || c.priceBadge.currencyFontSize) * kf };
+           else if (elemId === 'value') up.priceBadge = { ...(up.priceBadge || c.priceBadge), valueFontSize: (up.priceBadge?.valueFontSize || c.priceBadge.valueFontSize) * kf };
+           else if (elemId === 'suffix') up.priceBadge = { ...(up.priceBadge || c.priceBadge), suffixFontSize: (up.priceBadge?.suffixFontSize || c.priceBadge.suffixFontSize) * kf };
         });
-        updateSlotSettings(idx, up);
+        updateSlotSettings(id, up);
       });
     }
     setDragging(null); setResizing(null); setDragState(null); setResizeState(null); 
@@ -737,7 +745,7 @@ export const StepPriceBadge = () => {
           const c = toSvg(e);
           setMarquee({ x1: c.x, y1: c.y, x2: c.x, y2: c.y });
         }
-      }} onClick={e => { if (!dragging && !resizing && !marquee) { setSelectedElems([]); setSelectedSlotIndex(null); setSelectedSlotIndices([]); setSelectedElem(null); } }}>
+      }} onClick={e => { if (!dragging && !resizing && !marquee) { setSelectedElems([]); setSelectedSlotId(null); setSelectedSlotIds([]); setSelectedElem(null); } }}>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-[0.15] z-0 pointer-events-none" />
 
         <div className="absolute top-6 z-20 flex items-center gap-3 bg-zinc-900/90 backdrop-blur-xl p-2 rounded-2xl border border-zinc-800/80 shadow-2xl select-none max-w-[90%] overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -752,7 +760,7 @@ export const StepPriceBadge = () => {
                {Array.from({ length: pageCount }).map((_, i) => (
                  <button
                    key={i}
-                   onClick={() => { setActivePage(i); setSelectedSlotIndex(null); setSelectedElem(null); }}
+                   onClick={() => { setActivePage(i); setSelectedSlotId(null); setSelectedElem(null); }}
                    className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                      activePage === i
                        ? 'bg-red-600 text-white shadow-sm scale-105'
@@ -771,7 +779,7 @@ export const StepPriceBadge = () => {
              <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
              
              <button 
-               onClick={() => { if (selectedSlotIndex !== null) syncAllSlots(null, selectedSlotIndex); else toast.info('Selecione um produto para sincronizar seu estilo'); }} 
+               onClick={() => { if (selectedSlotId !== null) syncAllSlots(null, selectedSlotId); else toast.info('Selecione um produto para sincronizar seu estilo'); }} 
                className="p-1.5 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-colors shrink-0"
                title="Sincronizar este estilo para todas as telas"
              >
@@ -791,9 +799,9 @@ export const StepPriceBadge = () => {
               
               return pageSlots.map((s, idx) => {
                 const gIdx = productStartIdx + idx; 
-                const cfg = getSlotSettings(gIdx); 
+                const cfg = getSlotSettings(s.id); 
                 const el = getElems(s, cfg);
-                const isSlotSel = selectedSlotIndices.includes(gIdx);
+                const isSlotSel = selectedSlotIds.includes(s.id);
                 const p = products?.[gIdx]; const name = p?.name || "NOME PRODUTO"; const price = p?.price || "10,99";
                 const v = { ...el };
                 if (isSlotSel && dragState) { selectedElems.forEach(id => { (v as any)[id].x += dragState.dx; (v as any)[id].y += dragState.dy; }); }
@@ -813,30 +821,30 @@ export const StepPriceBadge = () => {
                   <g key={gIdx} onClick={e => e.stopPropagation()}>
                     <rect x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={isSlotSel ? '#ef4444' : 'rgba(0,0,0,0.05)'} strokeWidth={isSlotSel ? 4/zoom : 1/zoom} strokeDasharray={isSlotSel ? 'none' : '4,2'} pointerEvents="none" />
                     
-                    <DragBox id="badge" el={v.badge} zoom={zoom} isPrimary={selectedElem === 'badge'} isSel={isSlotSel && selectedElems.includes('badge')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                    <DragBox id="badge" el={v.badge} zoom={zoom} isPrimary={selectedElem === 'badge'} isSel={isSlotSel && selectedElems.includes('badge')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={s.id} isDragging={!!dragging}>
                        {cfg.priceBadge.badgeImageUrl ? <image href={cfg.priceBadge.badgeImageUrl} x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} preserveAspectRatio="xMidYMid meet" style={{ borderRadius: cfg.priceBadge.borderRadius + 'px' }} pointerEvents="none" /> 
                                                      : <rect x={v.badge.x} y={v.badge.y} width={v.badge.w} height={v.badge.h} rx={cfg.priceBadge.borderRadius * el.sFactor} fill={cfg.priceBadge.bgColor} pointerEvents="none" />}
                     </DragBox>
                     
-                    <DragBox id="image" el={v.image} zoom={zoom} isPrimary={selectedElem === 'image'} isSel={isSlotSel && selectedElems.includes('image')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                    <DragBox id="image" el={v.image} zoom={zoom} isPrimary={selectedElem === 'image'} isSel={isSlotSel && selectedElems.includes('image')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={s.id} isDragging={!!dragging}>
                       <rect x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} rx={12} fill="rgba(0,0,0,0.01)" stroke="rgba(239,68,68,0.15)" strokeDasharray="3,3" pointerEvents="none" />
                       {p?.images?.[0] && <image href={p.images[0]} x={v.image.x} y={v.image.y} width={v.image.w} height={v.image.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
                     </DragBox>
                     
-                    <DragBox id="name" el={v.name} zoom={zoom} isPrimary={selectedElem === 'name'} isSel={isSlotSel && selectedElems.includes('name')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                    <DragBox id="name" el={v.name} zoom={zoom} isPrimary={selectedElem === 'name'} isSel={isSlotSel && selectedElems.includes('name')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={s.id} isDragging={!!dragging}>
                       <text x={v.name.x+v.name.w/2} y={v.name.y+v.name.h/2} fontSize={cfg.descConfig.fontSize*el.sFactor} fill={cfg.descConfig.color} fontWeight="800" textAnchor="middle" fontFamily={cfg.descConfig.fontFamily} pointerEvents="none" style={cfg.descConfig.uppercase ? {textTransform:'uppercase'}:{}}>{renderTextWrap(name, v.name.x+v.name.w/2, v.name.y+v.name.h/2, cfg.descConfig.fontSize*el.sFactor)}</text>
                     </DragBox>
                     
-                    <DragBox id="currency" el={v.currency} zoom={zoom} isPrimary={selectedElem === 'currency'} isSel={isSlotSel && selectedElems.includes('currency')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                    <DragBox id="currency" el={v.currency} zoom={zoom} isPrimary={selectedElem === 'currency'} isSel={isSlotSel && selectedElems.includes('currency')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={s.id} isDragging={!!dragging}>
                       <text x={v.currency.x + v.currency.w/2} y={v.currency.y + v.currency.h/2} fontSize={cfg.priceBadge.currencyFontSize*el.sFactor} fill={cfg.priceBadge.currencyColor} fontWeight="900" textAnchor="middle" dominantBaseline="central" pointerEvents="none">R$</text>
                     </DragBox>
                     
-                    <DragBox id="value" el={v.value} zoom={zoom} isPrimary={selectedElem === 'value'} isSel={isSlotSel && selectedElems.includes('value')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                    <DragBox id="value" el={v.value} zoom={zoom} isPrimary={selectedElem === 'value'} isSel={isSlotSel && selectedElems.includes('value')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={s.id} isDragging={!!dragging}>
                       <text x={v.value.x + v.value.w/2} y={v.value.y + v.value.h/2} fontSize={cfg.priceBadge.valueFontSize*el.sFactor} fill={cfg.priceBadge.valueColor} fontWeight="900" textAnchor="middle" dominantBaseline="central" pointerEvents="none">{price}</text>
                     </DragBox>
 
                     {cfg.priceBadge.showSuffix && (
-                      <DragBox id="suffix" el={v.suffix} zoom={zoom} isPrimary={selectedElem === 'suffix'} isSel={isSlotSel && selectedElems.includes('suffix')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={gIdx} isDragging={!!dragging}>
+                      <DragBox id="suffix" el={v.suffix} zoom={zoom} isPrimary={selectedElem === 'suffix'} isSel={isSlotSel && selectedElems.includes('suffix')} onStartDrag={onStartDrag} onStartResize={onStartResize} slotIdx={s.id} isDragging={!!dragging}>
                         <text x={v.suffix.x + v.suffix.w/2} y={v.suffix.y + v.suffix.h/2} fontSize={cfg.priceBadge.suffixFontSize*el.sFactor} fill={cfg.priceBadge.suffixColor} fontWeight="600" textAnchor="middle" dominantBaseline="central" pointerEvents="none">{cfg.priceBadge.suffixText}</text>
                       </DragBox>
                     )}
@@ -924,9 +932,9 @@ export const StepPriceBadge = () => {
                Sincronização Mestre
             </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400 text-[13px] font-medium mt-2">
-               Deseja aplicar o visual DESTE produto em TODO o projeto?
+               Deseja aplicar o visual da <strong className="text-white">TELA 1</strong> em todo o projeto?
                <br/><br/>
-               <span className="text-indigo-400 font-medium">As cores e fontes serão copiadas para todos, mas as proporções e tamanhos originais serão mantidos.</span>
+               <span className="text-indigo-400 font-medium">Cada slot nas outras telas receberá o visual do seu correspondente na primeira tela. Isso garante que todo o encarte siga o mesmo padrão.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4 gap-3 sm:gap-0">
@@ -934,10 +942,13 @@ export const StepPriceBadge = () => {
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => {
-              const sourceIdx = selectedSlotIndex ?? 0;
-              const style = getSlotSettings(sourceIdx);
-              pushHistory();
-              syncAllSlots(style as any, sourceIdx);
+              const sourceId = selectedSlotId ?? slots[0]?.id;
+              if (sourceId) {
+                pushHistory();
+                syncAllSlots(null, sourceId);
+              } else {
+                toast.error('Nenhum slot para sincronizar');
+              }
               setSyncModalOpen(false);
               toast.success('Visual sincronizado para todos!');
             }} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-6 text-[12px] font-semibold shadow-md shadow-indigo-900/20 transition-all">

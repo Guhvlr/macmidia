@@ -37,6 +37,7 @@ interface ReviewCardProps {
   onOpenDetail: (id: string) => void;
 
   hasEanConflict?: boolean;
+  activeClientName?: string | null;
 }
 
 export const ReviewCard = React.memo(({
@@ -64,7 +65,8 @@ export const ReviewCard = React.memo(({
   onConfirmCreate,
   onUpdateProduct,
   onOpenDetail,
-  hasEanConflict
+  hasEanConflict,
+  activeClientName
 }: ReviewCardProps) => {
   const {
     attributes,
@@ -146,13 +148,39 @@ export const ReviewCard = React.memo(({
             </span>
             <div className="w-px h-3 bg-zinc-700" />
             <ConfidenceBadge product={product} />
+            {(() => {
+              const normActive = (activeClientName || '').trim().toUpperCase();
+              const normItem = (product.client_name || '').trim().toUpperCase();
+              
+              if (!product.client_name) {
+                return (
+                  <span className="text-[10px] font-bold text-zinc-500 bg-zinc-500/10 px-2 py-0.5 rounded-lg border border-zinc-500/20 whitespace-nowrap">
+                    Global
+                  </span>
+                );
+              }
+              
+              if (normActive === normItem && normActive !== '') {
+                return (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 whitespace-nowrap">
+                    {product.client_name}
+                  </span>
+                );
+              }
+              
+              return (
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20 whitespace-nowrap">
+                  Outro: {product.client_name}
+                </span>
+              );
+            })()}
             <span className="text-[10px] font-mono text-zinc-600 hidden sm:inline">#{product.ean}</span>
-            {hasEanConflict && (
+            {product.warning && product.warning.includes('variações') && (
               <span 
                 onClick={(e) => { e.stopPropagation(); onOpenDetail(product.id); }}
                 className="flex items-center gap-1 text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20 cursor-pointer animate-pulse hover:bg-amber-500/20 transition-all"
               >
-                <Layers className="w-3 h-3" />
+                <Layers className="w-3.5 h-3.5" />
                 Variações detectadas
               </span>
             )}

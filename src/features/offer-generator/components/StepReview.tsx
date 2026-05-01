@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const StepReview = () => {
-  const { products, setProducts, removeProducts, pushHistory, slots, setStep, clients, pageCount } = useOffer();
+  const { products, setProducts, removeProducts, pushHistory, slots, setStep, clients, pageCount, selectedClientName, setSelectedClientName } = useOffer();
   const [bulkInput, setBulkInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [variations, setVariations] = useState<ProductItem[]>([]);
@@ -52,7 +52,7 @@ export const StepReview = () => {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [loadingVariationsId, setLoadingVariationsId] = useState<string | null>(null);
   const [detailPanelProductId, setDetailPanelProductId] = useState<string | null>(null);
-  const [eanConflicts, setEanConflicts] = useState<Record<string, boolean>>({});
+
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -88,44 +88,12 @@ export const StepReview = () => {
   const [isCreatingVariation, setIsCreatingVariation] = useState(false);
 
   // Background Removal State
+  // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [imageFormats, setImageFormats] = useState<Record<string, string>>({});
   const [processingBg, setProcessingBg] = useState<Set<string>>(new Set());
   const [bgPreviews, setBgPreviews] = useState<Record<string, string>>({});
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
-
-  // Check for EAN conflicts when products list changes
-  React.useEffect(() => {
-    const checkConflicts = async () => {
-      const eans = Array.from(new Set(products.map(p => p.ean).filter(ean => ean && ean !== 'N/A' && ean !== 'NA')));
-      if (eans.length === 0) return;
-
-      try {
-        // Simple RPC or count query to find EANs with more than 1 record
-        const { data, error } = await supabase
-          .from('products')
-          .select('ean')
-          .in('ean', eans);
-        
-        if (error) throw error;
-        
-        const counts: Record<string, number> = {};
-        data.forEach((p: any) => {
-          counts[p.ean] = (counts[p.ean] || 0) + 1;
-        });
-
-        const conflicts: Record<string, boolean> = {};
-        Object.keys(counts).forEach(ean => {
-          if (counts[ean] > 1) conflicts[ean] = true;
-        });
-        setEanConflicts(conflicts);
-      } catch (e) {
-        console.error('Error checking EAN conflicts:', e);
-      }
-    };
-
-    checkConflicts();
-  }, [products]);
 
   const handleFormatChange = (id: string, format: string) => {
     setImageFormats(prev => ({ ...prev, [id]: format }));
@@ -316,7 +284,9 @@ export const StepReview = () => {
     if (!bulkInput.trim()) return;
     setIsProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('process-products', { body: { bulkInput } });
+      const { data, error } = await supabase.functions.invoke('process-products', { 
+        body: { bulkInput, clientName: selectedClientName } 
+      });
       if (error) throw error;
       
       const results: ProductItem[] = (data.results || []).map((res: any, idx: number) => {
@@ -345,8 +315,10 @@ export const StepReview = () => {
 
         let images: string[] = [];
         if (found) {
-          if (res.match.ean) {
-            images = [getImageUrl(res.match.ean)];
+          if (res.match?.image_path) {
+            images = [`https://ebvvmddizsggrqasnnvv.supabase.co/storage/v1/object/public/product-images/${res.match.image_path}`];
+          } else if (res.match?.ean) {
+            images = [getImageUrl(res.match.ean, res.match.client_name)];
           }
         } else if (isBarcode && extractedEan) {
           images = [getImageUrl(extractedEan)];
@@ -362,12 +334,14 @@ export const StepReview = () => {
           }
         }
 
-        let suffix = 'cada';
-        const originalLower = (res.original || '').toLowerCase();
-        if (originalLower.match(/\b(kg|kilo|kilos)\b/i)) {
-          suffix = 'KG';
-        } else if (originalLower.match(/\b(cada|unidade|unid|uni|un)\b/i)) {
-          suffix = 'cada';
+        let suffix = res.match?.unit || 'cada';
+        if (!res.match?.unit) {
+          const originalLower = (res.original || '').toLowerCase();
+          if (originalLower.match(/\b(kg|kilo|kilos)\b/i)) {
+            suffix = 'KG';
+          } else if (originalLower.match(/\b(cada|unidade|unid|uni|un)\b/i)) {
+            suffix = 'cada';
+          }
         }
 
         return {
@@ -384,6 +358,7 @@ export const StepReview = () => {
           confidence_reason: res.confidence_reason,
           warning: res.warning,
           mode: res.mode || 'description',
+          client_name: res.match?.client_name,
         } as ProductItem;
       });
 
@@ -414,6 +389,8 @@ export const StepReview = () => {
       let query = (supabase.from('products') as any).select('*');
       if (product.brand && product.line) {
         query = query.eq('brand', product.brand).eq('line', product.line);
+      } else if (product.brand) {
+        query = query.eq('brand', product.brand);
       } else {
         const words = product.name.split(' ').filter(w => w.length > 3);
         const searchTerm = words[0] || product.name.split(' ')[0];
@@ -427,7 +404,7 @@ export const StepReview = () => {
         query = query.ilike('name', `%${searchTerm}%`);
       }
 
-      const { data, error } = await query.neq('ean', product.ean).limit(15);
+      const { data, error } = await query.neq('ean', product.ean).limit(30);
       if (error) throw error;
 
       setVariations((data || []).map(v => {
@@ -469,8 +446,8 @@ export const StepReview = () => {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .or(`name.ilike.%${term}%,ean.ilike.%${term}%`)
-        .limit(10);
+        .or(`name.ilike.%${term}%,ean.ilike.%${term}%,brand.ilike.%${term}%`)
+        .limit(20);
 
       if (error) throw error;
       setManualResults((data || []).map(v => {
@@ -735,7 +712,8 @@ export const StepReview = () => {
           if (existing && existing.length > 0) {
             const { error: updateError } = await supabase.from('products').update({
               name: updates.name.toUpperCase(),
-              price: updates.price ? parseFloat(updates.price.replace(/[^\d,]/g, '').replace(',', '.')) : null
+              price: updates.price ? parseFloat(updates.price.replace(/[^\d,]/g, '').replace(',', '.')) : null,
+              unit: updates.suffix
             }).eq('id', existing[0].id);
             error = updateError;
           } else {
@@ -743,7 +721,8 @@ export const StepReview = () => {
               ean: cleanEan,
               name: updates.name.toUpperCase(),
               price: updates.price ? parseFloat(updates.price.replace(/[^\d,]/g, '').replace(',', '.')) : null,
-              client_name: clientNameVal
+              client_name: clientNameVal,
+              unit: updates.suffix
             });
             error = insertError;
           }
@@ -857,6 +836,9 @@ export const StepReview = () => {
           setBulkInput={setBulkInput}
           isProcessing={isProcessing}
           onSearch={handleBulkSearch}
+          selectedClientName={selectedClientName}
+          setSelectedClientName={setSelectedClientName}
+          clients={clients}
         />
 
         {products.length > 0 && (
@@ -1021,7 +1003,7 @@ export const StepReview = () => {
                           onConfirmCreate={handleCreateProduct}
                           onUpdateProduct={handleUpdateProduct}
                           onOpenDetail={setDetailPanelProductId}
-                          hasEanConflict={!!eanConflicts[p.ean]}
+                          activeClientName={selectedClientName}
                         />
                       ))}
                     </SortableContext>

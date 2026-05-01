@@ -133,8 +133,8 @@ serve(async (req) => {
   }
 
   try {
-    const { bulkInput } = await req.json()
-    console.log('--- Process Products V2 ---');
+    const { bulkInput, clientName } = await req.json()
+    console.log('--- Process Products V2 (Context:', clientName || 'Global', ') ---');
 
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -266,18 +266,39 @@ Formato de Saída (JSON APENAS):
     for (let i = 0; i < parsedItems.length; i += chunkSize) {
       const chunk = parsedItems.slice(i, i + chunkSize);
       const chunkPromises = chunk.map(async (item) => {
-        if (item.mode === 'barcode') {
-          const ean = String(item.barcode || '').replace(/[^0-9]/g, '');
-          let searchEan = ean.replace(/^0+/, ''); 
-          if (searchEan === '') searchEan = '0';
+        // 0. Force barcode mode if input is just digits
+        if (item.mode === 'description' && /^\d{8,14}$/.test(item.original?.trim() || '')) {
+          item.mode = 'barcode';
+          item.barcode = item.original.trim();
+        }
 
-          let { data } = await supabase.from('products').select('*').eq('ean', searchEan).maybeSingle();
-          if (!data && ean !== searchEan) {
-             const res2 = await supabase.from('products').select('*').eq('ean', ean).maybeSingle();
-             data = res2.data;
+        if (item.mode === 'barcode') {
+          const ean = String(item.barcode || '').trim().replace(/[^0-9]/g, '');
+          const searchEan = ean.replace(/^0+/, '') || '0';
+          
+          // Generate all possible paddings (standard EAN formats)
+          const variations = [
+            ean, 
+            searchEan,
+            searchEan.padStart(8, '0'),
+            searchEan.padStart(12, '0'),
+            searchEan.padStart(13, '0'),
+            searchEan.padStart(14, '0')
+          ];
+          const uniqueVariations = [...new Set(variations)].filter(v => v.length > 0);
+          const orFilter = uniqueVariations.map(v => `ean.eq."${v}"`).join(',') + `,name.eq."${ean}"`;
+
+          // 1. Unified Search: Fetch EVERYTHING for these variations
+          const { data: candidates, error: searchError } = await supabase
+            .from('products')
+            .select('*')
+            .or(orFilter);
+
+          if (searchError) {
+            console.error('[Barcode Search Error]', searchError);
           }
 
-          if (!data) {
+          if (!candidates || candidates.length === 0) {
             return {
               original: item.original,
               mode: 'barcode',
@@ -286,20 +307,66 @@ Formato de Saída (JSON APENAS):
               found: true,
               match: { name: ean, ean: ean, images: [] },
               confidence: 'none',
-              confidence_reason: 'Código de barras novo (Cadastro sugerido)',
-              warning: 'Código de barras não encontrado no banco. Adicione uma foto para completar.',
+              confidence_reason: 'Código de barras não encontrado no banco',
+              warning: 'Produto não cadastrado. Adicione uma foto para criar o cadastro.',
             };
+          }
+
+          // 2. APPLY PRIORITY RULES (IN-MEMORY)
+          const normClient = (clientName || '').trim().toUpperCase();
+          
+          // Case-insensitive filtering for the active client
+          const localMatch = candidates.filter(c => 
+            (c.client_name || '').trim().toUpperCase() === normClient
+          );
+          
+          // Global products (no client)
+          const globalMatch = candidates.filter(c => !c.client_name);
+          
+          // Products from other clients
+          const otherMatch = candidates.filter(c => 
+            c.client_name && (c.client_name || '').trim().toUpperCase() !== normClient
+          );
+
+          let selectedMatch = null;
+          let warning = undefined;
+          let confidence = 'exact';
+
+          // --- PRIORITY FLOW ---
+          if (localMatch.length > 0) {
+            // Priority 1: Current Client
+            selectedMatch = localMatch[0];
+            if (localMatch.length > 1) {
+              warning = "⚠ Código duplicado no cliente ativo. Escolha a variação correta.";
+              confidence = 'medium';
+            }
+          } else if (globalMatch.length > 0) {
+            // Priority 2: Global Products
+            selectedMatch = globalMatch[0];
+            if (globalMatch.length > 1) {
+              warning = "⚠ Este código possui variações cadastradas";
+              confidence = 'medium';
+            }
+          } else if (otherMatch.length > 0) {
+            // Priority 3: Other Clients
+            selectedMatch = otherMatch[0];
+            confidence = 'low';
+            warning = `Produto encontrado no cliente: ${otherMatch[0].client_name}`;
+            if (otherMatch.length > 1) {
+              warning = "⚠ Este código possui variações em outros clientes";
+            }
           }
 
           return {
             original: item.original,
             mode: 'barcode',
-            display_name: data.name,
+            display_name: selectedMatch.name,
             price: item.price || null,
             found: true,
-            match: data,
-            confidence: 'exact',
-            confidence_reason: 'Código de barras encontrado',
+            match: selectedMatch,
+            confidence: confidence,
+            confidence_reason: 'Prioridade de contexto aplicada',
+            warning: warning,
           };
         }
 

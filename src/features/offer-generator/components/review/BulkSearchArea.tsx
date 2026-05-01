@@ -8,21 +8,46 @@ interface BulkSearchAreaProps {
   setBulkInput: (val: string) => void;
   isProcessing: boolean;
   onSearch: () => void;
+  selectedClientName: string | null;
+  setSelectedClientName: (name: string | null) => void;
+  clients: any[];
 }
 
 export const BulkSearchArea = ({ 
   bulkInput, 
   setBulkInput, 
   isProcessing, 
-  onSearch 
+  onSearch,
+  selectedClientName,
+  setSelectedClientName,
+  clients
 }: BulkSearchAreaProps) => {
   return (
     <div className="p-8 border-b border-zinc-800 bg-zinc-950">
       <div className="max-w-5xl mx-auto flex gap-6 items-start">
         <div className="flex-1">
-          <label className="text-[12px] font-semibold text-zinc-400 block mb-2">
-            Entrada de Produtos do Cliente
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[12px] font-semibold text-zinc-400 block">
+              Entrada de Produtos do Cliente
+            </label>
+            
+            {/* Local Client Selector */}
+            <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900/80 border border-zinc-800 rounded-lg">
+              <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Pasta Ativa:</span>
+              <select 
+                value={selectedClientName || ''} 
+                onChange={(e) => setSelectedClientName(e.target.value || null)}
+                className="bg-transparent text-[11px] font-bold text-red-500 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="" className="bg-zinc-900 text-zinc-300">Geral (Global)</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.name} className="bg-zinc-900 text-zinc-300">
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <Textarea 
             value={bulkInput} 
             onChange={e => setBulkInput(e.target.value)}

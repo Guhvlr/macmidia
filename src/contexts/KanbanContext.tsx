@@ -256,33 +256,23 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, (payload) => {
+        console.log('Realtime Card change:', payload);
         if (payload.eventType === 'UPDATE' && payload.new) {
           const row = payload.new as any;
           if (pendingOpsRef.current.has(row.id)) return;
-          const updatedCard = mapKanbanCard(row);
+          
           setKanbanCards(prev => {
             const index = prev.findIndex(c => c.id === row.id);
             if (index === -1) return [...prev, mapKanbanCard(row)];
-            const existing = prev[index];
-            const merged = { ...existing };
             
-            if (row.client_name !== undefined) merged.clientName = row.client_name;
-            if (row.description !== undefined) merged.description = row.description;
-            if (row.images !== undefined) merged.images = row.images || [];
-            if (row.column !== undefined) merged.column = row.column;
-            if (row.ai_status !== undefined) merged.aiStatus = row.ai_status;
-            if (row.ai_report !== undefined) merged.aiReport = typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report;
-            if (row.comments !== undefined) merged.comments = row.comments || [];
-            if (row.history !== undefined) merged.history = typeof row.history === 'string' ? JSON.parse(row.history) : (row.history || []);
-            if (row.position_index !== undefined) merged.position_index = row.position_index;
-            if (row.source !== undefined) merged.source = row.source;
-            if (row.original_message !== undefined) merged.originalMessage = row.original_message;
-            if (row.ai_status !== undefined) merged.aiStatus = row.ai_status;
-            if (row.ai_report !== undefined) merged.aiReport = typeof row.ai_report === 'string' ? JSON.parse(row.ai_report) : row.ai_report;
-
-            if (JSON.stringify(existing) === JSON.stringify(merged)) return prev;
+            const existing = prev[index];
+            const updated = mapKanbanCard(row);
+            
+            // Only update if there are actual changes
+            if (JSON.stringify(existing) === JSON.stringify(updated)) return prev;
+            
             const next = [...prev];
-            next[index] = merged;
+            next[index] = updated;
             return next;
           });
         } else if (payload.eventType === 'INSERT' && payload.new) {
@@ -343,7 +333,16 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
           setCalendarClients(prev => prev.filter(c => c.id !== (payload.old as any).id));
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Conectado ao Realtime Kanban com sucesso!');
+        } else if (status === 'CLOSED') {
+          console.log('Conexão Realtime Kanban fechada.');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Erro na conexão Realtime Kanban.');
+          toast.error('Erro na sincronização em tempo real. Tente atualizar a página.');
+        }
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, fetchAllBase, debouncedRefetchCards]);
@@ -517,8 +516,8 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     const op: Partial<KanbanCard> = { column, history: hist };
     const db: any = { column, history: hist };
 
-    if (colDef && card.column !== column) {
-      trackEvent('observation', 'kanban', `Fluxo Operacional: Job "${card.clientName}" movido para etapa: [${colDef.title}]`);
+    if (toCol && card.column !== column) {
+      trackEvent('observation', 'kanban', `Fluxo Operacional: Job "${card.clientName}" movido para etapa: [${toCol.title}]`);
     }
 
     if (column === 'em-producao' && card.column !== 'em-producao') {

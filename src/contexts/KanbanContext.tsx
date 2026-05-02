@@ -470,8 +470,9 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.from('kanban_cards').update(db).eq('id', id);
         if (error) throw error;
       }, { id, updates: Object.keys(updates) });
-    } catch (error) {
-       toast.error('Erro ao salvar.'); 
+    } catch (error: any) {
+       console.error('Update error:', error);
+       toast.error(`Erro ao salvar: ${error.message || 'Erro desconhecido'}`); 
        debouncedRefetchCards(); 
     } finally {
       setTimeout(() => pendingOpsRef.current.delete(id), 1500);

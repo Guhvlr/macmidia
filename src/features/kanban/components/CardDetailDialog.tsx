@@ -203,9 +203,11 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     
     // Tentar remover do Storage físico
     try {
-      const storagePath = imgToRemove.split('/public/kanban_assets/')[1];
-      if (storagePath) {
-        await supabase.storage.from('kanban_assets').remove([storagePath]);
+      const pathPart = imgToRemove.split('/public/kanban_assets/')[1];
+      if (pathPart) {
+        const storagePath = pathPart.split('?')[0]; // Remove cache buster if present
+        const { error } = await supabase.storage.from('kanban_assets').remove([storagePath]);
+        if (error) console.warn("Erro ao remover do storage:", error);
       }
     } catch (err) {
       console.warn("Falha ao remover arquivo do storage:", err);
@@ -227,11 +229,15 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     // Tentar remover todos os arquivos do Storage físico
     try {
       const pathsToDelete = localImages
-        .map(url => url.split('/public/kanban_assets/')[1])
+        .map(url => {
+          const part = url.split('/public/kanban_assets/')[1];
+          return part ? part.split('?')[0] : null;
+        })
         .filter(Boolean) as string[];
       
       if (pathsToDelete.length > 0) {
-        await supabase.storage.from('kanban_assets').remove(pathsToDelete);
+        const { error } = await supabase.storage.from('kanban_assets').remove(pathsToDelete);
+        if (error) console.warn("Erro ao remover múltiplos do storage:", error);
       }
     } catch (err) {
       console.warn("Falha ao remover arquivos do storage:", err);

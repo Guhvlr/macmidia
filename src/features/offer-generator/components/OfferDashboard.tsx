@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, FileText, Calendar, Trash2, Loader2, Zap, ArrowRight } from 'lucide-react';
+import { Plus, FileText, Calendar, Trash2, Loader2, Zap, ArrowRight, Type } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { OfferFontsModal } from './OfferFontsModal';
 
 export interface OfferProject {
   id: string;
@@ -24,6 +25,7 @@ export const OfferDashboard: React.FC<OfferDashboardProps> = ({ onOpenProject, o
   const [projects, setProjects] = useState<OfferProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showFontsModal, setShowFontsModal] = useState(false);
   const [formName, setFormName] = useState('');
   const [formDate, setFormDate] = useState(format(new Date(), 'dd/MM/yyyy'));
   const [creating, setCreating] = useState(false);
@@ -104,6 +106,14 @@ export const OfferDashboard: React.FC<OfferDashboardProps> = ({ onOpenProject, o
         <Zap className="w-5 h-5 text-yellow-500" />
         <h1 className="text-xl font-black tracking-tighter">MacOferta Pro</h1>
         <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest ml-2">Projetos</span>
+        
+        <button 
+          onClick={() => setShowFontsModal(true)} 
+          className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold transition-all text-white/60 hover:text-white"
+        >
+          <Type className="w-4 h-4" />
+          Gerenciar Fontes
+        </button>
       </header>
 
       {/* Content */}
@@ -248,6 +258,11 @@ export const OfferDashboard: React.FC<OfferDashboardProps> = ({ onOpenProject, o
             </div>
           </div>
         </div>
+      )}
+
+      {/* Fonts Modal */}
+      {showFontsModal && (
+        <OfferFontsModal onClose={() => setShowFontsModal(false)} />
       )}
     </div>
   );

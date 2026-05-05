@@ -710,7 +710,7 @@ export const StepReview = () => {
           finalImagePath = fileName;
         }
 
-        let query = supabase.from('products').select('id').eq('ean', paddedEan).eq('name', targetName.toUpperCase());
+        let query = supabase.from('products').select('id').eq('ean', paddedEan);
         if (clientNameVal) query = query.eq('client_name', clientNameVal);
         else query = query.is('client_name', null);
         

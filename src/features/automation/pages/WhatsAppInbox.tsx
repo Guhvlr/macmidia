@@ -497,9 +497,16 @@ Retorne em JSON: { "clientName": "Nome do Cliente", "description": "Texto criati
   const getFilteredMessages = () => {
     if (!filterActive) return messages;
     return messages.filter(msg => {
+      // Esconde áudio ou imagem sem texto (conforme solicitado pelo usuário)
+      if ((msg.message_type === 'audio' || msg.message_type === 'image') && !msg.message_text?.trim()) {
+        return false;
+      }
+
       if (msg.media_url || msg.message_type !== 'text') return true;
+      
       const text = (msg.message_text || '').trim();
       if (!text) return false;
+      
       const hasPrices = /\d+[,.]\d{2}/i.test(text);
       const hasForceKeywords = ['oferta', 'promo', 'encarte', 'kg', 'unidade', 'unid', 'litro', 'grama'].some(k => text.toLowerCase().includes(k));
       return hasPrices || hasForceKeywords;

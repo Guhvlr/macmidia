@@ -1,0 +1,1061 @@
+import { create } from 'zustand';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import type { OfferProject } from '../components/OfferDashboard';
+
+export interface ProductItem {
+  id: string;
+  ean: string;
+  name: string;
+  price: string;
+  images: string[];
+  brand?: string;
+  line?: string;
+  category?: string;
+  has_qr_code?: boolean;
+  description_on_front?: boolean;
+  confidence?: 'exact' | 'high' | 'medium' | 'low' | 'none';
+  confidence_reason?: string;
+  warning?: string;
+  suffix?: string;
+  mode?: 'barcode' | 'description';
+  client_name?: string;
+  pendingImageFile?: File;
+}
+
+export interface Slot {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  pageIndex?: number;
+}
+
+export interface PriceBadgeConfig {
+  badgeImageUrl: string | null;
+  badgeWidth: number;
+  badgeHeight: number;
+  badgeOffsetX: number;
+  badgeOffsetY: number;
+  currencyFontSize: number;
+  currencyOffsetX: number;
+  currencyOffsetY: number;
+  currencyColor: string;
+  currencyFontFamily: string;
+  valueFontSize: number;
+  valueOffsetX: number;
+  valueOffsetY: number;
+  valueColor: string;
+  valueFontFamily: string;
+  suffixText: string;
+  suffixFontSize: number;
+  suffixOffsetX: number;
+  suffixOffsetY: number;
+  suffixColor: string;
+  suffixFontFamily: string;
+  showSuffix: boolean;
+  bgColor: string;
+  borderRadius: number;
+  badgeType: string;
+}
+
+export interface DescriptionConfig {
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  bgColor: string;
+  showBg: boolean;
+  offsetX: number;
+  offsetY: number;
+  maxChars: number;
+  uppercase: boolean;
+}
+
+export interface ImageConfig {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface ArtBoardConfig {
+  width: number;
+  height: number;
+  backgroundImageUrl: string | null;
+}
+
+export const defaultPriceBadge: PriceBadgeConfig = {
+  badgeImageUrl: null,
+  badgeWidth: 320,
+  badgeHeight: 130,
+  badgeOffsetX: 50,
+  badgeOffsetY: 70,
+  currencyFontSize: 26,
+  currencyOffsetX: 15,
+  currencyOffsetY: 52,
+  currencyColor: '#ffffff',
+  currencyFontFamily: 'Montserrat, sans-serif',
+  valueFontSize: 56,
+  valueOffsetX: 55,
+  valueOffsetY: 68,
+  valueColor: '#ffffff',
+  valueFontFamily: 'Montserrat, sans-serif',
+  suffixText: 'cada',
+  suffixFontSize: 14,
+  suffixOffsetX: 55,
+  suffixOffsetY: 90,
+  suffixColor: '#ffffff',
+  suffixFontFamily: 'Montserrat, sans-serif',
+  showSuffix: true,
+  bgColor: '#e11d48',
+  borderRadius: 14,
+  badgeType: 'rectangle',
+};
+
+export const defaultDescConfig: DescriptionConfig = {
+  fontFamily: 'Montserrat, sans-serif',
+  fontSize: 15,
+  color: '#1a1a1a',
+  bgColor: '#ffffff',
+  showBg: false,
+  offsetX: 50,
+  offsetY: 62,
+  maxChars: 22,
+  uppercase: true,
+};
+
+export const defaultImageConfig: ImageConfig = {
+  scale: 1,
+  offsetX: 50,
+  offsetY: 28,
+};
+
+export const defaultConfig: ArtBoardConfig = {
+  width: 1080,
+  height: 1080,
+  backgroundImageUrl: null,
+};
+
+export interface OfferState {
+  step: number;
+  setStep: (step: number) => void;
+  config: ArtBoardConfig;
+  setConfig: (config: ArtBoardConfig) => void;
+  updateConfig: (p: Partial<ArtBoardConfig>) => void;
+  slots: Slot[];
+  setSlots: (slots: Slot[]) => void;
+  selectedSlotId: string | null;
+  setSelectedSlotId: (id: string | null) => void;
+  pageCount: number;
+  setPageCount: (count: number) => void;
+  priceBadge: PriceBadgeConfig;
+  setPriceBadge: (pb: PriceBadgeConfig) => void;
+  updatePriceBadge: (p: Partial<PriceBadgeConfig>) => void;
+  descConfig: DescriptionConfig;
+  setDescConfig: (dc: DescriptionConfig) => void;
+  updateDescConfig: (p: Partial<DescriptionConfig>) => void;
+  imageConfig: ImageConfig;
+  setImageConfig: (ic: ImageConfig) => void;
+  updateImageConfig: (p: Partial<ImageConfig>) => void;
+  products: ProductItem[];
+  setProducts: (prods: ProductItem[]) => void;
+  layouts: any[];
+  setLayouts: (l: any[] | ((prev: any[]) => any[])) => void;
+  customFonts: { name: string; url: string }[];
+  setCustomFonts: (fonts: any | ((prev: any[]) => any[])) => void;
+  presets: any[];
+  setPresets: (presets: any[] | ((prev: any[]) => any[])) => void;
+  isLoadingPresets: boolean;
+  setIsLoadingPresets: (b: boolean) => void;
+  slotSettings: Record<string, any>;
+  setSlotSettings: (s: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
+  updateSlotSettings: (slotId: string, p: any) => void;
+  selectedSlotId: string | null;
+  setSelectedSlotId: (id: string | null) => void;
+  selectedSlotIds: string[];
+  setSelectedSlotIds: (ids: string[] | ((prev: string[]) => string[])) => void;
+  zoom: number;
+  setZoom: (z: number | ((prev: number) => number)) => void;
+  panOffset: { x: number; y: number };
+  setPanOffset: (po: { x: number; y: number }) => void;
+  pageTemplates: any[];
+  setPageTemplates: (pt: any[] | ((prev: any[]) => any[])) => void;
+  isLoadingTemplates: boolean;
+  setIsLoadingTemplates: (b: boolean) => void;
+  activePage: number;
+  setActivePage: (p: number) => void;
+  customCanvasElements: Record<number, any[]>;
+  setCustomCanvasElements: (c: Record<number, any[]> | ((prev: Record<number, any[]>) => Record<number, any[]>)) => void;
+  selectedClientName: string | null;
+  setSelectedClientName: (name: string | null) => void;
+  clients: any[];
+  setClients: (c: any[]) => void;
+  activeProjectId: string | null;
+  setActiveProjectId: (id: string | null) => void;
+  activeProjectName: string | null;
+  setActiveProjectName: (name: string | null) => void;
+
+  // External Injections
+  isAuthenticated: boolean;
+  setIsAuthenticated: (b: boolean) => void;
+  trackEvent: (category: string, action: string, label?: string) => void;
+  setTrackEvent: (fn: any) => void;
+
+  // History state
+  history: string[];
+  historyIndex: number;
+  
+  // Methods
+  pushHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+  fetchClients: () => Promise<void>;
+  fetchPresets: () => Promise<void>;
+  fetchFonts: () => Promise<void>;
+  fetchTemplates: () => Promise<void>;
+  saveProjectTemplate: (name: string, templateType?: 'complete' | 'individual') => Promise<void>;
+  deleteProjectTemplate: (template: { id?: string; name: string }) => void;
+  loadProjectTemplate: (id: string) => void;
+  getSlotSettings: (slotId: string) => { priceBadge: PriceBadgeConfig; descConfig: DescriptionConfig; imageConfig: ImageConfig; groups?: Record<string, string>; [key: string]: any };
+  replaceSlotSettings: (slotId: string, settings: any) => void;
+  syncAllSlots: (settings: any, sourceId: string) => void;
+  getProjectStateSnapshot: () => any;
+  loadProjectState: (state: any) => void;
+  createAndOpenProject: (name: string, date: string) => Promise<void>;
+  openProject: (project: OfferProject) => void;
+  saveProject: () => Promise<void>;
+  closeProject: () => void;
+  resetToDefaults: () => void;
+  removeBackground: (productIdx: number) => Promise<void>;
+  autoFitImage: (productIdx: number) => Promise<void>;
+  removeProducts: (ids: string[]) => void;
+}
+
+export const useOfferStore = create<OfferState>((set, get) => ({
+  step: 1,
+  setStep: (step) => set((state) => ({ step: typeof step === 'function' ? step(state.step) : step })),
+  config: defaultConfig,
+  setConfig: (config) => set((state) => ({ config: typeof config === 'function' ? config(state.config) : config })),
+  updateConfig: (p) => set((state) => ({ config: { ...state.config, ...p } })),
+  slots: [],
+  setSlots: (slots) => set((state) => {
+    const newSlots = typeof slots === 'function' ? slots(state.slots) : slots;
+    let hasChanges = false;
+    const newCustom = { ...state.customCanvasElements };
+    Object.keys(newCustom).forEach(pageStr => {
+      const page = parseInt(pageStr);
+      if (newCustom[page]) {
+        newCustom[page] = newCustom[page].map(el => {
+           if (el.data?.attachedSlotIdx !== undefined && el.data?.attachedOffsetX !== undefined) {
+              const slot = newSlots.find(s => s.pageIndex === page && newSlots.indexOf(s) === el.data.attachedSlotIdx) || newSlots[el.data.attachedSlotIdx];
+              if (slot) {
+                 const newX = slot.x + slot.width * (el.data.attachedOffsetX / 100);
+                 const newY = slot.y + slot.width * (el.data.attachedOffsetY / 100);
+                 const newW = slot.width * (el.data.attachedScaleW || 1);
+                 const newH = slot.width * (el.data.attachedScaleH || 1);
+                 if (Math.abs(el.x - newX) > 1 || Math.abs(el.y - newY) > 1 || Math.abs(el.w - newW) > 1 || Math.abs(el.h - newH) > 1) {
+                    hasChanges = true;
+                    return { ...el, x: newX, y: newY, w: newW, h: newH };
+                 }
+              }
+           }
+           return el;
+        });
+      }
+    });
+    return { slots: newSlots, customCanvasElements: hasChanges ? newCustom : state.customCanvasElements };
+  }),
+  selectedSlotId: null,
+  setSelectedSlotId: (selectedSlotId) => set({ selectedSlotId }),
+  pageCount: 1,
+  setPageCount: (countOrFn) => {
+    const state = get();
+    const oldCount = state.pageCount;
+    const newCount = typeof countOrFn === 'function' ? countOrFn(oldCount) : countOrFn;
+    
+    if (newCount > oldCount) {
+      // Duplicate slots from the last available page to the new pages
+      const lastPageIdx = oldCount - 1;
+      const lastPageSlots = state.slots.filter(s => (s.pageIndex || 0) === lastPageIdx);
+      const lastPageStartIdx = state.slots.filter(s => (s.pageIndex || 0) < lastPageIdx).length;
+      
+      const newSlots = [...state.slots];
+      const newSettings = { ...state.slotSettings };
+      
+      let currentTotalSlots = state.slots.length;
+      
+      for (let i = oldCount; i < newCount; i++) {
+        lastPageSlots.forEach((s, slotInPageIdx) => {
+          const newSlotId = crypto.randomUUID();
+          newSlots.push({ ...s, id: newSlotId, pageIndex: i });
+          
+          // Copy settings from the corresponding slot on the last page
+          const sourceSlot = lastPageSlots[slotInPageIdx];
+          if (sourceSlot && state.slotSettings[sourceSlot.id]) {
+            newSettings[newSlotId] = JSON.parse(JSON.stringify(state.slotSettings[sourceSlot.id]));
+          }
+          currentTotalSlots++;
+        });
+      }
+      set({ pageCount: newCount, slots: newSlots, slotSettings: newSettings });
+    } else if (newCount < oldCount) {
+      // Remove slots and settings for deleted pages
+      const filteredSlots = state.slots.filter(s => (s.pageIndex || 0) < newCount);
+      // We should also ideally clean up slotSettings, but it's less critical and hard to re-index
+      set({ pageCount: newCount, slots: filteredSlots });
+    } else {
+      set({ pageCount: newCount });
+    }
+  },
+  priceBadge: defaultPriceBadge,
+  setPriceBadge: (priceBadge) => set({ priceBadge }),
+  updatePriceBadge: (p) => set((state) => ({ priceBadge: { ...state.priceBadge, ...p } })),
+  descConfig: defaultDescConfig,
+  setDescConfig: (descConfig) => set({ descConfig }),
+  updateDescConfig: (p) => set((state) => ({ descConfig: { ...state.descConfig, ...p } })),
+  imageConfig: defaultImageConfig,
+  setImageConfig: (imageConfig) => set({ imageConfig }),
+  updateImageConfig: (p) => set((state) => ({ imageConfig: { ...state.imageConfig, ...p } })),
+  products: [],
+  setProducts: (products) => set((state) => {
+    const resolved = typeof products === 'function' ? products(state.products) : products;
+    // Auto-break long names into ~2 lines if no manual line breaks exist
+    const processed = resolved.map(p => {
+      if (!p.name || p.name.includes('\n')) return p;
+      const words = p.name.split(' ');
+      if (words.length <= 2) return p;
+      const mid = Math.ceil(words.length / 2);
+      const line1 = words.slice(0, mid).join(' ');
+      const line2 = words.slice(mid).join(' ');
+      return { ...p, name: `${line1}\n${line2}` };
+    });
+    return { products: processed };
+  }),
+  layouts: [],
+  setLayouts: (layouts) => set((state) => ({ layouts: typeof layouts === 'function' ? layouts(state.layouts) : layouts })),
+  customFonts: [],
+  setCustomFonts: (fonts) => set((state) => ({ customFonts: typeof fonts === 'function' ? fonts(state.customFonts) : fonts })),
+  presets: [],
+  setPresets: async (newPresets) => {
+    const state = get();
+    const current = state.presets;
+    const updated = typeof newPresets === 'function' ? newPresets(current) : newPresets;
+    
+    // Optimistic local update
+    set({ presets: updated });
+
+    try {
+      // Find what was deleted
+      const deletedIds = current.filter(cb => !updated.some(ub => ub.id === cb.id)).map(b => b.id);
+      // Find what was added/updated
+      const addedOrUpdated = updated.filter((ub: any) => {
+        const existing = current.find(cb => cb.id === ub.id);
+        return !existing || JSON.stringify(existing) !== JSON.stringify(ub);
+      });
+
+      if (deletedIds.length > 0) {
+        await supabase.from('offer_presets').delete().in('id', deletedIds);
+      }
+
+      for (const item of addedOrUpdated) {
+        await supabase.from('offer_presets').upsert({
+          id: item.id,
+          name: item.name,
+          client: item.client || state.selectedClientName,
+          price_badge: item.priceBadge,
+          desc_config: item.descConfig,
+          updated_at: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao persistir presets:', err);
+      toast.error('Erro ao sincronizar modelos com o servidor.');
+    }
+  },
+  isLoadingPresets: true,
+  setIsLoadingPresets: (isLoadingPresets) => set({ isLoadingPresets }),
+  slotSettings: {},
+  setSlotSettings: (slotSettings) => set((state) => ({ slotSettings: typeof slotSettings === 'function' ? slotSettings(state.slotSettings) : slotSettings })),
+  updateSlotSettings: (slotId, p) => {
+    set((state) => {
+      const current = state.slotSettings[slotId] || {};
+      const updated = { 
+        ...state.slotSettings, 
+        [slotId]: { 
+          ...current,
+          ...p,
+          priceBadge: p.priceBadge ? { ...(current.priceBadge || {}), ...p.priceBadge } : current.priceBadge,
+          descConfig: p.descConfig ? { ...(current.descConfig || {}), ...p.descConfig } : current.descConfig,
+          imageConfig: p.imageConfig ? { ...(current.imageConfig || {}), ...p.imageConfig } : current.imageConfig,
+        } 
+      };
+      return { slotSettings: updated };
+    });
+  },
+  selectedSlotIds: [],
+  setSelectedSlotIds: (selectedSlotIds) => set((state) => ({ selectedSlotIds: typeof selectedSlotIds === 'function' ? selectedSlotIds(state.selectedSlotIds) : selectedSlotIds })),
+  zoom: 0.8,
+  setZoom: (z) => set((state) => ({ zoom: typeof z === 'function' ? z(state.zoom) : z })),
+  panOffset: { x: 0, y: 0 },
+  setPanOffset: (panOffset) => set({ panOffset }),
+  pageTemplates: [],
+  setPageTemplates: (pt) => set((state) => ({ pageTemplates: typeof pt === 'function' ? pt(state.pageTemplates) : pt })),
+  isLoadingTemplates: true,
+  setIsLoadingTemplates: (isLoadingTemplates) => set({ isLoadingTemplates }),
+  activePage: 0,
+  setActivePage: (activePage) => set({ activePage }),
+  customCanvasElements: {},
+  setCustomCanvasElements: (c) => set((state) => ({ customCanvasElements: typeof c === 'function' ? c(state.customCanvasElements) : c })),
+  selectedClientName: null,
+  setSelectedClientName: (name) => {
+    if (name) localStorage.setItem('offer_generator_client', name);
+    else localStorage.removeItem('offer_generator_client');
+    set({ selectedClientName: name });
+  },
+  clients: [],
+  setClients: (clients) => set({ clients }),
+  activeProjectId: null,
+  setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
+  activeProjectName: null,
+  setActiveProjectName: (activeProjectName) => set({ activeProjectName }),
+
+  isAuthenticated: false,
+  setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
+  trackEvent: () => {},
+  setTrackEvent: (trackEvent) => set({ trackEvent }),
+
+  history: [],
+  historyIndex: -1,
+
+  pushHistory: () => {
+    const state = get();
+    // Use a lightweight snapshot for history to avoid main thread jank
+    const snapshotObj = { 
+      slots: state.slots, 
+      slotSettings: state.slotSettings, 
+      priceBadge: state.priceBadge, 
+      descConfig: state.descConfig, 
+      imageConfig: state.imageConfig, 
+      config: state.config, 
+      customCanvasElements: state.customCanvasElements, 
+      products: state.products.map(p => ({
+        id: p.id, ean: p.ean, name: p.name, price: p.price, images: p.images, suffix: p.suffix
+      }))
+    };
+
+    const snap = JSON.stringify(snapshotObj);
+    if (state.historyIndex >= 0 && state.history[state.historyIndex] === snap) return;
+    
+    const newHistory = [...state.history.slice(0, state.historyIndex + 1), snap];
+    let newIndex = newHistory.length - 1;
+    
+    if (newHistory.length > 30) { // Reduced from 50 to 30 for better memory management
+      newHistory.shift();
+      newIndex = Math.max(0, newIndex - 1);
+    }
+    
+    set({ history: newHistory, historyIndex: newIndex });
+  },
+
+  applySnapshot: (snap: string) => {
+    try {
+      const last = JSON.parse(snap);
+      set((state) => ({
+        slots: last.slots !== undefined ? last.slots : state.slots,
+        slotSettings: last.slotSettings !== undefined ? last.slotSettings : state.slotSettings,
+        priceBadge: last.priceBadge !== undefined ? last.priceBadge : state.priceBadge,
+        descConfig: last.descConfig !== undefined ? last.descConfig : state.descConfig,
+        imageConfig: last.imageConfig !== undefined ? last.imageConfig : state.imageConfig,
+        config: last.config !== undefined ? last.config : state.config,
+        customCanvasElements: last.customCanvasElements !== undefined ? last.customCanvasElements : state.customCanvasElements,
+        products: last.products !== undefined ? last.products : state.products,
+      }));
+    } catch (e) {
+      console.error('Error applying snapshot:', e);
+    }
+  },
+
+  undo: () => {
+    const state = get();
+    if (state.historyIndex <= 0) {
+      toast.info('Nada para desfazer');
+      return;
+    }
+    const newIndex = state.historyIndex - 1;
+    (get() as any).applySnapshot(state.history[newIndex]);
+    set({ historyIndex: newIndex });
+    toast.success('Desfeito!');
+  },
+
+  redo: () => {
+    const state = get();
+    if (state.historyIndex >= state.history.length - 1) {
+      toast.info('Nada para refazer');
+      return;
+    }
+    const newIndex = state.historyIndex + 1;
+    (get() as any).applySnapshot(state.history[newIndex]);
+    set({ historyIndex: newIndex });
+    toast.success('Refeito!');
+  },
+
+  fetchClients: async () => {
+    try {
+      const { data, error } = await supabase.from('calendar_clients').select('id, name').order('name');
+      if (error) throw error;
+      if (data) set({ clients: data });
+    } catch (err) {
+      console.error('Erro ao carregar clientes:', err);
+    }
+  },
+
+  fetchPresets: async () => {
+    try {
+      const { data } = await (supabase.from('offer_presets' as any) as any).select('*').order('created_at', { ascending: true });
+      if (data) {
+        set({ presets: data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          client: d.client,
+          priceBadge: d.price_badge,
+          descConfig: d.desc_config
+        })) });
+      }
+    } catch (err) {} finally { set({ isLoadingPresets: false }); }
+  },
+
+  fetchFonts: async () => {
+    try {
+      const { data } = await (supabase as any).from('offer_fonts').select('*');
+      if (!data) return;
+      for (const f of data) {
+        const prev = get().customFonts;
+        if (prev.some(x => x.name === f.name)) continue;
+        fetch(f.url).then(r => r.blob()).then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            const fontFace = new FontFace(f.name, `url(${base64})`);
+            fontFace.load().then(loaded => {
+              document.fonts.add(loaded);
+              const cur = get().customFonts;
+              if (!cur.some(x => x.name === f.name)) {
+                set({ customFonts: [...cur, { name: f.name, url: base64 }] });
+              }
+            });
+          };
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (e) {}
+  },
+
+  fetchTemplates: async () => {
+    try {
+      const { data: tData } = await (supabase.from('offer_templates' as any) as any).select('*').order('created_at', { ascending: true });
+      if (tData) {
+        set({ pageTemplates: tData.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          client: d.client,
+          slots: d.slots,
+          slotSettings: d.slot_settings,
+          priceBadge: d.price_badge,
+          descConfig: d.desc_config,
+          config: d.config
+        })) });
+      }
+    } catch (e) {} finally { set({ isLoadingTemplates: false }); }
+  },
+
+  saveProjectTemplate: async (name: string, templateType: 'complete' | 'individual' = 'complete') => {
+    const state = get();
+    const id = crypto.randomUUID();
+    
+    let savedSlots = state.slots;
+    let savedSettings = state.slotSettings;
+    
+    if (templateType === 'individual') {
+      const activeSlots = state.slots.filter(s => (s.pageIndex || 0) === state.activePage);
+      savedSlots = activeSlots.map(s => ({ ...s, pageIndex: 0 }));
+      
+      const newSettings: Record<string, any> = {};
+      activeSlots.forEach(s => {
+        if (savedSettings[s.id]) newSettings[s.id] = savedSettings[s.id];
+      });
+      savedSettings = newSettings;
+    }
+
+    const newTemplate = { 
+      id, 
+      name, 
+      slots: savedSlots, 
+      slotSettings: savedSettings, 
+      priceBadge: state.priceBadge, 
+      descConfig: state.descConfig, 
+      config: { ...state.config, templateType },
+      client: state.selectedClientName 
+    };
+    
+    // Optimistic update
+    set({ pageTemplates: [...state.pageTemplates, newTemplate] });
+    
+    try {
+      const { error } = await (supabase.from('offer_templates' as any) as any).insert({
+        id,
+        name,
+        client: state.selectedClientName,
+        slots: savedSlots,
+        slot_settings: savedSettings,
+        price_badge: state.priceBadge,
+        desc_config: state.descConfig,
+        config: newTemplate.config,
+        created_at: new Date().toISOString()
+      });
+
+      if (error) {
+        console.error('Erro detalhado ao salvar template:', error);
+        toast.error(`Falha ao salvar template no servidor: ${error.message}`);
+        // Rollback local state
+        set({ pageTemplates: state.pageTemplates.filter(t => t.id !== id) });
+      } else {
+        toast.success('Template salvo com sucesso!');
+      }
+    } catch (err: any) {
+      console.error('Erro crítico ao salvar template:', err);
+      toast.error('Ocorreu um erro inesperado ao tentar salvar o template.');
+      set({ pageTemplates: state.pageTemplates.filter(t => t.id !== id) });
+    }
+  },
+
+  deleteProjectTemplate: async (templateToDelete: { id?: string; name: string }) => {
+    try {
+      if (!templateToDelete.id) {
+        toast.error('O template não possui ID para deleção.');
+        return;
+      }
+      
+      // Local update first
+      set((state) => ({ pageTemplates: state.pageTemplates.filter(t => t.id !== templateToDelete.id) }));
+      
+      const { error } = await (supabase.from('offer_templates' as any) as any).delete().eq('id', templateToDelete.id);
+      
+      if (error) {
+        console.error('Erro ao deletar template:', error);
+        toast.error('Erro ao remover template do banco de dados.');
+        // Refetch to restore state if error
+        const { data } = await (supabase.from('offer_templates' as any) as any).select('*').order('created_at', { ascending: true });
+        if (data) set({ pageTemplates: data.map((d: any) => ({
+          id: d.id, name: d.name, client: d.client, slots: d.slots, slotSettings: d.slot_settings,
+          priceBadge: d.price_badge, descConfig: d.desc_config, config: d.config
+        })) });
+      } else {
+        toast.success('Template removido!');
+      }
+    } catch (err: any) {
+      console.error('Catch error deleting template:', err);
+      toast.error('Erro ao excluir template.');
+    }
+  },
+
+  loadProjectTemplate: (id: string) => {
+    const state = get();
+    const base = state.pageTemplates.find(t => t.id === id);
+    if (!base) return;
+    state.pushHistory();
+
+    const isIndividual = base.config?.templateType === 'individual';
+
+    // Sanitize template slots
+    let sanitizedSlots = base.slots || [];
+    
+    if (isIndividual) {
+      // For individual, map slots to the active page
+      const idMap = new Map<string, string>();
+      sanitizedSlots = sanitizedSlots.map((slot: any) => {
+        const newId = crypto.randomUUID();
+        idMap.set(slot.id, newId);
+        return {
+          ...slot,
+          id: newId,
+          pageIndex: state.activePage
+        };
+      });
+      
+      // Keep other pages' slots
+      const otherPagesSlots = state.slots.filter(s => (s.pageIndex || 0) !== state.activePage);
+      const newSlots = [...otherPagesSlots, ...sanitizedSlots];
+      
+      const newSettings = { ...state.slotSettings };
+      if (base.slotSettings) {
+        Object.entries(base.slotSettings).forEach(([oldId, settings]) => {
+          const newId = idMap.get(oldId);
+          if (newId) {
+            newSettings[newId] = JSON.parse(JSON.stringify(settings));
+          }
+        });
+      }
+
+      set({
+        slots: newSlots,
+        slotSettings: newSettings,
+      });
+      toast.success('Template Individual aplicado nesta tela!');
+    } else {
+      // For complete template, replace everything
+      const idMap = new Map<string, string>();
+      sanitizedSlots = sanitizedSlots.map((slot: any) => {
+        const newId = crypto.randomUUID();
+        idMap.set(slot.id, newId);
+        return {
+          ...slot,
+          id: newId,
+          pageIndex: slot.pageIndex !== undefined ? slot.pageIndex : 0
+        };
+      });
+
+      const newSettings: Record<string, any> = {};
+      if (base.slotSettings) {
+        Object.entries(base.slotSettings).forEach(([oldId, settings]) => {
+          const newId = idMap.get(oldId);
+          if (newId) {
+            newSettings[newId] = JSON.parse(JSON.stringify(settings));
+          }
+        });
+      }
+
+      // Calculate page count from slots
+      const maxPageIdx = sanitizedSlots.length > 0 ? Math.max(...sanitizedSlots.map((sl: any) => sl.pageIndex || 0)) : 0;
+      const newPageCount = Math.max(1, maxPageIdx + 1);
+
+      set({
+        slots: sanitizedSlots,
+        pageCount: newPageCount,
+        slotSettings: newSettings,
+        priceBadge: base.priceBadge || state.priceBadge,
+        descConfig: base.descConfig || state.descConfig,
+        config: base.config || state.config,
+        activePage: 0
+      });
+      toast.success('Template Completo carregado!');
+    }
+  },
+
+  getSlotSettings: (slotId: string) => {
+    const state = get();
+    const s = state.slotSettings[slotId] || {};
+    return {
+      ...s,
+      priceBadge: { ...state.priceBadge, ...(s.priceBadge || {}) },
+      descConfig: { ...state.descConfig, ...(s.descConfig || {}) },
+      imageConfig: { ...state.imageConfig, ...(s.imageConfig || {}) },
+    };
+  },
+
+  replaceSlotSettings: (slotId: string, settings: any) => {
+    set((state) => ({ slotSettings: { ...state.slotSettings, [slotId]: settings } }));
+  },
+
+  syncAllSlots: async (unused: any, unusedSourceId: string) => {
+    try {
+      const state = get();
+      if (state.slots.length === 0) return;
+      
+      const page0Slots = state.slots.filter(s => (s.pageIndex || 0) === 0);
+      if (page0Slots.length === 0) {
+        toast.error('Nenhum slot na primeira tela para usar como base.');
+        return;
+      }
+
+      const newSettings: Record<string, any> = { ...state.slotSettings };
+      
+      // We will map each page's slots to Page 0 slots by their order (index)
+      const pages = Array.from({ length: state.pageCount }, (_, i) => i);
+      
+      pages.forEach(pIdx => {
+        const pageSlots = state.slots.filter(s => (s.pageIndex || 0) === pIdx);
+        pageSlots.forEach((slot, sIdx) => {
+          // Find corresponding slot in Page 0 by index
+          // If the current page has more slots than Page 0, use the last slot of Page 0 or the first one
+          const sourceSlot = page0Slots[sIdx] || page0Slots[0];
+          const src = state.getSlotSettings(sourceSlot.id);
+          
+          newSettings[slot.id] = { 
+            priceBadge: { ...src.priceBadge }, 
+            descConfig: { ...src.descConfig }, 
+            imageConfig: { ...src.imageConfig } 
+          };
+        });
+      });
+      
+      // Update globals based on the very first slot
+      const firstSrc = state.getSlotSettings(page0Slots[0].id);
+      
+      set({
+        slotSettings: newSettings,
+        priceBadge: { ...firstSrc.priceBadge },
+        descConfig: { ...firstSrc.descConfig },
+        imageConfig: { ...firstSrc.imageConfig }
+      });
+      
+      toast.success('Visual da Tela 1 sincronizado para todas as outras telas!');
+    } catch (err) {
+      console.error('Sync Error:', err);
+      toast.error('Erro ao sincronizar estilos.');
+    }
+  },
+
+  getProjectStateSnapshot: () => {
+    const state = get();
+    
+    // Clean products to avoid saving huge blobs if they were just processed
+    const cleanProducts = state.products.map(p => ({
+      ...p,
+      // If the image is a data URI (base64) and it's too long, we might want to alert 
+      // but for now we'll save it, just ensuring we don't save duplicates
+    }));
+
+    return {
+      step: state.step, 
+      config: state.config, 
+      slots: state.slots, 
+      pageCount: state.pageCount, 
+      priceBadge: state.priceBadge, 
+      descConfig: state.descConfig, 
+      imageConfig: state.imageConfig,
+      products: cleanProducts, 
+      layouts: state.layouts, 
+      slotSettings: state.slotSettings, 
+      activePage: state.activePage, 
+      selectedClientName: state.selectedClientName,
+      customCanvasElements: state.customCanvasElements,
+    };
+  },
+
+  loadProjectState: (s: any) => {
+    if (!s) return;
+    const state = get();
+    
+    // Sanitize slots to ensure they all have a pageIndex and UNIQUE IDs
+    let sanitizedSlots = s.slots || state.slots;
+    const newSettings = s.slotSettings ? { ...s.slotSettings } : { ...state.slotSettings };
+
+    if (Array.isArray(sanitizedSlots)) {
+      const seenIds = new Set<string>();
+      sanitizedSlots = sanitizedSlots.map((slot: any) => {
+        let finalId = slot.id;
+        if (seenIds.has(slot.id)) {
+          finalId = crypto.randomUUID();
+          // copy settings to new id if it was duplicated
+          if (newSettings[slot.id]) {
+            newSettings[finalId] = JSON.parse(JSON.stringify(newSettings[slot.id]));
+          }
+        }
+        seenIds.add(finalId);
+        
+        return {
+          ...slot,
+          id: finalId,
+          pageIndex: slot.pageIndex !== undefined ? slot.pageIndex : 0
+        };
+      });
+    }
+
+    // Determine correct page count
+    let calculatedPageCount = s.pageCount != null ? s.pageCount : state.pageCount;
+    if (sanitizedSlots.length > 0) {
+      const maxPageIdx = Math.max(...sanitizedSlots.map((sl: any) => sl.pageIndex || 0));
+      calculatedPageCount = Math.max(calculatedPageCount, maxPageIdx + 1);
+    }
+
+    set({
+      step: s.step != null ? s.step : state.step,
+      config: s.config ? { ...defaultConfig, ...s.config } : state.config,
+      slots: sanitizedSlots,
+      pageCount: calculatedPageCount,
+      priceBadge: s.priceBadge ? { ...defaultPriceBadge, ...s.priceBadge } : state.priceBadge,
+      descConfig: s.descConfig ? { ...defaultDescConfig, ...s.descConfig } : state.descConfig,
+      imageConfig: s.imageConfig ? { ...defaultImageConfig, ...s.imageConfig } : state.imageConfig,
+      products: s.products ? s.products : state.products,
+      layouts: s.layouts ? s.layouts : state.layouts,
+      slotSettings: newSettings,
+      activePage: s.activePage != null ? s.activePage : state.activePage,
+      selectedClientName: s.selectedClientName !== undefined ? s.selectedClientName : state.selectedClientName,
+      customCanvasElements: s.customCanvasElements ? s.customCanvasElements : state.customCanvasElements,
+      history: [],
+      historyIndex: -1
+    });
+    setTimeout(() => get().pushHistory(), 50);
+  },
+
+  createAndOpenProject: async (name: string, date: string) => {
+    const state = get();
+    state.resetToDefaults();
+    try {
+      const { data, error } = await (supabase as any)
+        .from('offer_projects')
+        .insert({ name, offer_date: date, state: {} })
+        .select()
+        .single();
+      if (error) throw error;
+      set({ activeProjectId: data.id, activeProjectName: data.name });
+      toast.success(`Oferta "${name}" criada!`);
+      state.trackEvent('observation', 'offer_studio', `Nova Arte/Projeto gerado: "${name}" (${state.slots.length * state.pageCount} telas)`);
+    } catch (err: any) {
+      toast.error('Erro ao criar oferta: ' + (err.message || ''));
+      throw err;
+    }
+  },
+
+  openProject: (project: OfferProject) => {
+    const state = get();
+    state.resetToDefaults();
+    set({ activeProjectId: project.id, activeProjectName: project.name });
+    state.loadProjectState(project.state);
+    toast.success(`Oferta "${project.name}" aberta!`);
+  },
+
+  saveProject: async () => {
+    const state = get();
+    if (!state.activeProjectId) {
+      toast.error('Nenhuma oferta ativa para salvar');
+      return;
+    }
+    try {
+      const snapshot = state.getProjectStateSnapshot();
+      const { error } = await (supabase as any)
+        .from('offer_projects')
+        .update({ state: snapshot, updated_at: new Date().toISOString() })
+        .eq('id', state.activeProjectId);
+      if (error) throw error;
+      toast.success('Alterações salvas!');
+      state.trackEvent('observation', 'offer_studio', `Projeto salvo: Ajustes de design aplicados em "${state.activeProjectName}"`);
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err.message || ''));
+    }
+  },
+
+  closeProject: () => {
+    const state = get();
+    state.resetToDefaults();
+    set({ activeProjectId: null, activeProjectName: null });
+  },
+
+  removeBackground: async (productIdx: number) => {
+    const state = get();
+    const product = state.products[productIdx];
+    if (!product || !product.images?.[0]) return;
+
+    try {
+      toast.loading('Removendo fundo e recortando...', { id: 'rb-' + productIdx });
+      const { data, error } = await supabase.functions.invoke('remove-background', {
+        body: { imageUrl: product.images[0] }
+      });
+
+      if (error) throw error;
+      if (data?.base64) {
+        const newProducts = [...state.products];
+        const timestampedUrl = `${data.base64}#t=${Date.now()}`;
+        newProducts[productIdx] = { ...product, images: [timestampedUrl] };
+        
+        state.pushHistory();
+        set({ products: newProducts });
+        
+        setTimeout(() => get().autoFitImage(productIdx), 500);
+        toast.success('Fundo removido e imagem recortada!', { id: 'rb-' + productIdx });
+      }
+    } catch (err: any) {
+      console.error('Erro ao remover fundo:', err);
+      toast.error('Erro ao remover fundo: ' + (err.message || 'Erro desconhecido'), { id: 'rb-' + productIdx });
+    }
+  },
+
+  autoFitImage: async (productIdx: number) => {
+    const state = get();
+    const product = state.products[productIdx];
+    if (!product || !product.images?.[0]) return;
+
+    try {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.src = product.images[0];
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+      let found = false;
+
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          const alpha = data[(y * canvas.width + x) * 4 + 3];
+          if (alpha > 10) { 
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+            found = true;
+          }
+        }
+      }
+
+      if (!found) return;
+
+      const sw = maxX - minX;
+      const sh = maxY - minY;
+      const scx = minX + sw / 2;
+      const scy = minY + sh / 2;
+      
+      const offX = (scx / canvas.width) * 100;
+      const offY = (scy / canvas.height) * 100;
+
+      const slot = state.slots[productIdx];
+      if (!slot) return;
+      const scaleX = slot.width / sw;
+      const scaleY = slot.height / sh;
+      const baseScale = Math.min(scaleX, scaleY) * 0.85;
+      
+      state.pushHistory();
+      state.updateSlotSettings(slot.id, {
+        imageConfig: {
+          offsetX: offX,
+          offsetY: offY,
+          scale: baseScale > 1.5 ? 1.5 : baseScale < 0.5 ? 0.5 : baseScale
+        }
+      });
+      
+      toast.success('Caixa ajustada ao produto!');
+    } catch (err) {
+      console.error('Erro ao auto-ajustar imagem:', err);
+    }
+  },
+
+  resetToDefaults: () => {
+    set({
+      step: 1, config: defaultConfig, slots: [], selectedSlotId: null, pageCount: 1,
+      priceBadge: defaultPriceBadge, descConfig: defaultDescConfig, imageConfig: defaultImageConfig,
+      products: [], layouts: [], slotSettings: {}, selectedSlotIds: [],
+      zoom: 0.8, panOffset: { x: 0, y: 0 }, activePage: 0, customCanvasElements: {}, history: [], historyIndex: -1
+    });
+  },
+  
+  removeProducts: (ids: string[]) => {
+    const state = get();
+    state.pushHistory();
+    set((state) => ({ 
+      products: state.products.filter(p => !ids.includes(p.id)) 
+    }));
+  }
+}));

@@ -1,0 +1,264 @@
+import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useKanban } from './KanbanContext';
+import { compressImage } from '@/lib/utils';
+
+interface AutomationContextType {
+  triggerAICorrection: (cardId: string) => Promise<void>;
+  fixDescriptionWithAI: (cardId: string, mode?: 'keep_sequence' | 'organize' | 'barcode') => Promise<void>;
+  customAICommand: (cardId: string, userPrompt: string) => Promise<void>;
+}
+
+const AutomationContext = createContext<AutomationContextType | undefined>(undefined);
+
+export function AutomationProvider({ children }: { children: ReactNode }) {
+  const { kanbanCards, updateKanbanCard } = useKanban();
+
+  const triggerAICorrection = useCallback(async (cardId: string) => {
+    try {
+      const card = kanbanCards.find(c => c.id === cardId);
+      if (!card) return;
+
+      toast.info('🤖 IA Auditora: Redimensionando imagens...');
+
+      // TURBO: Resize images on client-side
+      const imagesBase64: string[] = [];
+      const imageUrls = card.images || [];
+
+      if (imageUrls.length > 0) {
+        for (const url of imageUrls.slice(0, 13)) {
+          try {
+            const resp = await fetch(url);
+            const blob = await resp.blob();
+            const file = new File([blob], "image.jpg", { type: "image/jpeg" });
+            const resizedBase64 = await compressImage(file, 1024, 0.5);
+            const base64Data = resizedBase64.split(',')[1];
+            imagesBase64.push(base64Data);
+          } catch (imgErr) {
+            console.warn('Erro ao processar imagem para IA:', imgErr);
+          }
+        }
+      }
+
+      toast.info('🤖 IA Auditora: Enviando para análise...');
+
+      const { data, error } = await supabase.functions.invoke('ai-correction', {
+        body: { cardId, imagesBase64 }
+      });
+
+      if (error) throw error;
+      
+      const analysis = data.analysis;
+      if (analysis?.hasErrors) {
+        toast.warning('🤖 Auditoria: Encontrei divergências.');
+      } else {
+        toast.success('🤖 Auditoria: Tudo ok.');
+      }
+    } catch (err: any) {
+      console.error('Audit Error:', err);
+      toast.error(`IA Auditora: ${err.message || 'Falha no processamento'}`);
+    }
+  }, [kanbanCards, updateKanbanCard]);
+
+  const fixDescriptionWithAI = useCallback(async (cardId: string, mode: 'keep_sequence' | 'organize' | 'barcode' = 'keep_sequence') => {
+    try {
+      const card = kanbanCards.find(c => c.id === cardId);
+      if (!card) return;
+      
+      const toastMsg = mode === 'organize' ? 'Organizando por setores...' : mode === 'barcode' ? 'Corrigindo com código de barras...' : 'Corrigindo texto...';
+      toast.info(`🤖 IA: ${toastMsg}`);
+
+      const { data: settingsData } = await (supabase as any).from('settings').select('value').eq('key', 'openai_api_key').single();
+      const apiKey = settingsData?.value;
+      if (!apiKey) throw new Error('OpenAI key missing');
+
+      const CATEGORIES_PROMPT = `SETORIZAÇÃO (Use apenas estes nomes):
+━━━ CARNES ━━━
+━━━ FRIOS E LATICÍNIOS ━━━
+━━━ MERCEARIA ━━━
+━━━ BEBIDAS ━━━
+━━━ LIMPEZA ━━━
+━━━ HIGIENE ━━━
+━━━ HORTIFRUTI ━━━
+━━━ PADARIA ━━━
+━━━ CONGELADOS ━━━
+━━━ PET ━━━
+━━━ BAZAR ━━━
+━━━ OUTROS ━━━`;
+
+      const BARCODE_PROMPT = `Você é um assistente especializado em corrigir, padronizar e organizar listas de ofertas de supermercado, entendendo qualquer formato confuso de unidades, preços e categorias.
+
+REGRAS:
+
+Corrigir ortografia e acentuação de todos os nomes de produtos.
+Padronizar nomes: TODOS OS NOMES DEVEM ESTAR EM LETRAS MAIÚSCULAS.
+Manter unidades no padrão: Kg, L, g, ml.
+Detectar e ajustar todas as unidades para o formato correto (Kg, L, g, ml, etc.).
+Corrigir preços para o formato R$ 0,00, mesmo que estejam incompletos ou com vírgula/ponto trocados.
+Garantir que o preço sempre venha por último, separado do produto por " - ".
+Manter uma linha por produto, mesmo que a lista esteja em linhas incompletas ou com múltiplos espaços.
+Reconhecer automaticamente unidades junto ao produto (ex.: "2kg" → "2Kg", "1k" → "1Kg").
+NÃO ADICIONAR números à unidade de medida se o texto original não possuir número. Exemplo: se estiver apenas "kg" ou "Kg", MANTENHA apenas "Kg", NUNCA altere para "1Kg".
+🔒 REGRA CRÍTICA – POSICIONAMENTO DA MARCA:
+
+A MARCA NUNCA DEVE APARECER NO INÍCIO DO NOME DO PRODUTO.
+
+A descrição deve seguir obrigatoriamente esta estrutura:
+
+TIPO/DESCRIÇÃO DO PRODUTO + MARCA + QUANTIDADE/UNIDADE
+
+Exemplos corretos:
+ARROZ TIPO 1 CAMIL 5Kg
+REFRIGERANTE COLA COCA-COLA 2L
+LEITE UHT INTEGRAL PIRACANJUBA 1L
+CAFÉ TRADICIONAL 3 CORAÇÕES 500g
+
+Exemplos incorretos:
+CAMIL ARROZ TIPO 1 5Kg
+COCA-COLA REFRIGERANTE COLA 2L
+PIRACANJUBA LEITE UHT INTEGRAL 1L
+
+Sempre que identificar uma marca no início, reorganizar automaticamente para o formato correto.
+
+🔒 REGRA CRÍTICA – CÓDIGO DE BARRAS:
+
+O código de barras deve ser mantido EXATAMENTE como recebido.
+NÃO alterar, NÃO corrigir, NÃO completar, NÃO adicionar números no final.
+O código de barras deve ser movido apenas para o INÍCIO da linha do produto.
+
+FORMATO FINAL OBRIGATÓRIO:
+
+CÓDIGO_DE_BARRAS  DESCRIÇÃO_DO_PRODUTO MARCA QUANTIDADE_UNIDADE R$ PREÇO
+
+🔒 REGRA DE FORMATAÇÃO DE ESPAÇO:
+
+Deve haver DOIS ESPAÇOS ("  ") obrigatórios entre o CÓDIGO_DE_BARRAS e o nome do PRODUTO.
+
+ORGANIZAÇÃO POR DEPARTAMENTOS:
+
+Separar automaticamente os produtos por departamentos, identificando pelo nome do produto.
+NÃO escrever o nome do departamento, apenas agrupar os produtos corretamente.
+Inserir uma linha em branco entre cada grupo.
+
+DEPARTAMENTOS (AGRUPAMENTO):
+
+Bebidas Alcoólicas
+Bebidas, Mercearia, Frios e Perecíveis e Padaria (todos juntos)
+Carne
+Hortifrúti
+Bazar
+Cosméticos, Perfumaria e Limpeza
+Pet
+
+REGRAS IMPORTANTES:
+
+NÃO adicionar explicações, comentários ou exemplos na saída.
+NÃO conversar; responder apenas com a lista corrigida e organizada.
+Respeitar a separação por departamentos com espaçamento entre grupos.
+
+AGORA CORRIJA ESTA LISTA:`;
+
+      const systemPrompt = mode === 'barcode'
+        ? BARCODE_PROMPT
+        : mode === 'organize' 
+        ? `Você é um assistente de produção de encartes de supermercado especializado em correção técnica.
+
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original do cliente. Sua função é corrigir a ortografia e interpretar, mantendo o sentido original.
+
+REGRAS DE PRESERVAÇÃO:
+1. NÃO remova nem altere: Embalagem (pote, lata, fardo, caixa, garrafa), Unidade (un, kg, g, ml, l), Sabor, Tipo, Peso ou Volume.
+2. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
+3. Mantenha a ordem das informações conforme o texto original.
+
+TAREFA: Organizar a lista por setores (Categorias).
+1. Corrija a ortografia dos produtos preservando os detalhes técnicos acima.
+2. Formate os preços com vírgula (ex: 5.99 -> 5,99).
+3. Agrupe os produtos sob os títulos de setores informados abaixo.
+4. NUNCA use asteriscos (*), markdown, ou listas numeradas.
+5. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
+6. Se o texto original já contiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.
+
+${CATEGORIES_PROMPT}`
+        : `Você é um assistente de produção de encartes de supermercado especializado em correção técnica.
+
+REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original do cliente. Sua função é corrigir a ortografia e interpretar, mantendo o sentido original.
+
+REGRAS DE PRESERVAÇÃO:
+1. NÃO remova nem altere: Embalagem (pote, lata, fardo, caixa, garrafa), Unidade (un, kg, g, ml, l), Sabor, Tipo, Peso ou Volume.
+2. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
+3. MANTENHA EXATAMENTE a sequência em que os produtos aparecem.
+4. Formate os preços com vírgula (ex: 5.99 -> 5,99).
+5. NUNCA use asteriscos (*), markdown, ou listas numeradas.
+6. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
+7. Se o texto original tiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: card.description }
+          ],
+          temperature: 0.1, // Maiores chances de seguir instruções rígidas
+        }),
+      });
+
+      if (!response.ok) throw new Error('GPT Error');
+      const data = await response.json();
+      let fixedText = data.choices[0].message.content.trim();
+      
+      // Cleanup for safety
+      fixedText = fixedText.replace(/\*/g, '').replace(/###/g, '');
+
+      await updateKanbanCard(cardId, { description: fixedText }, `IA: ${mode === 'barcode' ? 'Correção com código de barras' : mode === 'organize' ? 'Organizou por categorias' : 'Refinou mantendo ordem'}`);
+      toast.success('✨ Descrição atualizada com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao refinar descrição.');
+    }
+  }, [kanbanCards, updateKanbanCard]);
+
+  const customAICommand = useCallback(async (cardId: string, userPrompt: string) => {
+    try {
+      const card = kanbanCards.find(c => c.id === cardId);
+      if (!card) return;
+      toast.info('🤖 IA Processando comando...');
+      const { data: settingsData } = await (supabase as any).from('settings').select('value').eq('key', 'openai_api_key').single();
+      const apiKey = settingsData?.value;
+      if (!apiKey) throw new Error('OpenAI key missing');
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: "Você é um assistente de produção de encartes. Retorne APENAS o texto final, sem comentários ou explicações." },
+            { role: 'user', content: `COMANDO: ${userPrompt}\n\nTEXTO ATUAL:\n${card.description}` }
+          ],
+          temperature: 0.3,
+        }),
+      });
+      if (!response.ok) throw new Error('AI Error');
+      const data = await response.json();
+      const result = data.choices[0].message.content.trim().replace(/\*/g, '');
+      await updateKanbanCard(cardId, { description: result }, `IA: Comando "${userPrompt.substring(0, 30)}..."`);
+      toast.success('🤖 IA: Alteração concluída!');
+    } catch (err: any) {
+      toast.error('Erro ao processar comando IA.');
+    }
+  }, [kanbanCards, updateKanbanCard]);
+
+  const value = useMemo(() => ({ triggerAICorrection, fixDescriptionWithAI, customAICommand }), [triggerAICorrection, fixDescriptionWithAI, customAICommand]);
+
+  return <AutomationContext.Provider value={value}>{children}</AutomationContext.Provider>;
+}
+
+export function useAutomation() {
+  const context = useContext(AutomationContext);
+  if (context === undefined) throw new Error('useAutomation must be used within an AutomationProvider');
+  return context;
+}

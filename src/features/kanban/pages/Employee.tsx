@@ -1,0 +1,392 @@
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useApp } from '@/contexts/useApp';
+import { FIXED_COLUMN_KEYS, KanbanCard as KanbanCardType } from '@/contexts/app-types';
+import KanbanColumn from '@/features/kanban/components/KanbanColumn';
+import KanbanCard from '@/features/kanban/components/KanbanCard';
+import CardDetailDialog from '@/features/kanban/components/CardDetailDialog';
+import { ArrowLeft, Camera, Archive, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useDraggableScroll } from '@/hooks/useDraggableScroll';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { KanbanBoardDndContext } from '@/features/kanban/components/KanbanBoardDndContext';
+import { MobileKanbanBoard } from '@/features/kanban/components/MobileKanbanBoard';
+
+const COLUMN_COLORS = [
+  { value: 'bg-info', label: 'Azul' },
+  { value: 'bg-warning', label: 'Amarelo' },
+  { value: 'bg-destructive', label: 'Vermelho' },
+  { value: 'bg-success', label: 'Verde' },
+  { value: 'bg-primary', label: 'Primário' },
+  { value: 'bg-muted-foreground', label: 'Cinza' },
+];
+
+const Employee = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const cardIdFromUrl = searchParams.get('cardId');
+  const [selectedCardFromUrl, setSelectedCardFromUrl] = useState<KanbanCardType | null>(null);
+  const { employees, kanbanCards, updateEmployee, getColumnsForEmployee, addKanbanColumn, updateKanbanColumn, deleteKanbanColumn, deleteEmployee, loggedUserRole, loading, memberFilter } = useApp();
+  const { ref: scrollRef, onMouseDown } = useDraggableScroll();
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (cardIdFromUrl && kanbanCards.length > 0) {
+      const found = kanbanCards.find(c => c.id === cardIdFromUrl);
+      if (found) {
+        setSelectedCardFromUrl(found);
+      }
+    }
+  }, [cardIdFromUrl, kanbanCards]);
+
+  const [showAddCol, setShowAddCol] = useState(false);
+  const [newColTitle, setNewColTitle] = useState('');
+  const [newColColor, setNewColColor] = useState('bg-primary');
+  const [editCol, setEditCol] = useState<string | null>(null);
+  const [editColTitle, setEditColTitle] = useState('');
+  const [editColColor, setEditColColor] = useState('');
+  const [deleteColTarget, setDeleteColTarget] = useState<string | null>(null);
+  const [showDeleteEmployee, setShowDeleteEmployee] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const employee = useMemo(() => employees.find(e => e.id === id), [employees, id]);
+
+  const allCards = useMemo(() => kanbanCards.filter(c => c.employeeId === id && !c.archivedAt), [kanbanCards, id]);
+  
+  const cards = useMemo(() => {
+    let filtered = allCards;
+    
+    if (memberFilter.length > 0) {
+      filtered = filtered.filter(c => {
+        const isAssigned = c.assignedUsers?.some(u => memberFilter.includes(u.id));
+        const isEmployee = memberFilter.includes(c.employeeId);
+        return isAssigned || isEmployee;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(c => c.clientName.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+    }
+    
+    return filtered;
+  }, [allCards, searchQuery, memberFilter]);
+
+  // Oculta a coluna Postado do Kanban do usuário (centralizada apenas no Postagem)
+  const columns = useMemo(() => employee ? getColumnsForEmployee(employee.id).filter(c => c.columnKey !== 'postado') : [], [employee, getColumnsForEmployee]);
+
+  // Pre-group cards by column key to avoid O(n) filter per column
+  const cardsByColumn = useMemo(() => {
+    const grouped: Record<string, typeof cards> = {};
+    columns.forEach(col => { grouped[col.columnKey] = []; });
+    cards.forEach(card => {
+      if (grouped[card.column]) grouped[card.column].push(card);
+    });
+    return grouped;
+  }, [cards, columns]);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !employee) return;
+    const reader = new FileReader();
+    reader.onload = () => updateEmployee(employee.id, { photoUrl: reader.result as string });
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddColumn = () => {
+    if (!newColTitle.trim() || !employee) return;
+    addKanbanColumn(employee.id, newColTitle.trim(), newColColor);
+    setNewColTitle('');
+    setNewColColor('bg-primary');
+    setShowAddCol(false);
+  };
+
+  const handleEditColumn = () => {
+    if (!editCol || !editColTitle.trim()) return;
+    updateKanbanColumn(editCol, { title: editColTitle.trim(), color: editColColor });
+    setEditCol(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen gradient-bg flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!employee) {
+    return (
+      <div className="min-h-screen gradient-bg flex flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Funcionário não encontrado</p>
+        <Button variant="outline" onClick={() => navigate('/')} className="rounded-xl">Voltar ao início</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen overflow-hidden flex flex-col kanban-custom-bg">
+      {/* Header — clean, without global add buttons */}
+      <header className="page-header flex-shrink-0">
+        <div className="flex items-center gap-4 px-6 py-3.5">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => {
+              const dest = sessionStorage.getItem('mobile_destination_chosen') || '/';
+              navigate(dest);
+            }} 
+            className="hover:bg-secondary rounded-xl"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <label className="relative cursor-pointer group">
+              {employee.photoUrl ? (
+                <img src={employee.photoUrl} alt={employee.name} className="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-border/30" />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-secondary/60 flex items-center justify-center text-xl">{employee.avatar}</div>
+              )}
+              <div className="absolute inset-0 rounded-xl bg-background/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-4 h-4 text-foreground" />
+              </div>
+              <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
+            </label>
+            {employee.photoUrl && (
+              <button onClick={() => updateEmployee(employee.id, { photoUrl: undefined })} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
+                Remover
+              </button>
+            )}
+            <div>
+              <h1 className="text-lg font-bold text-foreground">{employee.name}</h1>
+              <p className="text-[11px] text-muted-foreground">{employee.role}</p>
+            </div>
+            {loggedUserRole === 'ADMIN' && (
+              <Button variant="ghost" size="icon" onClick={() => setShowDeleteEmployee(true)} className="ml-4 text-muted-foreground hover:bg-destructive/20 hover:text-destructive rounded-xl transition-all">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-hidden flex flex-col p-5 min-h-0">
+        {/* Search */}
+        <div className="relative mb-5 max-w-sm flex-shrink-0">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar cards..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-10 h-9 bg-secondary/40 border-border/40 rounded-xl text-sm"
+          />
+        </div>
+
+        {/* Kanban board */}
+        <KanbanBoardDndContext>
+          {/* Desktop: horizontal scroll layout */}
+          {!isMobile && (
+            <div 
+              ref={scrollRef as any}
+              onMouseDown={onMouseDown}
+              className="kanban-board-desktop flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start min-h-0 custom-scrollbar cursor-grab active:cursor-grabbing select-none"
+            >
+              <SortableContext items={columns.map(c => c.columnKey)} strategy={horizontalListSortingStrategy}>
+                {columns.map(col => (
+                  <KanbanColumn
+                    key={col.id}
+                    id={col.columnKey}
+                    dbId={col.id}
+                    title={col.title}
+                    color={col.color}
+                    cards={cardsByColumn[col.columnKey] || []}
+                    count={(cardsByColumn[col.columnKey] || []).length}
+                    employeeId={employee.id}
+                    onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
+                    onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
+                  />
+                ))}
+              </SortableContext>
+
+              {/* "+ Nova Coluna" button */}
+              <div className="flex-shrink-0 min-w-[280px] w-[280px]">
+                <button
+                  onClick={() => setShowAddCol(true)}
+                  className="w-full flex items-center justify-center gap-2 py-4 mt-9 rounded-2xl border-2 border-dashed border-border/30 text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/[0.03] transition-all group"
+                >
+                  <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="text-sm font-medium">Nova Coluna</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile: swipe between columns */}
+          {isMobile && (
+            <MobileKanbanBoard
+              columns={columns.map(col => ({ id: col.columnKey, title: col.title, color: col.color }))}
+            >
+              {columns.map(col => (
+                <KanbanColumn
+                  key={col.id}
+                  id={col.columnKey}
+                  title={col.title}
+                  color={col.color}
+                  cards={cardsByColumn[col.columnKey] || []}
+                  count={(cardsByColumn[col.columnKey] || []).length}
+                  employeeId={employee.id}
+                  onEdit={() => { setEditCol(col.id); setEditColTitle(col.title); setEditColColor(col.color); }}
+                  onDelete={!FIXED_COLUMN_KEYS.includes(col.columnKey) ? () => setDeleteColTarget(col.id) : undefined}
+                />
+              ))}
+            </MobileKanbanBoard>
+          )}
+        </KanbanBoardDndContext>
+      </div>
+
+      {/* Add column dialog */}
+      <Dialog open={showAddCol} onOpenChange={setShowAddCol}>
+        <DialogContent className="glass-card border-border/50 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-center">Nova Coluna</DialogTitle>
+            <DialogDescription className="text-center">Crie uma nova coluna para organizar seus cards.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5 flex flex-col items-center">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase text-center w-full">Nome da Coluna</label>
+              <Input placeholder="Ex: Para Revisão" value={newColTitle} onChange={e => setNewColTitle(e.target.value)} className="bg-secondary/40 border-border/50 h-11 rounded-xl w-full text-center" autoFocus />
+            </div>
+            <div className="space-y-1.5 flex flex-col items-center">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase text-center w-full">Cor</label>
+              <Select value={newColColor} onValueChange={setNewColColor}>
+                <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl w-full grid grid-cols-[24px_1fr_24px] items-center px-3">
+                  <div /> {/* Espaçador esquerdo para equilibrar a seta */}
+                  <div className="flex items-center justify-center w-full">
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {COLUMN_COLORS.map(c => (
+                    <SelectItem key={c.value} value={c.value} className="cursor-pointer">
+                      <div className="flex items-center justify-center w-full gap-2">
+                        <div className={`w-3.5 h-3.5 rounded-full ${c.value} shadow-sm`} />
+                        <span className="font-medium">{c.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full h-11 btn-primary-glow font-bold rounded-xl mt-2" onClick={handleAddColumn}>Criar Coluna</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit column dialog */}
+      <Dialog open={!!editCol} onOpenChange={(open) => !open && setEditCol(null)}>
+        <DialogContent className="glass-card border-border/50 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-center">Editar Coluna</DialogTitle>
+            <DialogDescription className="text-center">Altere o nome ou cor da coluna.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5 flex flex-col items-center">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase text-center w-full">Nome da Coluna</label>
+              <Input value={editColTitle} onChange={e => setEditColTitle(e.target.value)} className="bg-secondary/40 border-border/50 h-11 rounded-xl w-full text-center" />
+            </div>
+            <div className="space-y-1.5 flex flex-col items-center">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase text-center w-full">Cor</label>
+              <Select value={editColColor} onValueChange={setEditColColor}>
+                <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl w-full grid grid-cols-[24px_1fr_24px] items-center px-3">
+                  <div /> {/* Espaçador esquerdo para equilibrar a seta */}
+                  <div className="flex items-center justify-center w-full">
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {COLUMN_COLORS.map(c => (
+                    <SelectItem key={c.value} value={c.value} className="cursor-pointer">
+                      <div className="flex items-center justify-center w-full gap-2">
+                        <div className={`w-3.5 h-3.5 rounded-full ${c.value} shadow-sm`} />
+                        <span className="font-medium">{c.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full h-11 btn-primary-glow font-bold rounded-xl mt-2" onClick={handleEditColumn}>Salvar Alterações</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete column confirmation */}
+      <AlertDialog open={!!deleteColTarget} onOpenChange={(open) => !open && setDeleteColTarget(null)}>
+        <AlertDialogContent className="glass-card border-border/50">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir coluna</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta coluna? Os cards nela não serão apagados, mas ficarão sem coluna.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl" onClick={() => { if (deleteColTarget) { deleteKanbanColumn(deleteColTarget); setDeleteColTarget(null); } }}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete employee confirmation */}
+      <AlertDialog open={showDeleteEmployee} onOpenChange={setShowDeleteEmployee}>
+        <AlertDialogContent className="glass-card border-border/50">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {employee.name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o funcionário/kanban <strong>{employee.name}</strong>?
+              Isso removerá este funcionário da plataforma e você não poderá reverter a ação.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-secondary hover:bg-muted rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl" 
+              onClick={() => { 
+                deleteEmployee(employee.id); 
+                setShowDeleteEmployee(false);
+                navigate('/');
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Auto-opened card from URL query parameter (e.g. from Calendar) */}
+      {selectedCardFromUrl && (
+        <CardDetailDialog
+          card={selectedCardFromUrl}
+          open={!!selectedCardFromUrl}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedCardFromUrl(null);
+              setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                next.delete('cardId');
+                return next;
+              }, { replace: true });
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Employee;

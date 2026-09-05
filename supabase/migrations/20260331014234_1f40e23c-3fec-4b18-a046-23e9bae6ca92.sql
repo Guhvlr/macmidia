@@ -1,0 +1,1 @@
+ALTER TABLE public.kanban_cards DROP CONSTRAINT IF EXISTS kanban_cards_column_check;

@@ -1,0 +1,27 @@
+const getUniversalStack = (customEls: any[]) => {
+    const stack: any[] = [];
+    customEls.forEach(el => {
+      if (!el.type || el.type !== 'z_override') stack.push({ ...el, isTemplate: false, zIndex: el.zIndex || 1000 });
+    });
+
+    const zMap: any = { image: 10, badgeBg: 20, badgeCurrency: 21, badgeValue: 22, badgeSuffix: 23, name: 30 };
+    
+    // Use original array indices so gIdx matches slots[gIdx] everywhere
+    slots.forEach((slot, originalIdx) => {
+      if ((slot.pageIndex || 0) !== activePage) return;
+      if (!products[originalIdx]) return;
+      
+      const gIdx = originalIdx;
+      const baseZ = gIdx * 100;
+      Object.keys(zMap).forEach(type => {
+        const id = `slot-${gIdx}-${type}`;
+        const over = customEls.find(e => e.id === id);
+        stack.push({ id, isTemplate: true, gIdx, type, el: slot, zIndex: over ? over.zIndex : baseZ + zMap[type] });
+      });
+    });
+    
+    stack.sort((a, b) => a.zIndex - b.zIndex);
+    return stack;
+  };
+
+  

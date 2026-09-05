@@ -1,0 +1,226 @@
+{getUniversalStack(customCanvasElements[activePage] || []).map(item => {
+                  if (item.isTemplate) {
+                    const { gIdx, type } = item;
+                    const sIdx = gIdx;
+                    const slot = slots[sIdx];
+                    const product = products[gIdx];
+                    if (!slot || !product) return null;
+
+                    const cfg = getSlotSettings(slot.id);
+                    const { priceBadge: pb, descConfig: dc } = cfg;
+                    const sf = slot.width / 500;
+                    const elData = getElems(slot, cfg);
+                    const box = (elData as any)[type];
+                    if (!box) return null;
+
+                    let f = 1; let bx = box.x; let by = box.y;
+                    let transformOrigin = `${box.x + box.w/2}px ${box.y + box.h/2}px`;
+                    const sel = selection.find(s => s.gIdx === gIdx && s.type === type);
+                    if (sel) {
+                      if (draggingRef.current && dragState) { bx += dragState.dx; by += dragState.dy; }
+                      if (resizeAnchor && resizeState && resizeStartW > 0) { 
+                        let dw = resizeState.dw; if (resizeAnchor === 'nw' || resizeAnchor === 'sw') dw = -dw; 
+                        const isGroupSelection = selection.length > 1 && resizeGroupBBox;
+                        f = isGroupSelection ? Math.max(0.1, 1 + dw / resizeGroupBBox.w) : Math.max(0.1, 1 + (dw * 2) / resizeStartW); 
+                        if (isGroupSelection) {
+                          const gb = resizeGroupBBox;
+                          const fixedX = resizeAnchor.includes('e') ? gb.x : gb.x + gb.w;
+                          const fixedY = resizeAnchor.includes('s') ? gb.y : gb.y + gb.h;
+                          transformOrigin = `${fixedX}px ${fixedY}px`;
+                        }
+                      }
+                    }
+                    const isSel = !!sel;
+
+                    const nameLines = wrapText(dc.uppercase ? product.name.toUpperCase() : product.name, elData.name.w, dc.fontSize * sf);
+                    const nameY = elData.name.y + elData.name.h / 2;
+                    const nameLH = dc.fontSize * sf * 1.1;
+
+                    return (
+                      <g key={item.id}
+                        transform={`translate(${bx - box.x}, ${by - box.y}) scale(${f})`}
+                        style={{ transformOrigin }}
+                        onMouseDown={e => startDragProduct(e, type as EditElemType, gIdx)}
+                        onDoubleClick={e => {
+                          e.stopPropagation();
+                          if (type === 'name') setInlineEdit({ gIdx, type: 'name', value: product.name });
+                          else if (type === 'badgeValue') setInlineEdit({ gIdx, type: 'badgeValue', value: product.price });
+                        }}
+                      >
+                        <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="none" pointerEvents="all" />
+                        
+                        {type === 'image' && product.images?.[0] && <image href={product.images[0]} x={elData.image.x} y={elData.image.y} width={elData.image.w} height={elData.image.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
+                        
+                        {type === 'badgeBg' && (pb.badgeImageUrl ? <image href={pb.badgeImageUrl} x={elData.badgeBg.x} y={elData.badgeBg.y} width={elData.badgeBg.w} height={elData.badgeBg.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" /> : <rect x={elData.badgeBg.x} y={elData.badgeBg.y} width={elData.badgeBg.w} height={elData.badgeBg.h} rx={pb.borderRadius * sf} fill={pb.bgColor} pointerEvents="none" />)}
+                        
+                        {type === 'badgeCurrency' && <text x={elData.badgeCurrency.x} y={elData.badgeCurrency.y + elData.badgeCurrency.h*0.8} fontSize={pb.currencyFontSize * sf} fill={pb.currencyColor} fontWeight="900" fontFamily={pb.currencyFontFamily} pointerEvents="none">R$</text>}
+                        
+                        {type === 'badgeValue' && (
+                          inlineEdit?.gIdx === gIdx && inlineEdit?.type === 'badgeValue' ? (
+                            <foreignObject x={elData.badgeValue.x - 60} y={elData.badgeValue.y} width={elData.badgeValue.w + 120} height={elData.badgeValue.h + 10}>
+                              <input autoFocus value={inlineEdit.value}
+                                onChange={e => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { const np = [...products]; np[gIdx] = { ...np[gIdx], price: inlineEdit.value }; setProducts(np); setInlineEdit(null); } }}
+                                onBlur={() => { const np = [...products]; np[gIdx] = { ...np[gIdx], price: inlineEdit.value }; setProducts(np); setInlineEdit(null); }}
+                                style={{ width: '100%', height: '100%', background: 'transparent', color: pb.valueColor, fontSize: pb.valueFontSize * sf, fontFamily: pb.valueFontFamily, fontWeight: 900, textAlign: 'center', border: 'none', borderRadius: 0, outline: 'none', padding: '0 4px', caretColor: '#007acc' }} />
+                            </foreignObject>
+                          ) : (
+                            <text x={elData.badgeValue.x + elData.badgeValue.w/2} y={elData.badgeValue.y + elData.badgeValue.h/2 + (pb.valueFontSize * sf * 0.3)} fontSize={pb.valueFontSize * sf} fill={pb.valueColor} fontWeight="900" textAnchor="middle" fontFamily={pb.valueFontFamily} pointerEvents="none">{product.price.replace('R$', '').trim()}</text>
+                          )
+                        )}
+
+                        {type === 'badgeSuffix' && pb.showSuffix && (() => {
+                          const rawSuffix = product.suffix || pb.suffixText || 'cada';
+                          const cleanSuffix = rawSuffix.toUpperCase();
+                          return <text x={elData.badgeSuffix.x + elData.badgeSuffix.w/2} y={elData.badgeSuffix.y + elData.badgeSuffix.h/2 + (pb.suffixFontSize * sf * 0.3)} fontSize={pb.suffixFontSize * sf} fontFamily={pb.suffixFontFamily || pb.valueFontFamily || 'Montserrat'} fill={pb.suffixColor} fontWeight="600" textAnchor="middle" pointerEvents="none">{cleanSuffix}</text>;
+                        })()}
+                        
+                        {type === 'name' && (
+                          inlineEdit?.gIdx === gIdx && inlineEdit?.type === 'name' ? (
+                            <foreignObject x={elData.name.x - 20} y={elData.name.y - 10} width={elData.name.w + 40} height={elData.name.h + 40}>
+                              <textarea autoFocus value={inlineEdit.value}
+                                onChange={e => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                                onBlur={() => { const np = [...products]; np[gIdx] = { ...np[gIdx], name: inlineEdit.value }; setProducts(np); setInlineEdit(null); }}
+                                style={{ width: '100%', height: '100%', background: 'transparent', color: dc.color, fontSize: dc.fontSize * sf, fontFamily: dc.fontFamily, fontWeight: 800, textAlign: 'center', border: 'none', borderRadius: 0, outline: 'none', resize: 'none', padding: '8px', overflow: 'hidden', caretColor: '#007acc' }} />
+                            </foreignObject>
+                          ) : (
+                            <text textAnchor="middle" fill={dc.color} fontSize={dc.fontSize * sf} fontWeight="800" fontFamily={dc.fontFamily || 'Montserrat'} pointerEvents="none">
+                              {nameLines.map((line, i) => <tspan key={i} x={elData.name.x + elData.name.w / 2} y={nameY + i * nameLH + (dc.fontSize * sf * 0.3)}>{line}</tspan>)}
+                            </text>
+                          )
+                        )}
+
+                        {isSel && !inlineEdit && selection.length === 1 && <BBox b={box} type={type as EditElemType} gIdx={gIdx} />}
+                      </g>
+                    );
+                  } else {
+                    const el = item as CanvasElement;
+                const s = el.style; const isSel = isSelected({ id: el.id });
+                let cX = el.x; let cY = el.y; let factor = 1;
+                let transformOrigin = `${el.w/2}px ${el.h/2}px`;
+                if (isSel) {
+                  if (draggingRef.current && dragState) { cX += dragState.dx; cY += dragState.dy; }
+                  if (resizeAnchor && resizeState && resizeStartW > 0) { 
+                    let dw = resizeState.dw; if (resizeAnchor === 'nw' || resizeAnchor === 'sw') dw = -dw; 
+                    const isGroupSelection = selection.length > 1 && resizeGroupBBox;
+                    factor = isGroupSelection ? Math.max(0.1, 1 + dw / resizeGroupBBox.w) : Math.max(0.1, 1 + dw / resizeStartW); 
+                    
+                    if (isGroupSelection) {
+                       const gb = resizeGroupBBox;
+                       let fixedX = gb.x + gb.w / 2;
+                       let fixedY = gb.y + gb.h / 2;
+                       if (!isRotating && resizeAnchor) {
+                          fixedX = resizeAnchor.includes('e') ? gb.x : gb.x + gb.w;
+                          fixedY = resizeAnchor.includes('s') ? gb.y : gb.y + gb.h;
+                       }
+                       transformOrigin = `${fixedX - cX}px ${fixedY - cY}px`;
+                    } else {
+                       const dW = el.w * (factor - 1); const dH = el.h * (factor - 1);
+                       if (resizeAnchor === 'se') { cX += dW / 2; cY += dH / 2; }
+                       else if (resizeAnchor === 'nw') { cX -= dW / 2; cY -= dH / 2; }
+                       else if (resizeAnchor === 'sw') { cX -= dW / 2; cY += dH / 2; }
+                       else if (resizeAnchor === 'ne') { cX += dW / 2; cY -= dH / 2; }
+                    }
+                  }
+                }
+
+                let shape: React.ReactNode = null;
+                if (el.type === 'rect') {
+                  // Support rects that have imageOnly productData (legacy clones)
+                  if (el.productData?.imageOnly && el.productData?.imageUrl) {
+                    shape = <image href={el.productData.imageUrl} x={0} y={0} width={el.w} height={el.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />;
+                  } else {
+                    shape = <rect x={0} y={0} width={el.w} height={el.h} fill={s.bgColor} stroke={s.borderColor} strokeWidth={s.borderWidth} rx={s.borderRadius} opacity={s.opacity} />;
+                  }
+                }
+                else if (el.type === 'circle') shape = <ellipse cx={el.w/2} cy={el.h/2} rx={el.w/2} ry={el.h/2} fill={s.bgColor} opacity={s.opacity} />;
+                else if (el.type === 'product_clone' && el.productData) {
+                  // Support imageOnly clones (from copy/paste & alt+drag of image sub-element)
+                  if (el.productData.imageOnly) {
+                    shape = el.productData.imageUrl ? <image href={el.productData.imageUrl} x={0} y={0} width={el.w} height={el.h} preserveAspectRatio="xMidYMid meet" pointerEvents="none" /> : null;
+                  } else if (el.productData.product && el.productData.cfg && el.productData.slot) {
+                    const { product, cfg, slot } = el.productData;
+                    const sfc = el.w / (slot.width || 1);
+                    const sf2 = (slot.width / 500) * sfc;
+                    const fW = slot.width * sfc; const fH = slot.height * sfc;
+                    const nameLines2 = wrapText(product.name.toUpperCase(), fW * 0.8, cfg.descConfig.fontSize * sf2);
+                    shape = (
+                      <g pointerEvents="none">
+                        {product.images?.[0] && <image href={product.images[0]} x={fW*0.1} y={fH*0.05} width={fW*0.8*cfg.imageConfig.scale} height={fH*0.5*cfg.imageConfig.scale} preserveAspectRatio="xMidYMid meet" />}
+                        <text textAnchor="middle" fill={cfg.descConfig.color} fontSize={cfg.descConfig.fontSize*sf2} fontFamily={cfg.descConfig.fontFamily || 'Montserrat'} fontWeight="800">
+                          {nameLines2.map((l: string, i: number) => <tspan key={i} x={fW/2} y={fH*0.65 + i * cfg.descConfig.fontSize*sf2*1.1}>{l}</tspan>)}
+                        </text>
+                        {cfg.priceBadge.badgeImageUrl
+                          ? <image href={cfg.priceBadge.badgeImageUrl} x={fW/2 - cfg.priceBadge.badgeWidth*sf2/2} y={fH - cfg.priceBadge.badgeHeight*sf2 - fH*0.05} width={cfg.priceBadge.badgeWidth*sf2} height={cfg.priceBadge.badgeHeight*sf2} preserveAspectRatio="xMidYMid meet" />
+                          : <rect x={fW/2 - cfg.priceBadge.badgeWidth*sf2/2} y={fH - cfg.priceBadge.badgeHeight*sf2 - fH*0.05} width={cfg.priceBadge.badgeWidth*sf2} height={cfg.priceBadge.badgeHeight*sf2} fill={cfg.priceBadge.bgColor} rx={cfg.priceBadge.borderRadius*sf2} />}
+                        <text x={fW/2} y={fH - fH*0.05 - cfg.priceBadge.badgeHeight*sf2*0.2} fill={cfg.priceBadge.valueColor} fontSize={cfg.priceBadge.valueFontSize*sf2} fontFamily={cfg.priceBadge.valueFontFamily || 'Montserrat'} fontWeight="900" textAnchor="middle">{product.price}</text>
+                      </g>
+                    );
+                  }
+                } else if (el.type === 'text') {
+                  const tAn = s.align === 'left' ? 'start' : s.align === 'right' ? 'end' : 'middle';
+                  const tX = s.align === 'left' ? 8 : s.align === 'right' ? el.w - 8 : el.w / 2;
+                  const fs = s.fontSize || 40;
+                  const lh = fs * (s.lineHeight || 1.2);
+
+                  if (inlineEdit?.id === el.id) {
+                    shape = (
+                      <foreignObject x={0} y={0} width={el.w} height={Math.max(el.h, 60)}>
+                        <textarea autoFocus value={inlineEdit.value}
+                          onChange={e => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                          onBlur={() => { updateElData(el.id, inlineEdit.value); setInlineEdit(null); }}
+                          onKeyDown={e => { if (e.key === 'Escape') { updateElData(el.id, inlineEdit.value); setInlineEdit(null); } }}
+                          style={{
+                            width: '100%', height: '100%',
+                            background: 'transparent', color: s.color || '#000',
+                            fontSize: fs, fontFamily: s.fontFamily || 'Inter',
+                            fontWeight: s.fontWeight || '400', textAlign: (s.align || 'left') as any,
+                            letterSpacing: s.letterSpacing || 0, lineHeight: `${s.lineHeight || 1.2}`,
+                            border: 'none', borderRadius: 0,
+                            outline: 'none', resize: 'none', padding: '4px 8px', overflow: 'hidden',
+                            textTransform: s.uppercase ? 'uppercase' : 'none',
+                            caretColor: '#007acc'
+                          }} />
+                      </foreignObject>
+                    );
+                  } else {
+                    const lines = wrapText(s.uppercase ? (el.data.text || '').toUpperCase() : (el.data.text || ''), el.w - 16, fs);
+                    shape = (
+                      <g
+                        onDoubleClick={e => { e.stopPropagation(); setInlineEdit({ id: el.id, value: el.data.text || '' }); }}
+                        onMouseDown={e => {
+                          if (activeTool === 't') { e.stopPropagation(); e.preventDefault(); setInlineEdit({ id: el.id, value: el.data.text || '' }); setSelection([{ id: el.id }]); return; }
+                        }}
+                      >
+                        {s.bgColor && s.bgColor !== 'transparent' && <rect x={0} y={0} width={el.w} height={el.h} fill={s.bgColor} rx={4} pointerEvents="none" />}
+                        <text fontFamily={s.fontFamily || 'Inter'} fontSize={fs} fontWeight={s.fontWeight} fill={s.color} textAnchor={tAn} letterSpacing={s.letterSpacing} opacity={s.opacity} pointerEvents="none">
+                          {lines.map((l, i) => <tspan key={i} x={tX} y={fs + i * lh}>{l}</tspan>)}
+                        </text>
+                      </g>
+                    );
+                  }
+                }
+
+                return (
+                  <g key={el.id} 
+                    transform={`translate(${cX}, ${cY}) scale(${factor}) rotate(${isSel && isRotating && dragState ? (selection.length > 1 ? (s.rotation || 0) + dragState.dx : dragState.dx) : (s.rotation || 0)})`}
+                    style={{ transformOrigin }}
+                    onMouseDown={e => {
+                      if (activeTool === 't' && el.type === 'text') { e.stopPropagation(); e.preventDefault(); setInlineEdit({ id: el.id, value: el.data.text || '' }); setSelection([{ id: el.id }]); return; }
+                      startDragCustom(e, el.id, el);
+                    }}
+                  >
+                    <rect x={0} y={0} width={el.w} height={el.h} fill="none" pointerEvents="all" />
+                    {shape}
+                    {isSel && !inlineEdit && selection.length === 1 && <BBox b={{ x: 0, y: 0, w: el.w, h: el.h }} isCustom elId={el.id} el={el} />}
+                  </g>
+                );
+                }
+              })}
+
+              {selection.length > 1 && (() => {
+                const gb = getGroupBBox(selection);
+                if (!gb) return null;
+                return <BBox b={gb} isGroup selArr={selection} />;
+              })()}
+            

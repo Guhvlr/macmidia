@@ -117,7 +117,7 @@ const AppSidebar = ({ collapsed, onToggle, teamOpen, onTeamToggle }: Props) => {
                 {teamOpen && !collapsed && (
                   <div className="pl-11 pr-2 space-y-1 py-1 animate-in slide-in-from-top-2 fade-in duration-200">
                     {employees
-                      .filter(emp => loggedUserRole !== 'GUEST' || emp.id === loggedUserKanbanLink)
+                      .filter(emp => loggedUserRole !== 'GUEST' || (loggedUserKanbanLink && loggedUserKanbanLink.split(',').includes(emp.id)))
                       .map(emp => (
                         <button
                           key={emp.id}

@@ -2242,7 +2242,7 @@ const ClientCalendar = () => {
               </SelectTrigger>
               <SelectContent className="bg-[#1C1C1E] border-white/10 text-white z-[99999]">
                 {employees
-                  .filter(emp => loggedUserRole !== 'GUEST' || emp.id === loggedUserKanbanLink)
+                  .filter(emp => loggedUserRole !== 'GUEST' || (loggedUserKanbanLink && loggedUserKanbanLink.split(',').includes(emp.id)))
                   .map(emp => (
                     <SelectItem key={emp.id} value={emp.id} className="focus:bg-white/10 text-white cursor-pointer py-2.5">
                       <div className="flex items-center gap-2">

@@ -187,9 +187,15 @@ const UsersAdmin = () => {
                       </div>
                       {user.kanbanLink && (
                         <div className="flex flex-col border-t border-orange-500/10 pt-1">
-                          <span className="text-[9px] font-black text-white/40 uppercase">Quadro Vinculado</span>
-                          <span className="text-[11px] font-bold text-white/70">
-                            {employees.find(e => e.id === user.kanbanLink)?.name || 'Desconhecido'}
+                          <span className="text-[9px] font-black text-white/40 uppercase">Quadros Vinculados</span>
+                          <span className="text-[11px] font-bold text-white/70 truncate max-w-[150px]" title={
+                            Array.from(new Set(user.kanbanLink.split(',').filter(Boolean)))
+                              .map(id => employees.find(e => e.id === id)?.name || 'Desconhecido')
+                              .join(', ')
+                          }>
+                            {Array.from(new Set(user.kanbanLink.split(',').filter(Boolean)))
+                              .map(id => employees.find(e => e.id === id)?.name || 'Desconhecido')
+                              .join(', ')}
                           </span>
                         </div>
                       )}
@@ -310,21 +316,42 @@ const UsersAdmin = () => {
 
             {actionType === 'PROMOTE_GUEST' && (
               <div className="mt-4 space-y-2 pb-4">
-                <label className="text-xs font-bold text-white/40 uppercase tracking-widest">Acesso ao Quadro Kanban</label>
-                <Select value={kanbanBoard} onValueChange={setKanbanBoard}>
-                  <SelectTrigger className="w-full bg-[#121214] border-white/10 rounded-xl h-12 text-white">
-                    <SelectValue placeholder="Selecione um quadro da equipe..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1C1C1E] border-white/10 text-white max-h-[300px]">
-                    <SelectItem value="none">Nenhum (Somente Calendário)</SelectItem>
-                    {employees.map(emp => (
-                      <SelectItem key={emp.id} value={emp.id}>
-                        Quadro de {emp.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[10px] text-white/30 italic">Determina qual aba de "Equipe" ficará visível para ele.</p>
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest block">Acesso ao Quadro Kanban</label>
+                <div className="bg-[#121214] border border-white/10 rounded-xl max-h-48 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                  {employees.map(emp => {
+                    const isSelected = kanbanBoard.split(',').includes(emp.id);
+                    return (
+                      <div key={emp.id} className="flex items-center gap-3 group/item">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = kanbanBoard && kanbanBoard !== 'none' ? Array.from(new Set(kanbanBoard.split(',').filter(Boolean))) : [];
+                            let next;
+                            if (current.includes(emp.id)) {
+                              next = current.filter(id => id !== emp.id);
+                            } else {
+                              next = [...current, emp.id];
+                            }
+                            setKanbanBoard(next.length > 0 ? next.join(',') : 'none');
+                          }}
+                          className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${kanbanBoard.split(',').includes(emp.id) ? 'bg-primary border-primary' : 'border-white/20 group-hover/item:border-primary/50'
+                            }`}
+                        >
+                          {kanbanBoard.split(',').includes(emp.id) && <Check className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                        <span className={`text-xs font-medium transition-colors ${isSelected ? 'text-white' : 'text-white/40 group-hover/item:text-white/70'}`}>
+                          Quadro de {emp.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {employees.length === 0 && (
+                    <div className="text-center py-4">
+                      <p className="text-[10px] text-white/20 uppercase tracking-widest italic font-bold">Nenhum quadro cadastrado</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-white/30 italic">Determina quais abas de "Equipe" ficarão visíveis para ele.</p>
               </div>
             )}
           </AlertDialogHeader>

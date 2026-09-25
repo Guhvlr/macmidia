@@ -241,13 +241,14 @@ const Index = () => {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#020202] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Remover bloqueio de carregamento para que a tela abra instantaneamente no celular
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen bg-[#020202] flex items-center justify-center">
+  //       <Loader2 className="w-8 h-8 animate-spin text-primary" />
+  //     </div>
+  //   );
+  // }
 
   return (
     <>

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Wallet, ChevronRight, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Wallet, ChevronRight, Sparkles, LogOut } from 'lucide-react';
 import { useApp } from '@/contexts/useApp';
 
 export function MobileHeader() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loggedUserName } = useApp();
+  const { loggedUserName, logout } = useApp();
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
@@ -36,30 +36,40 @@ export function MobileHeader() {
           </span>
         </div>
 
-        {/* Switcher de 1 toque entre Dashboard e Financeiro */}
-        <div className="flex bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
-          <button
-            onClick={() => handleChoose('/')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-              isDashboard 
-                ? 'bg-red-600 text-white shadow-sm' 
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-            Dashboard
-          </button>
+        <div className="flex items-center gap-2">
+          {/* Switcher de 1 toque entre Dashboard e Financeiro */}
+          <div className="flex bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
+            <button
+              onClick={() => handleChoose('/')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                isDashboard 
+                  ? 'bg-red-600 text-white shadow-sm' 
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </button>
+
+            <button
+              onClick={() => handleChoose('/financeiro')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                isFinanceiro 
+                  ? 'bg-red-600 text-white shadow-sm' 
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Financeiro</span>
+            </button>
+          </div>
 
           <button
-            onClick={() => handleChoose('/financeiro')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-              isFinanceiro 
-                ? 'bg-red-600 text-white shadow-sm' 
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            onClick={logout}
+            className="p-1.5 text-zinc-400 hover:text-red-500 bg-zinc-900/90 rounded-lg border border-zinc-800"
+            title="Sair"
           >
-            <Wallet className="w-3.5 h-3.5" />
-            Financeiro
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>

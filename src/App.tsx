@@ -1,6 +1,5 @@
 import React, { lazy, Suspense } from 'react';
 import { OfferProvider } from './features/offer-generator/context/OfferContext';
-import { OfferEditorPage } from '@/features/offer-generator/components/OfferEditorPage';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -31,8 +30,9 @@ const OfferStudio = lazy(() => import("@/features/offer-generator/pages/OfferStu
 const Report = lazy(() => import("@/features/reports/pages/Report"));
 const ReportsHub = lazy(() => import("@/features/reports/pages/ReportsHub"));
 const FinanceiroPage = lazy(() => import("@/features/financeiro/pages/FinanceiroPage"));
-import ProductivityDashboard from "@/features/reports/pages/ProductivityDashboard";
-import MemberProductivityDetail from "@/features/reports/pages/MemberProductivityDetail";
+const ProductivityDashboard = lazy(() => import("@/features/reports/pages/ProductivityDashboard"));
+const MemberProductivityDetail = lazy(() => import("@/features/reports/pages/MemberProductivityDetail"));
+const OfferEditorPage = lazy(() => import("@/features/offer-generator/components/OfferEditorPage").then(m => ({ default: m.OfferEditorPage })));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -84,14 +84,14 @@ const AppRoutes = () => (
       <Route path="/usuarios" element={<ProtectedRoute><UsersAdmin /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppInbox /></ProtectedRoute>} />
       <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-      <Route path="/gerador-artes" element={<ProtectedRoute><OfferStudio /></ProtectedRoute>} />
+      <Route path="/gerador-artes" element={<OfferProvider><ProtectedRoute><OfferStudio /></ProtectedRoute></OfferProvider>} />
       <Route path="/relatorios" element={<ProtectedRoute><ReportsHub /></ProtectedRoute>} />
       <Route path="/relatorio" element={<ProtectedRoute><Report /></ProtectedRoute>} />
       <Route path="/financeiro" element={<ProtectedRoute><FinanceiroPage /></ProtectedRoute>} />
       <Route path="/produtividade" element={<ProtectedRoute><ProductivityDashboard /></ProtectedRoute>} />
       <Route path="/produtividade/:member_id" element={<ProtectedRoute><MemberProductivityDetail /></ProtectedRoute>} />
 
-      <Route path="/offer-editor" element={<FullScreenProtectedRoute><OfferEditorPage /></FullScreenProtectedRoute>} />
+      <Route path="/offer-editor" element={<OfferProvider><FullScreenProtectedRoute><OfferEditorPage /></FullScreenProtectedRoute></OfferProvider>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>
@@ -114,9 +114,7 @@ const App = () => (
           <AutoUpdateListener />
           <ErrorBoundary>
             <ThemeProvider>
-              <OfferProvider>
                 <AppRoutes />
-              </OfferProvider>
             </ThemeProvider>
           </ErrorBoundary>
         </AppProvider>

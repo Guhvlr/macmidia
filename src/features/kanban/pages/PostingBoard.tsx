@@ -253,9 +253,8 @@ const PostingBoard = () => {
           <MobileKanbanBoard
             columns={orderedColumns.map(col => ({ id: col.key, title: col.title, color: col.color }))}
           >
-            <SortableContext items={orderedColumns.map(c => c.key)} strategy={horizontalListSortingStrategy}>
-              {orderedColumns.map(col => (
-                <KanbanColumn
+            {orderedColumns.map(col => (
+              <KanbanColumn
                 key={col.key}
                 id={col.key}
                 title={col.title}
@@ -265,7 +264,7 @@ const PostingBoard = () => {
                 employeeId=""
               />
             ))}
-          </SortableContext></MobileKanbanBoard>
+          </MobileKanbanBoard>
         )}
       </KanbanBoardDndContext>
     </div>

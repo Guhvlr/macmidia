@@ -99,7 +99,8 @@ const Index = () => {
     addEmployee, 
     dashboardLogo,
     loggedUserRole,
-    loggedUserClientLink
+    loggedUserClientLink,
+    loggedUserKanbanLink
   } = useApp();
   
   const { ref: scrollRef, onMouseDown } = useDraggableScroll();
@@ -146,8 +147,13 @@ const Index = () => {
       });
     }
 
+    // Add employees they have direct kanban access to
+    if (loggedUserKanbanLink && loggedUserKanbanLink !== 'none') {
+      loggedUserKanbanLink.split(',').forEach(id => linkedIds.add(id.trim()));
+    }
+
     return employees.filter(emp => linkedIds.has(emp.id));
-  }, [employees, loggedUserRole, loggedUserClientLink, calendarTasks, kanbanCards]);
+  }, [employees, loggedUserRole, loggedUserClientLink, loggedUserKanbanLink, calendarTasks, kanbanCards]);
 
   const selectedClient = useMemo(() => 
     (calendarClients || []).find(c => c.id === selectedClientId),
@@ -465,11 +471,12 @@ const Index = () => {
                 <div 
                   key={emp.id} 
                   onClick={() => {
-                    if (loggedUserRole !== 'GUEST') {
+                    const isGuestAllowed = loggedUserRole === 'GUEST' && loggedUserKanbanLink && loggedUserKanbanLink.split(',').includes(emp.id);
+                    if (loggedUserRole !== 'GUEST' || isGuestAllowed) {
                       navigate(`/funcionario/${emp.id}`);
                     }
                   }} 
-                  className={`flex flex-col items-center gap-3 transition-all ${loggedUserRole !== 'GUEST' ? 'hover:scale-110 cursor-pointer group/emp' : 'bg-transparent cursor-default'}`}
+                  className={`flex flex-col items-center gap-3 transition-all ${loggedUserRole !== 'GUEST' || (loggedUserRole === 'GUEST' && loggedUserKanbanLink?.split(',').includes(emp.id)) ? 'hover:scale-110 cursor-pointer group/emp' : 'bg-transparent cursor-default'}`}
                 >
                   <div className="relative">
                     <div className="w-14 h-14 rounded-2xl bg-white/5 overflow-hidden border border-white/10 group-hover/emp:border-primary/60 transition-all">

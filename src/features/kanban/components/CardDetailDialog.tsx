@@ -439,6 +439,18 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates({ checklists: newList });
   };
 
+  const moveChecklistItem = (id: string, direction: 'up' | 'down') => {
+    const idx = checklists.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === checklists.length - 1) return;
+    const newList = [...checklists];
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [newList[idx], newList[swapIdx]] = [newList[swapIdx], newList[idx]];
+    setChecklists(newList);
+    saveUpdates({ checklists: newList });
+  };
+
   const uploadCommentImage = async (file: File): Promise<string | null> => {
     try {
       const safeName = sanitizeFileName(file.name || 'pasted-image.png');
@@ -688,6 +700,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                       checklistProgress={checklistProgress}
                       toggleChecklist={toggleChecklist}
                       deleteChecklistItem={deleteChecklistItem}
+                      moveChecklistItem={moveChecklistItem}
                       newChecklistTitle={newChecklistTitle}
                       setNewChecklistTitle={setNewChecklistTitle}
                       addChecklistItem={addChecklistItem}
@@ -849,6 +862,7 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                       checklistProgress={checklistProgress}
                       toggleChecklist={toggleChecklist}
                       deleteChecklistItem={deleteChecklistItem}
+                      moveChecklistItem={moveChecklistItem}
                       newChecklistTitle={newChecklistTitle}
                       setNewChecklistTitle={setNewChecklistTitle}
                       addChecklistItem={addChecklistItem}

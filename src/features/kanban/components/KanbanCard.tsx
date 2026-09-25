@@ -1,7 +1,7 @@
 import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import type { KanbanCard as KanbanCardType, Employee, SystemUser } from '@/contexts/app-types';
 import Timer from './Timer';
-import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles, Clock, MoveRight } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles, Clock, MoveRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressImage, createThumbnail } from '@/lib/utils';
 import { useApp } from '@/contexts/useApp';
@@ -13,6 +13,7 @@ import {
   ContextMenuTrigger 
 } from "@/components/ui/context-menu";
 import { MoveCardDialog } from './card-detail/MoveCardDialog';
+import { DuplicateCardDialog } from './card-detail/DuplicateCardDialog';
 
 import { isFinalColumn, formatInactiveTime } from '../utils/stuckCards';
 
@@ -135,6 +136,7 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
   }, [card.id, uploadKanbanAsset]);
 
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
 
   const handleOpenDetail = useCallback(() => setDetailOpen(true), []);
 
@@ -202,8 +204,7 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
 
         {coverImage && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 min-h-[120px] max-h-[260px] bg-black/40 group/img flex items-center justify-center">
-            <img src={coverImage} alt="" className="absolute inset-0 w-full h-full object-cover blur-lg opacity-40 scale-110" />
-            <img src={coverImage} alt="Capa" loading="lazy" className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5" />
+            <img src={coverImage} alt="Capa" loading="lazy" decoding="async" className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5" />
           </div>
         )}
 
@@ -346,6 +347,15 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
           >
             <MoveRight className="w-3.5 h-3.5" /> Mover
           </ContextMenuItem>
+          <ContextMenuItem 
+            onClick={(e) => {
+              e.preventDefault();
+              setDuplicateDialogOpen(true);
+            }}
+            className="text-[12px] font-semibold text-white/80 hover:bg-white/10 cursor-pointer rounded-lg px-3 py-2 flex items-center gap-2"
+          >
+            <Copy className="w-3.5 h-3.5" /> Duplicar
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 
@@ -353,6 +363,12 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         card={card} 
         open={moveDialogOpen} 
         onOpenChange={setMoveDialogOpen} 
+      />
+
+      <DuplicateCardDialog 
+        card={card} 
+        open={duplicateDialogOpen} 
+        onOpenChange={setDuplicateDialogOpen} 
       />
 
       {detailOpen && (

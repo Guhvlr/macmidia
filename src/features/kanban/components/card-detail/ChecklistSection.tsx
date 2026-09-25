@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import { CheckSquare, X } from 'lucide-react';
+import { CheckSquare, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ interface ChecklistSectionProps {
   checklistProgress: number;
   toggleChecklist: (id: string, completed: boolean) => void;
   deleteChecklistItem: (id: string) => void;
+  moveChecklistItem: (id: string, direction: 'up' | 'down') => void;
   newChecklistTitle: string;
   setNewChecklistTitle: (title: string) => void;
   addChecklistItem: () => void;
@@ -20,6 +21,7 @@ export const ChecklistSection = memo( ({
   checklistProgress,
   toggleChecklist,
   deleteChecklistItem,
+  moveChecklistItem,
   newChecklistTitle,
   setNewChecklistTitle,
   addChecklistItem
@@ -38,7 +40,7 @@ export const ChecklistSection = memo( ({
             </div>
           </div>
           <div className="space-y-1">
-            {checklists.map(item => (
+            {checklists.map((item, index) => (
               <div key={item.id} className="group flex items-start gap-3 py-2 px-2 rounded-lg hover:bg-white/5 transition-colors">
                 <Checkbox 
                   checked={item.completed} 
@@ -46,9 +48,29 @@ export const ChecklistSection = memo( ({
                   className="mt-0.5 border-white/20 data-[state=checked]:bg-emerald-500" 
                 />
                 <span className={`text-[13px] flex-1 ${item.completed ? 'line-through text-white/40' : 'text-white/90'}`}>{item.title}</span>
-                <Button variant="ghost" size="icon" onClick={() => deleteChecklistItem(item.id)} className="w-6 h-6 text-white/30 opacity-0 group-hover:opacity-100 hover:text-red-400">
-                  <X className="w-3.5 h-3.5" />
-                </Button>
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => moveChecklistItem(item.id, 'up')} 
+                    disabled={index === 0}
+                    className="w-6 h-6 text-white/30 hover:text-white/80 disabled:opacity-20 disabled:cursor-not-allowed"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => moveChecklistItem(item.id, 'down')} 
+                    disabled={index === checklists.length - 1}
+                    className="w-6 h-6 text-white/30 hover:text-white/80 disabled:opacity-20 disabled:cursor-not-allowed"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => deleteChecklistItem(item.id)} className="w-6 h-6 text-white/30 hover:text-red-400">
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

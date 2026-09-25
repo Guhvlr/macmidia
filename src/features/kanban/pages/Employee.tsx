@@ -4,7 +4,8 @@ import { useApp } from '@/contexts/useApp';
 import { FIXED_COLUMN_KEYS, KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import KanbanColumn from '@/features/kanban/components/KanbanColumn';
 import KanbanCard from '@/features/kanban/components/KanbanCard';
-import CardDetailDialog from '@/features/kanban/components/CardDetailDialog';
+import React, { lazy, Suspense } from 'react';
+const CardDetailDialog = lazy(() => import('@/features/kanban/components/CardDetailDialog'));
 import { ArrowLeft, Camera, Archive, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -370,20 +371,22 @@ const Employee = () => {
 
       {/* Auto-opened card from URL query parameter (e.g. from Calendar) */}
       {selectedCardFromUrl && (
-        <CardDetailDialog
-          card={selectedCardFromUrl}
-          open={!!selectedCardFromUrl}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSelectedCardFromUrl(null);
-              setSearchParams(prev => {
-                const next = new URLSearchParams(prev);
-                next.delete('cardId');
-                return next;
-              }, { replace: true });
-            }
-          }}
-        />
+        <Suspense fallback={null}>
+          <CardDetailDialog
+            card={selectedCardFromUrl}
+            open={!!selectedCardFromUrl}
+            onOpenChange={(open) => {
+              if (!open) {
+                setSelectedCardFromUrl(null);
+                setSearchParams(prev => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('cardId');
+                  return next;
+                }, { replace: true });
+              }
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

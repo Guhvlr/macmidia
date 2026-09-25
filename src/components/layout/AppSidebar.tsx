@@ -96,6 +96,13 @@ const AppSidebar = ({ collapsed, onToggle, teamOpen, onTeamToggle }: Props) => {
             return null;
           }
 
+          const isMobile = window.innerWidth <= 768;
+
+          // Ocultar MacOferta no celular
+          if (path === '/gerador-artes' && isMobile) {
+            return null;
+          }
+
           if (path === '/equipe') {
             return (
               <div key={path} className="space-y-1">

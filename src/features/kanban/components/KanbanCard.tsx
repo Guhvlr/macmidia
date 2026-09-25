@@ -151,7 +151,7 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         onClick={handleOpenDetail}
         {...dragAttributes}
         {...dragListeners}
-        className={`kanban-card bg-[#1C1C1E] border rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual ${
+        className={`kanban-card bg-[#1C1C1E] border rounded-xl p-3 space-y-3 cursor-pointer group hover:bg-[#252528] hover:border-white/10 active:scale-[0.98] transition-all duration-200 shadow-md relative overflow-hidden flex flex-col performance-virtual select-none [-webkit-touch-callout:none] ${
           isStuck 
             ? 'border-red-500/80 ring-2 ring-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)] bg-red-950/20' 
             : 'border-white/5'
@@ -204,7 +204,7 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
 
         {coverImage && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 min-h-[120px] max-h-[260px] bg-black/40 group/img flex items-center justify-center">
-            <img src={coverImage} alt="Capa" loading="lazy" decoding="async" className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5" />
+            <img src={coverImage} alt="Capa" loading="lazy" decoding="async" draggable="false" className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5 pointer-events-none select-none" />
           </div>
         )}
 

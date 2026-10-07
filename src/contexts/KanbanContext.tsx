@@ -702,7 +702,18 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     }
   }, [kanbanCards, kanbanColumns, createHistoryAction, debouncedRefetchCards]);
 
-  const reorderKanbanCards = useCallback(async (updates: { id: string; position_index: number; column?: string }[]) => {
+  const reorderKanbanCards = useCallback(async (rawUpdates: { id: string; position_index: number; column?: string }[]) => {
+    // Descarta updates sem mudança real (mesma posição e mesma coluna).
+    // Cada UPDATE no banco vira 1 mensagem Realtime para CADA navegador conectado,
+    // então gravar cards que não mudaram multiplica a cobrança do Supabase.
+    const updates = rawUpdates.filter(u => {
+      const current = kanbanCards.find(c => c.id === u.id);
+      if (!current) return false;
+      const columnChanged = !!u.column && u.column !== current.column;
+      return columnChanged || (current.position_index ?? 0) !== u.position_index;
+    });
+    if (updates.length === 0) return;
+
     // Optimistic UI update
     const updateMap = new Map(updates.map(u => [u.id, u]));
     const now = Date.now();

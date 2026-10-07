@@ -138,9 +138,11 @@ export function KanbanBoardDndContext({ children, onReorderColumns }: Props) {
       destColumnKey = overData.card.column;
     }
 
-    // Filter and sort destination cards
+    // Filtra apenas cards do MESMO funcionário e não arquivados.
+    // Antes filtrava só pela chave da coluna (ex: "postado"), o que pegava cards de
+    // todos os funcionários + arquivados e gerava milhares de UPDATEs por arraste.
     const destCards = kanbanCards
-      .filter(c => c.column === destColumnKey)
+      .filter(c => c.column === destColumnKey && c.employeeId === activeCard.employeeId && !c.archivedAt)
       .sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
 
     // Case 1: Same column reorder

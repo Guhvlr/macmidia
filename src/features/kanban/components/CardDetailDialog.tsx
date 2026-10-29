@@ -493,6 +493,51 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
     saveUpdates({ comments: newList }, "Comentou no card");
   };
 
+  const removeStorageUrlsInBackground = (urls: string[]) => {
+    const paths = urls
+      .filter(u => typeof u === 'string' && u.includes('/kanban_assets/'))
+      .map(u => decodeURIComponent(u.split('/kanban_assets/')[1]))
+      .filter(Boolean);
+    if (paths.length > 0) {
+      supabase.storage.from('kanban_assets').remove(paths).catch(err => {
+        console.warn('Falha ao remover imagem de comentário do storage:', err);
+      });
+    }
+  };
+
+  const deleteComment = (commentId: string) => {
+    const target = comments.find(c => c.id === commentId);
+    if (!target) return;
+    if (Array.isArray(target.images) && target.images.length > 0) {
+      removeStorageUrlsInBackground(target.images);
+    }
+    const newList = comments.filter(c => c.id !== commentId);
+    setComments(newList);
+    saveUpdates({ comments: newList }, "Removeu um comentário");
+    toast.success("Comentário excluído");
+  };
+
+  const deleteCommentImage = (commentId: string, imageUrl: string) => {
+    const target = comments.find(c => c.id === commentId);
+    if (!target) return;
+    removeStorageUrlsInBackground([imageUrl]);
+
+    const remainingImages = (target.images || []).filter((img: string) => img !== imageUrl);
+    const hasText = Boolean(target.text && target.text.trim());
+
+    let newList: any[];
+    if (!hasText && remainingImages.length === 0) {
+      // If the comment only contained this image and no text, remove the comment entirely
+      newList = comments.filter(c => c.id !== commentId);
+    } else {
+      newList = comments.map(c => c.id === commentId ? { ...c, images: remainingImages } : c);
+    }
+
+    setComments(newList);
+    saveUpdates({ comments: newList }, "Removeu imagem de comentário");
+    toast.success("Imagem do comentário excluída");
+  };
+
   const addLabel = (color: string = 'bg-red-600', textParam?: string) => {
     const txt = (textParam !== undefined ? textParam : newLabelText).toUpperCase().trim();
     if (!txt) return;
@@ -776,6 +821,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                     addComment={() => {}}
                     getRelativeTime={getRelativeTime}
                     hideCommentInput={true}
+                    onDeleteComment={deleteComment}
+                    onDeleteCommentImage={deleteCommentImage}
                   />
                 </div>
 
@@ -911,6 +958,8 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                   addComment={addComment}
                   getRelativeTime={getRelativeTime}
                   onUploadImage={uploadCommentImage}
+                  onDeleteComment={deleteComment}
+                  onDeleteCommentImage={deleteCommentImage}
                 />
                 <div className="p-4 space-y-3">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">Ações do Card</h3>

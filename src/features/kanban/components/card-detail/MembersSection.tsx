@@ -207,7 +207,14 @@ export const MembersSection = memo( ({
               <Sparkles className="w-3.5 h-3.5 text-primary/40" />
             </div>
             
-            <div className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1">
+            <div
+              className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1 overscroll-contain"
+              onWheel={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.currentTarget.scrollTop += e.deltaY;
+              }}
+            >
               {(() => {
                 const allMembers = employees.map(e => ({
                   id: e.id,
@@ -355,7 +362,14 @@ export const MembersSection = memo( ({
                     <Sparkles className="w-3.5 h-3.5 text-primary/40" />
                   </div>
                   
-                  <div className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                  <div
+              className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1 overscroll-contain"
+              onWheel={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.currentTarget.scrollTop += e.deltaY;
+              }}
+            >
                     {(() => {
                       const allMembers = employees.map(e => ({
                         id: e.id,
@@ -461,7 +475,14 @@ export const MembersSection = memo( ({
                     />
 
                     <h5 className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-2">Sugestões</h5>
-                    <div className="max-h-48 overflow-y-auto custom-scrollbar pr-1.5 mb-3 flex flex-col gap-1.5">
+                    <div
+                      className="max-h-64 overflow-y-auto custom-scrollbar pr-1.5 mb-3 flex flex-col gap-1.5 overscroll-contain"
+                      onWheel={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.scrollTop += e.deltaY;
+                      }}
+                    >
                       {filteredLabels.map(l => {
                         const parts = l.split('|');
                         const hasColor = parts.length > 1;

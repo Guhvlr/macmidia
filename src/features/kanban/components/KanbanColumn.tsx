@@ -8,10 +8,11 @@ import AddCardDialog from './AddCardDialog';
 import { SortableKanbanCard } from './SortableKanbanCard';
 
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
+import { compareKanbanCards } from '@/features/kanban/utils/cardOrder';
 
 interface Props {
   id: string;
-  dbId: string;
+  dbId?: string;
   title: string;
   color: string;
   cards: KanbanCardType[];
@@ -47,12 +48,13 @@ const KanbanColumnInner = ({ id, dbId, title, color, cards, count, employeeId, o
   });
 
   const sortedCards = useMemo(() => {
-    return [...cards].sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
+    return [...cards].sort(compareKanbanCards);
   }, [cards]);
 
-  const [visibleCount, setVisibleCount] = useState(20);
+  const [visibleCount, setVisibleCount] = useState(25);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const visibleCards = sortedCards.slice(0, visibleCount);
+  const visibleCards = useMemo(() => sortedCards.slice(0, visibleCount), [sortedCards, visibleCount]);
+  const visibleCardIds = useMemo(() => visibleCards.map(c => c.id), [visibleCards]);
 
   return (
     <div 
@@ -125,13 +127,13 @@ const KanbanColumnInner = ({ id, dbId, title, color, cards, count, employeeId, o
           {/* Cards container */}
           <div 
             ref={setDroppableNodeRef}
-            className={`flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-24 rounded-2xl border transition-all duration-200 max-h-[calc(100vh-200px)]
+            className={`flex-1 overflow-y-auto custom-scrollbar space-y-3 p-3 pb-24 rounded-2xl border transition-colors duration-150 max-h-[calc(100vh-200px)]
             ${isOver
               ? 'bg-primary/5 border-primary/25 shadow-[inset_0_0_20px_hsl(0_80%_52%/0.05)]'
               : 'bg-secondary/15 border-border/25'
             }`}
           >
-            <SortableContext items={visibleCards.map(c => c.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={visibleCardIds} strategy={verticalListSortingStrategy}>
               {visibleCards.map(card => (
                 <SortableKanbanCard key={card.id} card={card} />
               ))}
@@ -139,7 +141,7 @@ const KanbanColumnInner = ({ id, dbId, title, color, cards, count, employeeId, o
 
             {sortedCards.length > visibleCount && (
               <button 
-                onClick={() => setVisibleCount(prev => prev + 20)}
+                onClick={() => setVisibleCount(prev => prev + 25)}
                 className="w-full py-2 mt-2 mb-2 text-[11px] uppercase tracking-wider font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors"
               >
                 Ver mais ({sortedCards.length - visibleCount} ocultos)

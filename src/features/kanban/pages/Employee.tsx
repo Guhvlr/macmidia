@@ -58,7 +58,7 @@ const Employee = () => {
 
   const employee = useMemo(() => employees.find(e => e.id === id), [employees, id]);
 
-  const allCards = useMemo(() => kanbanCards.filter(c => c.employeeId === id && !c.archivedAt), [kanbanCards, id]);
+  const allCards = useMemo(() => kanbanCards.filter(c => c.employeeId === id && c.column !== 'postado'), [kanbanCards, id]);
   
   const cards = useMemo(() => {
     let filtered = allCards;
@@ -72,8 +72,14 @@ const Employee = () => {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(c => c.clientName.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+      const normalize = (v?: string | null) =>
+        (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const q = normalize(searchQuery.trim());
+      filtered = filtered.filter(c =>
+        normalize(c.clientName).includes(q) ||
+        normalize(c.description).includes(q) ||
+        normalize(c.calendarClientName).includes(q)
+      );
     }
     
     return filtered;

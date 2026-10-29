@@ -12,6 +12,8 @@ interface HistorySectionProps {
   getRelativeTime: (isoDate: string) => string;
   hideCommentInput?: boolean;
   onUploadImage?: (file: File) => Promise<string | null>;
+  onDeleteComment?: (commentId: string) => void;
+  onDeleteCommentImage?: (commentId: string, imageUrl: string) => void;
 }
 
 export const HistorySection = memo( ({
@@ -22,7 +24,9 @@ export const HistorySection = memo( ({
   addComment,
   getRelativeTime,
   hideCommentInput = false,
-  onUploadImage
+  onUploadImage,
+  onDeleteComment,
+  onDeleteCommentImage
 }: HistorySectionProps) => {
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -97,14 +101,30 @@ export const HistorySection = memo( ({
         {images.length > 0 && (
           <div className={`${item.text ? 'mt-2' : ''} flex flex-wrap gap-2`}>
             {images.map((url: string, i: number) => (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
-                <img 
-                  src={url} 
-                  alt="Imagem do comentário" 
-                  className="max-w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-90 transition-opacity"
-                  style={{ maxHeight: '300px' }}
-                />
-              </a>
+              <div key={i} className="relative group/cimg inline-block">
+                <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+                  <img 
+                    src={url} 
+                    alt="Imagem do comentário" 
+                    className="max-w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-90 transition-opacity"
+                    style={{ maxHeight: '300px' }}
+                  />
+                </a>
+                {onDeleteCommentImage && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDeleteCommentImage(item.id, url);
+                    }}
+                    title="Excluir imagem do comentário"
+                    className="absolute top-2 right-2 w-7 h-7 bg-black/80 hover:bg-red-600 text-white rounded-lg flex items-center justify-center border border-white/15 opacity-0 group-hover/cimg:opacity-100 transition-all shadow-lg z-10"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -197,12 +217,26 @@ export const HistorySection = memo( ({
           mixed.map(item => {
             if (item.type === 'comment') {
               return (
-                <div key={item.id} className="flex gap-3">
+                <div key={item.id} className="flex gap-3 group/comment">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-[11px] font-black text-white flex-shrink-0 shadow-lg border border-white/10">
                     {item.userName.substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-white/90">{item.userName} <span className="font-medium text-white/30 ml-2 tracking-tighter">{getRelativeTime(item.createdAt)}</span></p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-white/90">
+                        {item.userName} <span className="font-medium text-white/30 ml-2 tracking-tighter">{getRelativeTime(item.createdAt)}</span>
+                      </p>
+                      {onDeleteComment && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteComment(item.id)}
+                          title="Excluir comentário"
+                          className="opacity-0 group-hover/comment:opacity-100 text-white/30 hover:text-red-400 hover:bg-red-500/10 p-1 rounded-md transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                     <div className="text-sm text-white/80 bg-white/5 border border-white/5 p-4 rounded-2xl rounded-tl-none mt-1.5 leading-relaxed shadow-sm">
                       {renderCommentContent(item)}
                     </div>

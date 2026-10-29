@@ -27,7 +27,6 @@ const CorrectionBoard = () => {
 
   const activeCards = useMemo(() =>
     kanbanCards.filter(c => {
-      if (c.archivedAt && c.column !== 'postado') return false;
       if (!KANBAN_COLUMNS.some(col => col.key === c.column)) return false;
       
       if (memberFilter.length > 0) {

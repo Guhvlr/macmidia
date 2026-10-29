@@ -11,7 +11,20 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/useApp';
 import { toast } from 'sonner';
-import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
+import { DEFAULT_COLUMNS, type KanbanCard as KanbanCardType } from '@/contexts/app-types';
+import {
+  compareKanbanCards,
+  computePositionUpdatesAtIndex,
+  getTopPositionIndex,
+  normalizeColumnKey,
+} from '@/features/kanban/utils/cardOrder';
+
+const EXTRA_POSTING_COLUMNS = [
+  { columnKey: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info', position: 100 },
+  { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 101 },
+  { columnKey: 'alteracao', title: 'Alteração', color: 'bg-warning', position: 102 },
+  { columnKey: 'programar-mais-dias', title: 'Programar para Mais Dias', color: 'bg-purple-500', position: 103 },
+];
 
 interface MoveCardDialogProps {
   card: KanbanCardType;
@@ -28,94 +41,104 @@ export const MoveCardDialog = memo(({
   trigger,
   onMoveComplete
 }: MoveCardDialogProps) => {
-  const { kanbanCards, kanbanColumns, getColumnsForEmployee, moveKanbanCard, reorderKanbanCards } = useApp();
+  const { kanbanCards, getColumnsForEmployee, reorderKanbanCards } = useApp();
   
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : internalOpen;
   const setIsOpen = isControlled ? (controlledOnOpenChange || (() => {})) : setInternalOpen;
 
-  // Get columns for this card's employee
+  // Get columns for this card's employee + ensure PostingBoard columns are always available
   const columns = useMemo(() => {
-    return getColumnsForEmployee(card.employeeId);
+    const empCols = card.employeeId ? getColumnsForEmployee(card.employeeId) : [];
+    const baseCols = empCols.length > 0
+      ? empCols
+      : DEFAULT_COLUMNS.map((c, idx) => ({
+          id: c.columnKey,
+          employeeId: card.employeeId || '',
+          columnKey: c.columnKey,
+          title: c.title,
+          color: c.color,
+          position: idx,
+        }));
+
+    const byKey = new Map<string, { columnKey: string; title: string; color: string }>();
+    for (const col of baseCols) {
+      const k = normalizeColumnKey(col.columnKey);
+      if (!byKey.has(k)) {
+        byKey.set(k, { columnKey: k, title: col.title, color: col.color });
+      }
+    }
+    for (const extra of EXTRA_POSTING_COLUMNS) {
+      if (!byKey.has(extra.columnKey)) {
+        byKey.set(extra.columnKey, { columnKey: extra.columnKey, title: extra.title, color: extra.color });
+      }
+    }
+    return Array.from(byKey.values());
   }, [card.employeeId, getColumnsForEmployee]);
 
   const [selectedColumn, setSelectedColumn] = useState(card.column);
   const [selectedPosition, setSelectedPosition] = useState('1');
 
+  const isEmployeeBoard = typeof window !== 'undefined' && window.location.pathname.startsWith('/funcionario/');
+
   // When dialog opens, reset to current card state
   React.useEffect(() => {
     if (isOpen) {
       setSelectedColumn(card.column);
-      // Find current position of card in its column
       const cardsInCol = kanbanCards
-        .filter(c => c.column === card.column && c.employeeId === card.employeeId && !c.archivedAt)
-        .sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
+        .filter(c => {
+          if (c.column !== card.column) return false;
+          if (isEmployeeBoard && c.employeeId !== card.employeeId) return false;
+          return true;
+        })
+        .sort(compareKanbanCards);
       const currentIdx = cardsInCol.findIndex(c => c.id === card.id);
       setSelectedPosition(String(currentIdx >= 0 ? currentIdx + 1 : 1));
     }
-  }, [isOpen, card.column, card.id, card.employeeId, kanbanCards]);
+  }, [isOpen, card.column, card.id, card.employeeId, kanbanCards, isEmployeeBoard]);
 
-  // Cards in the selected target column (excluding current card if same column)
+  // Cards in the selected target column (excluding current card)
   const cardsInTargetColumn = useMemo(() => {
+    if (!isOpen) return [];
     return kanbanCards
-      .filter(c => c.column === selectedColumn && c.employeeId === card.employeeId && !c.archivedAt && c.id !== card.id)
-      .sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
-  }, [kanbanCards, selectedColumn, card.employeeId, card.id]);
+      .filter(c => {
+        if (c.column !== selectedColumn || c.id === card.id) return false;
+        if (isEmployeeBoard && c.employeeId !== card.employeeId) return false;
+        return true;
+      })
+      .sort(compareKanbanCards);
+  }, [isOpen, kanbanCards, selectedColumn, card.employeeId, card.id, isEmployeeBoard]);
 
   // Available positions (1 to N+1 where N is the count of cards in target)
   const positions = useMemo(() => {
-    const count = cardsInTargetColumn.length + 1; // +1 for the card being moved
+    const count = Math.min(cardsInTargetColumn.length + 1, 100); // Cap dropdown at 100 for huge columns
     return Array.from({ length: count }, (_, i) => i + 1);
   }, [cardsInTargetColumn]);
 
   const handleMove = async () => {
     const targetCol = columns.find(c => c.columnKey === selectedColumn);
-    const pos = parseInt(selectedPosition, 10) - 1; // 0-indexed
+    const pos = Math.max(0, parseInt(selectedPosition, 10) - 1); // 0-indexed
 
     try {
-      if (selectedColumn !== card.column) {
-        // Moving to a different column
-        const targetCards = kanbanCards
-          .filter(c => c.column === selectedColumn && c.employeeId === card.employeeId && !c.archivedAt && c.id !== card.id)
-          .sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
-        
-        // Insert card at desired position
-        const reorderUpdates: { id: string; position_index: number; column?: string }[] = [];
-        let posIndex = 0;
-        for (let i = 0; i <= targetCards.length; i++) {
-          if (i === pos) {
-            reorderUpdates.push({ id: card.id, position_index: posIndex * 1024, column: selectedColumn });
-            posIndex++;
-          }
-          if (i < targetCards.length) {
-            reorderUpdates.push({ id: targetCards[i].id, position_index: posIndex * 1024 });
-            posIndex++;
-          }
-        }
-        
-        if (reorderUpdates.length > 0) {
-          await reorderKanbanCards(reorderUpdates);
-        }
+      if (pos === 0) {
+        // Position 1 -> always place at the very top globally
+        const topPos = getTopPositionIndex(kanbanCards, selectedColumn, card.id);
+        await reorderKanbanCards([
+          {
+            id: card.id,
+            position_index: topPos,
+            column: selectedColumn !== card.column ? selectedColumn : undefined,
+          },
+        ]);
       } else {
-        // Same column, just reorder
-        const otherCards = kanbanCards
-          .filter(c => c.column === selectedColumn && c.employeeId === card.employeeId && !c.archivedAt && c.id !== card.id)
-          .sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
-        
-        const reorderUpdates: { id: string; position_index: number }[] = [];
-        let posIndex = 0;
-        for (let i = 0; i <= otherCards.length; i++) {
-          if (i === pos) {
-            reorderUpdates.push({ id: card.id, position_index: posIndex * 1024 });
-            posIndex++;
-          }
-          if (i < otherCards.length) {
-            reorderUpdates.push({ id: otherCards[i].id, position_index: posIndex * 1024 });
-            posIndex++;
-          }
-        }
-        
+        const reorderUpdates = computePositionUpdatesAtIndex(
+          kanbanCards,
+          cardsInTargetColumn,
+          card.id,
+          selectedColumn,
+          pos
+        );
         if (reorderUpdates.length > 0) {
           await reorderKanbanCards(reorderUpdates);
         }
@@ -131,13 +154,19 @@ export const MoveCardDialog = memo(({
   };
 
   const currentCol = columns.find(c => c.columnKey === card.column);
-  const targetCol = columns.find(c => c.columnKey === selectedColumn);
-  const isSamePosition = selectedColumn === card.column && selectedPosition === String(
-    kanbanCards
-      .filter(c => c.column === card.column && c.employeeId === card.employeeId && !c.archivedAt)
-      .sort((a, b) => (a.position_index || 0) - (b.position_index || 0))
-      .findIndex(c => c.id === card.id) + 1
-  );
+  const currentPosInCol = useMemo(() => {
+    if (!isOpen) return 1;
+    const cardsInCol = kanbanCards
+      .filter(c => {
+        if (c.column !== card.column) return false;
+        if (isEmployeeBoard && c.employeeId !== card.employeeId) return false;
+        return true;
+      })
+      .sort(compareKanbanCards);
+    return cardsInCol.findIndex(c => c.id === card.id) + 1;
+  }, [isOpen, kanbanCards, card.column, card.employeeId, card.id, isEmployeeBoard]);
+
+  const isSamePosition = selectedColumn === card.column && selectedPosition === String(currentPosInCol);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

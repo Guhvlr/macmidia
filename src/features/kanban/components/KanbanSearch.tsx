@@ -11,6 +11,16 @@ import {
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 import CardDetailDialog from './CardDetailDialog';
 import { cn } from '@/lib/utils';
+import { getCardLatestTimestamp } from '../utils/cardOrder';
+
+const normalizeText = (value?: string | null) =>
+  (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const KanbanSearch = () => {
   const { kanbanCards, employees, memberFilter, setMemberFilter, loggedUserRole, loggedUserClientLink } = useApp();
@@ -47,57 +57,107 @@ export const KanbanSearch = () => {
     };
   }, []);
 
-  const results = useMemo(() => {
-    const lowQuery = query.toLowerCase();
+  const trimmedQuery = query.trim();
+
+  const { results, totalMatches } = useMemo(() => {
+    const normQuery = normalizeText(trimmedQuery);
     
     // Base filter: if no query and no member, return nothing (or handle initial state)
-    if (!query && memberFilter.length === 0) return [];
+    if (!normQuery && memberFilter.length === 0) return { results: [] as KanbanCardType[], totalMatches: 0 };
 
-    return filteredKanbanCards.filter(card => {
+    const matched: { card: KanbanCardType; score: number; latestTs: number }[] = [];
+
+    for (const card of filteredKanbanCards) {
       // Member filter
-      let matchesMember = true;
       if (memberFilter.length > 0) {
         const isAssigned = card.assignedUsers?.some(u => memberFilter.includes(u.id));
         const isEmployee = memberFilter.includes(card.employeeId);
-        matchesMember = isAssigned || isEmployee;
+        if (!isAssigned && !isEmployee) continue;
       }
-      if (!matchesMember) return false;
 
-      // Query filter
-      if (!query) return true; // Show all for member if no query
+      if (!normQuery) {
+        matched.push({
+          card,
+          score: card.column !== 'postado' ? 10 : 0,
+          latestTs: getCardLatestTimestamp(card),
+        });
+        continue;
+      }
 
-      const matchName = card.clientName?.toLowerCase().includes(lowQuery);
-      const matchDesc = card.description?.toLowerCase().includes(lowQuery);
-      const matchOrig = card.originalMessage?.toLowerCase().includes(lowQuery);
-      const matchNotes = card.notes?.toLowerCase().includes(lowQuery);
-      const matchLabels = card.labels?.some(l => l.toLowerCase().includes(lowQuery));
-      const matchComments = card.comments?.some(c => c.text.toLowerCase().includes(lowQuery));
-      
-      return matchName || matchDesc || matchOrig || matchNotes || matchLabels || matchComments;
-    }).slice(0, 20); // Show more when filtering by member
-  }, [filteredKanbanCards, query, memberFilter]);
+      const normName = normalizeText(card.clientName);
+      const normFolder = normalizeText(card.calendarClientName);
+      const normDesc = normalizeText(card.description);
+      const normOrig = normalizeText(card.originalMessage);
+      const normNotes = normalizeText(card.notes);
+      const matchLabels = card.labels?.some(l => normalizeText(l).includes(normQuery));
+      const matchComments = card.comments?.some(c => normalizeText(c.text).includes(normQuery));
+
+      const matchName = normName.includes(normQuery);
+      const matchFolder = normFolder.includes(normQuery);
+      const matchDesc = normDesc.includes(normQuery);
+      const matchOrig = normOrig.includes(normQuery);
+      const matchNotes = normNotes.includes(normQuery);
+
+      if (!matchName && !matchFolder && !matchDesc && !matchOrig && !matchNotes && !matchLabels && !matchComments) {
+        continue;
+      }
+
+      let score = 0;
+      if (normName === normQuery) score += 100;
+      else if (normName.startsWith(normQuery)) score += 80;
+      else if (matchName) score += 60;
+      if (matchFolder) score += 45;
+      if (matchLabels) score += 30;
+      if (matchDesc || matchOrig || matchNotes || matchComments) score += 15;
+      if (card.column !== 'postado' && !card.archivedAt) score += 10;
+
+      matched.push({
+        card,
+        score,
+        latestTs: getCardLatestTimestamp(card),
+      });
+    }
+
+    matched.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.latestTs !== a.latestTs) return b.latestTs - a.latestTs;
+      return (a.card.position_index ?? 0) - (b.card.position_index ?? 0);
+    });
+
+    return {
+      results: matched.slice(0, 60).map(m => m.card),
+      totalMatches: matched.length,
+    };
+  }, [filteredKanbanCards, trimmedQuery, memberFilter]);
 
   const highlightMatch = (text: string, q: string) => {
-    if (!q || !text) return text;
-    const parts = text.split(new RegExp(`(${q})`, 'gi'));
-    return (
-      <span className="break-all">
-        {parts.map((part, i) => 
-          part.toLowerCase() === q.toLowerCase() 
-            ? <span key={i} className="text-primary font-bold bg-primary/10 px-0.5 rounded-sm">{part}</span> 
-            : part
-        )}
-      </span>
-    );
+    const cleanQ = q.trim();
+    if (!cleanQ || !text) return text;
+    try {
+      const escaped = escapeRegExp(cleanQ);
+      const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+      return (
+        <span className="break-all">
+          {parts.map((part, i) => 
+            normalizeText(part) === normalizeText(cleanQ)
+              ? <span key={i} className="text-primary font-bold bg-primary/10 px-0.5 rounded-sm">{part}</span> 
+              : part
+          )}
+        </span>
+      );
+    } catch {
+      return text;
+    }
   };
 
   const getSnippet = (text: string, q: string) => {
     if (!text) return '';
-    const index = text.toLowerCase().indexOf(q.toLowerCase());
+    const cleanQ = q.trim();
+    const index = normalizeText(text).indexOf(normalizeText(cleanQ));
     if (index === -1) return text.substring(0, 80) + (text.length > 80 ? '...' : '');
     
     const start = Math.max(0, index - 30);
-    const end = Math.min(text.length, index + q.length + 50);
+    const end = Math.min(text.length, index + cleanQ.length + 50);
     let snippet = text.substring(start, end);
     if (start > 0) snippet = '...' + snippet;
     if (end < text.length) snippet = snippet + '...';
@@ -105,12 +165,16 @@ export const KanbanSearch = () => {
   };
 
   const findWhereMatch = (card: KanbanCardType, q: string) => {
-    const lowQ = q.toLowerCase();
-    if (card.description?.toLowerCase().includes(lowQ)) return { label: 'Descrição', text: card.description };
-    if (card.originalMessage?.toLowerCase().includes(lowQ)) return { label: 'Original', text: card.originalMessage };
-    if (card.notes?.toLowerCase().includes(lowQ)) return { label: 'Notas', text: card.notes };
-    if (card.comments?.some(c => c.text.toLowerCase().includes(lowQ))) {
-      const comment = card.comments?.find(c => c.text.toLowerCase().includes(lowQ));
+    const normQ = normalizeText(q.trim());
+    if (!normQ) return null;
+    if (card.calendarClientName && normalizeText(card.calendarClientName).includes(normQ)) {
+      return { label: 'Pasta', text: card.calendarClientName };
+    }
+    if (card.description && normalizeText(card.description).includes(normQ)) return { label: 'Descrição', text: card.description };
+    if (card.originalMessage && normalizeText(card.originalMessage).includes(normQ)) return { label: 'Original', text: card.originalMessage };
+    if (card.notes && normalizeText(card.notes).includes(normQ)) return { label: 'Notas', text: card.notes };
+    if (card.comments?.some(c => normalizeText(c.text).includes(normQ))) {
+      const comment = card.comments?.find(c => normalizeText(c.text).includes(normQ));
       return { label: 'Comentário', text: comment?.text || '' };
     }
     return null;
@@ -153,17 +217,35 @@ export const KanbanSearch = () => {
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          placeholder="Pesquisar cards, produtos ou membros..."
-          className="pl-10 pr-10 bg-secondary/30 border-border/40 hover:bg-secondary/50 focus:bg-secondary/60 h-10 rounded-xl text-xs font-medium transition-all shadow-sm focus-visible:ring-primary/30 focus-visible:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+          placeholder="Pesquisar cards, clientes, pastas ou membros..."
+          className="pl-10 pr-24 bg-secondary/30 border-border/40 hover:bg-secondary/50 focus:bg-secondary/60 h-10 rounded-xl text-xs font-medium transition-all shadow-sm focus-visible:ring-primary/30 focus-visible:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
         />
-        {query && (
-          <button 
-            onClick={() => setQuery('')}
-            className="absolute right-3 p-1 hover:bg-white/10 rounded-full text-muted-foreground hover:text-foreground transition-all"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <div className="absolute right-2.5 flex items-center gap-1">
+          {memberFilter.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMemberFilter([]);
+              }}
+              title="Limpar filtro de membros"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/20 text-primary border border-primary/30 text-[10px] font-bold hover:bg-primary/30 transition-all"
+            >
+              <Users className="w-3 h-3" />
+              <span>{memberFilter.length}</span>
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )}
+          {query && (
+            <button 
+              type="button"
+              onClick={() => setQuery('')}
+              className="p-1 hover:bg-white/10 rounded-full text-muted-foreground hover:text-foreground transition-all"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {isOpen && (
@@ -173,8 +255,8 @@ export const KanbanSearch = () => {
             <div className="flex-1 min-w-0">
               <div className="p-3.5 border-b border-white/5 flex items-center justify-between">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-white/40 px-1">
-                  {memberFilter.length > 0 
-                    ? `Cards Filtrados (${memberFilter.length})` 
+                  {trimmedQuery.length >= 1 || memberFilter.length > 0
+                    ? `Cards Encontrados (${totalMatches})`
                     : 'Cards'
                   }
                 </p>
@@ -184,18 +266,18 @@ export const KanbanSearch = () => {
                       onClick={() => setMemberFilter([])}
                       className="text-[10px] font-bold text-primary hover:underline uppercase tracking-tight"
                     >
-                      Limpar Filtros
+                      Limpar Filtros ({memberFilter.length})
                     </button>
                   )}
-                  {(!query && memberFilter.length === 0) && <span className="text-[10px] text-white/20 italic">Digite ou selecione um membro...</span>}
+                  {(!trimmedQuery && memberFilter.length === 0) && <span className="text-[10px] text-white/20 italic">Digite ou selecione um membro...</span>}
                 </div>
               </div>
               
               <div className="max-h-[520px] overflow-y-auto custom-scrollbar p-1">
-                {(query.length >= 2 || memberFilter.length > 0) ? (
+                {(trimmedQuery.length >= 1 || memberFilter.length > 0) ? (
                   results.length > 0 ? (
                     results.map(card => {
-                      const match = findWhereMatch(card, query);
+                      const match = findWhereMatch(card, trimmedQuery);
                       return (
                         <HoverCard key={card.id} openDelay={200}>
                           <HoverCardTrigger asChild>
@@ -212,10 +294,10 @@ export const KanbanSearch = () => {
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-col">
                                   <h4 className="text-[14px] font-medium text-white/90 leading-tight">
-                                    {highlightMatch(card.clientName, query)}
+                                    {highlightMatch(card.clientName, trimmedQuery)}
                                   </h4>
                                   <p className="text-[11px] text-white/30 uppercase tracking-tight mt-0.5">
-                                    MAC MIDIA: {card.column.replace('-', ' ')} {card.archivedAt ? '• Archived' : ''}
+                                    MAC MIDIA: {card.column.replace(/-/g, ' ')} {card.calendarClientName ? `• ${card.calendarClientName}` : ''} {card.column === 'postado' ? '• Postado' : ''}
                                   </p>
                                 </div>
                                 
@@ -224,7 +306,7 @@ export const KanbanSearch = () => {
                                     <span className="font-black text-[9px] uppercase tracking-wider text-white/20 mr-1.5 not-italic">
                                       {match.label}:
                                     </span>
-                                    {highlightMatch(getSnippet(match.text, query), query)}
+                                    {highlightMatch(getSnippet(match.text, trimmedQuery), trimmedQuery)}
                                   </p>
                                 )}
                               </div>
@@ -246,7 +328,7 @@ export const KanbanSearch = () => {
                               <div className="flex items-start justify-between gap-2">
                                 <h3 className="text-sm font-bold text-white leading-tight uppercase">{card.clientName}</h3>
                                 <div className="px-2 py-0.5 rounded-sm bg-primary/20 text-primary text-[9px] font-black uppercase tracking-wider border border-primary/20">
-                                  {card.column.replace('-', ' ')}
+                                  {card.column.replace(/-/g, ' ')}
                                 </div>
                               </div>
                               
@@ -281,7 +363,7 @@ export const KanbanSearch = () => {
                   <div className="py-20 flex flex-col items-center justify-center text-center px-4 opacity-50">
                     <Layout className="w-10 h-10 text-white/10 mb-4" />
                     <p className="text-[13px] font-medium text-white/40">O que você está procurando?</p>
-                    <p className="text-[11px] text-white/20 max-w-[200px] mt-1">Busque por clientes, produtos ou selecione um membro ao lado.</p>
+                    <p className="text-[11px] text-white/20 max-w-[200px] mt-1">Busque por clientes, pastas ou selecione um membro ao lado.</p>
                   </div>
                 )}
               </div>
@@ -360,7 +442,7 @@ export const KanbanSearch = () => {
 
       {selectedCard && (
         <CardDetailDialog
-          card={selectedCard}
+          card={kanbanCards.find(c => c.id === selectedCard.id) || selectedCard}
           open={!!selectedCard}
           onOpenChange={(open) => !open && setSelectedCard(null)}
         />

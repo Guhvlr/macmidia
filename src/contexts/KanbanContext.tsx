@@ -15,6 +15,7 @@ import type {
   CardAction,
 } from './app-types';
 import { DEFAULT_COLUMNS, slugify } from './app-types';
+import { getTopPositionIndex, normalizeColumnKey } from '@/features/kanban/utils/cardOrder';
 
 export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export interface QueuedTask {
@@ -91,7 +92,7 @@ function mapKanbanCard(row: any): KanbanCard {
     checklists: Array.isArray(row.checklists) ? row.checklists : [],
     comments: Array.isArray(row.comments) ? row.comments : [],
     assignedUsers: Array.isArray(row.assigned_users) ? row.assigned_users : [],
-    column: row.column || 'pendente',
+    column: normalizeColumnKey(row.column || 'pendente'),
     timeSpent: row.time_spent ?? 0,
     timerRunning: row.timer_running ?? false,
     timerStart: row.timer_start || undefined,
@@ -112,8 +113,23 @@ function mapKanbanCard(row: any): KanbanCard {
     dueDateCompleted: row.due_date_completed ?? false,
   };
 }
+function mergeKanbanCardFromRealtime(existing: KanbanCard, row: any): KanbanCard {
+  const mapped = mapKanbanCard(row);
+  return {
+    ...existing,
+    ...mapped,
+    clientName: 'client_name' in row && row.client_name !== undefined ? mapped.clientName : existing.clientName,
+    description: 'description' in row && row.description !== undefined ? mapped.description : existing.description,
+    images: 'images' in row && row.images !== undefined ? mapped.images : existing.images,
+    labels: 'labels' in row && row.labels !== undefined ? mapped.labels : existing.labels,
+    checklists: 'checklists' in row && row.checklists !== undefined ? mapped.checklists : existing.checklists,
+    comments: 'comments' in row && row.comments !== undefined ? mapped.comments : existing.comments,
+    assignedUsers: 'assigned_users' in row && row.assigned_users !== undefined ? mapped.assignedUsers : existing.assignedUsers,
+    history: 'history' in row && row.history !== undefined ? mapped.history : existing.history,
+  };
+}
 function mapKanbanColumn(row: any): KanbanColumnDef {
-  return { id: row.id, employeeId: row.employee_id, columnKey: row.column_key, title: row.title, color: row.color, position: row.position };
+  return { id: row.id, employeeId: row.employee_id, columnKey: normalizeColumnKey(row.column_key), title: row.title, color: row.color, position: row.position };
 }
 function mapCalendarTask(row: any): CalendarTask {
   return { 
@@ -138,6 +154,35 @@ function mapCredential(row: any): Credential {
 }
 function mapCalendarClient(row: any): CalendarClient {
   return { id: row.id, name: row.name, logoUrl: row.logo_url || undefined, email: row.email || undefined, phones: Array.isArray(row.phones) ? row.phones : [], address: row.address || undefined, notes: row.notes || undefined };
+}
+
+// Paginated fetch for all kanban_cards with deterministic ordering (position_index, id)
+// so no cards are skipped across 1000-row page boundaries or dropped on refetch.
+async function fetchAllKanbanCardsRows(): Promise<any[]> {
+  const byId = new Map<string, any>();
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('kanban_cards')
+      .select('*')
+      .or('archived_at.is.null,archived_at.gt.2024-01-01T00:00:00.000Z')
+      .order('position_index', { ascending: true })
+      .order('id', { ascending: true })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      for (const row of data) {
+        if (row?.id) byId.set(row.id, row);
+      }
+      page++;
+      if (data.length < pageSize) hasMore = false;
+    } else {
+      hasMore = false;
+    }
+  }
+  return Array.from(byId.values());
 }
 
 function createDebouncedRefetch(fn: () => void, delayMs = 2000) {
@@ -171,6 +216,10 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
   const pendingOpsRef = useRef<Set<string>>(new Set());
   const reconnectAttemptRef = useRef(0);
+  const kanbanCardsRef = useRef<KanbanCard[]>(kanbanCards);
+  kanbanCardsRef.current = kanbanCards;
+  const kanbanColumnsRef = useRef<KanbanColumnDef[]>(kanbanColumns);
+  kanbanColumnsRef.current = kanbanColumns;
 
   const enqueueTask = useCallback((task: Omit<QueuedTask, 'id' | 'status' | 'progress'>) => {
     const id = crypto.randomUUID();
@@ -216,34 +265,10 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         }
         return allTasks;
       };
-      // Supabase também tem limite de 1000 linhas para kanban_cards (já com 2700+)
-      const fetchAllKanbanCards = async () => {
-        const allCards: any[] = [];
-        const pageSize = 1000;
-        let page = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data, error } = await supabase
-            .from('kanban_cards')
-            .select('*')
-            .or('archived_at.is.null,archived_at.gt.2024-01-01T00:00:00.000Z')
-            .order('position_index', { ascending: true })
-            .range(page * pageSize, (page + 1) * pageSize - 1);
-          if (error) throw error;
-          if (data && data.length > 0) {
-            allCards.push(...data);
-            page++;
-            if (data.length < pageSize) hasMore = false;
-          } else {
-            hasMore = false;
-          }
-        }
-        return allCards;
-      };
 
       const results = await Promise.allSettled([
         supabase.from('employees').select('*'),
-        fetchAllKanbanCards(),
+        fetchAllKanbanCardsRows(),
         supabase.from('kanban_columns').select('*'),
         fetchAllCalendarTasks(),
         supabase.from('credentials').select('*'),
@@ -298,20 +323,23 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, setLoading]);
 
   const debouncedRefetchCards = useMemo(() => createDebouncedRefetch(() => {
-    const cutoff = '2024-01-01T00:00:00.000Z';
-    supabase.from('kanban_cards').select('*').or(`archived_at.is.null,archived_at.gt.${cutoff}`).order('position_index', { ascending: true }).then(r => {
-      if (r.data) setKanbanCards(prev => {
-        const pending = pendingOpsRef.current;
-        if (pending.size === 0) return r.data!.map(mapKanbanCard);
-        const freshMap = new Map(r.data!.map(row => [row.id, row]));
-        const merged = prev.map(c => {
-          if (pending.has(c.id)) return c;
-          const fresh = freshMap.get(c.id);
-          return fresh ? mapKanbanCard(fresh) : c;
+    fetchAllKanbanCardsRows().then(rows => {
+      if (rows && rows.length > 0) {
+        setKanbanCards(prev => {
+          const pending = pendingOpsRef.current;
+          if (pending.size === 0) return rows.map(mapKanbanCard);
+          const freshMap = new Map(rows.map(row => [row.id, row]));
+          const merged = prev.map(c => {
+            if (pending.has(c.id)) return c;
+            const fresh = freshMap.get(c.id);
+            return fresh ? mapKanbanCard(fresh) : c;
+          });
+          rows.forEach(row => { if (!merged.some(c => c.id === row.id)) merged.push(mapKanbanCard(row)); });
+          return merged;
         });
-        r.data!.forEach(row => { if (!merged.some(c => c.id === row.id)) merged.push(mapKanbanCard(row)); });
-        return merged;
-      });
+      }
+    }).catch(err => {
+      console.error('Erro ao sincronizar cards:', err);
     });
   }, 1500), []);
 
@@ -342,13 +370,17 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
           setKanbanCards(prev => {
             const index = prev.findIndex(c => c.id === row.id);
             if (index === -1) {
-              // Card not in local state, fetch full card
-              debouncedRefetchCards();
+              // Card not in local state, fetch this single card directly
+              supabase.from('kanban_cards').select('*').eq('id', row.id).single().then(({ data }) => {
+                if (data) {
+                  setKanbanCards(curr => curr.some(c => c.id === data.id) ? curr : [...curr, mapKanbanCard(data)]);
+                }
+              });
               return prev;
             }
             
             const existing = prev[index];
-            const updated = mapKanbanCard(row);
+            const updated = mergeKanbanCardFromRealtime(existing, row);
             
             const next = [...prev];
             next[index] = updated;
@@ -493,14 +525,13 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
   const addKanbanCard = useCallback(async (card: Omit<KanbanCard, 'id'>): Promise<string | undefined> => {
     const tempId = crypto.randomUUID();
+    const targetColumn = normalizeColumnKey(card.column);
     const history = [createHistoryAction('create', `Criou o card na coluna`)];
-    const columnCards = kanbanCards.filter(c => c.column === card.column);
-    const maxPos = columnCards.length > 0 ? Math.max(...columnCards.map(c => c.position_index || 0)) : 0;
-    const position_index = maxPos + 1024;
+    const position_index = getTopPositionIndex(kanbanCardsRef.current, targetColumn, tempId);
     const employeeId = card.employeeId || '';
 
-    const opCard: KanbanCard = { ...card, id: tempId, history, position_index, employeeId };
-    setKanbanCards(prev => [...prev, opCard]);
+    const opCard: KanbanCard = { ...card, column: targetColumn, id: tempId, history, position_index, employeeId };
+    setKanbanCards(prev => [opCard, ...prev]);
     pendingOpsRef.current.add(tempId);
 
     try {
@@ -513,7 +544,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
           calendar_client_id: card.calendarClientId || null, calendar_client_name: card.calendarClientName || null,
           images: card.images || [], image_url: card.imageUrl || null, cover_image: card.coverImage !== undefined ? card.coverImage : null,
           labels: card.labels || [], checklists: card.checklists || [], comments: card.comments || [],
-          assigned_users: card.assignedUsers || [], column: card.column, time_spent: card.timeSpent ?? 0,
+          assigned_users: card.assignedUsers || [], column: targetColumn, time_spent: card.timeSpent ?? 0,
           timer_running: card.timerRunning ?? false, timer_start: card.timerStart || null, history,
           source: card.source || 'manual', original_message: card.originalMessage || null,
           ai_status: card.aiStatus || null, ai_report: card.aiReport || null,
@@ -533,7 +564,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
           setKanbanCards(prev => prev.map(c => c.id === tempId ? { ...c, id: realId } : c));
           pendingOpsRef.current.delete(tempId);
           pendingOpsRef.current.add(realId);
-          setTimeout(() => pendingOpsRef.current.delete(realId), 200);
+          setTimeout(() => pendingOpsRef.current.delete(realId), 1500);
           return realId;
         } else {
           pendingOpsRef.current.delete(tempId);
@@ -547,13 +578,34 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       pendingOpsRef.current.delete(tempId);
       throw err;
     }
-  }, [kanbanCards, createHistoryAction]);
+  }, [createHistoryAction]);
 
   const updateKanbanCard = useCallback(async (id: string, updates: Partial<KanbanCard>, actionDescription?: string) => {
-    const existing = kanbanCards.find(c => c.id === id);
+    const currentCards = kanbanCardsRef.current;
+    const existing = currentCards.find(c => c.id === id);
     if (!existing) return;
     const op: Partial<KanbanCard> = { ...updates };
     const db: any = {};
+
+    if (updates.column !== undefined) {
+      const normalizedCol = normalizeColumnKey(updates.column);
+      op.column = normalizedCol;
+      db.column = normalizedCol;
+      if (normalizedCol !== existing.column && updates.position_index === undefined) {
+        const topPos = getTopPositionIndex(currentCards, normalizedCol, id);
+        op.position_index = topPos;
+        db.position_index = topPos;
+      }
+      if (normalizedCol === 'postado') {
+        const archAt = new Date().toISOString();
+        op.archivedAt = archAt;
+        db.archived_at = archAt;
+      } else if (existing.archivedAt) {
+        op.archivedAt = undefined;
+        db.archived_at = null;
+      }
+    }
+
     if (actionDescription) {
       const prevHistory = Array.isArray(existing.history) ? existing.history.slice(0, 49) : [];
       const hist = [createHistoryAction('edit', actionDescription), ...prevHistory];
@@ -574,7 +626,6 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     if (updates.checklists !== undefined) db.checklists = updates.checklists;
     if (updates.comments !== undefined) db.comments = updates.comments;
     if (updates.assignedUsers !== undefined) db.assigned_users = updates.assignedUsers;
-    if (updates.column !== undefined) db.column = updates.column;
     if (updates.timeSpent !== undefined) db.time_spent = updates.timeSpent;
     if (updates.timerRunning !== undefined) db.timer_running = updates.timerRunning;
     if ('timerStart' in updates) db.timer_start = updates.timerStart || null;
@@ -616,9 +667,9 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
          debouncedRefetchCards(); 
        }
     } finally {
-      setTimeout(() => pendingOpsRef.current.delete(id), 200);
+      setTimeout(() => pendingOpsRef.current.delete(id), 1500);
     }
-  }, [kanbanCards, createHistoryAction, debouncedRefetchCards]);
+  }, [createHistoryAction, debouncedRefetchCards]);
 
   const deleteKanbanCard = useCallback(async (id: string) => {
     try {
@@ -631,7 +682,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       console.warn('Falha ao limpar arquivos do storage:', err);
     }
 
-    const oldCards = [...kanbanCards];
+    const oldCards = [...kanbanCardsRef.current];
     setKanbanCards(prev => prev.filter(c => c.id !== id));
     
     try {
@@ -643,13 +694,16 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       toast.error(`Erro ao excluir card: ${error.message}`);
       setKanbanCards(oldCards); // Rollback
     }
-  }, [kanbanCards]);
+  }, []);
 
-  const moveKanbanCard = useCallback(async (id: string, column: string) => {
-    const card = kanbanCards.find(c => c.id === id);
+  const moveKanbanCard = useCallback(async (id: string, rawColumn: string) => {
+    const currentCards = kanbanCardsRef.current;
+    const currentCols = kanbanColumnsRef.current;
+    const card = currentCards.find(c => c.id === id);
     if (!card) return;
-    const fromCol = kanbanColumns.find(c => c.columnKey === card.column);
-    const toCol = kanbanColumns.find(c => c.columnKey === column);
+    const column = normalizeColumnKey(rawColumn);
+    const fromCol = currentCols.find(c => c.columnKey === card.column);
+    const toCol = currentCols.find(c => c.columnKey === column);
     const fromTitle = fromCol?.title || card.column;
     const toTitle = toCol?.title || column;
 
@@ -657,10 +711,9 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     const prevHistory = Array.isArray(card.history) ? card.history.slice(0, 49) : [];
     const hist = [createHistoryAction('move', `Moveu de "${fromTitle}" para "${toTitle}"`), ...prevHistory];
     const now = Date.now();
-    const op: Partial<KanbanCard> = { column, history: hist };
-    const db: any = { column, history: hist };
-
-
+    const topPositionIndex = getTopPositionIndex(currentCards, column, id);
+    const op: Partial<KanbanCard> = { column, position_index: topPositionIndex, history: hist };
+    const db: any = { column, position_index: topPositionIndex, history: hist };
 
     if (column === 'em-producao' && card.column !== 'em-producao') {
       db.timer_running = true; db.timer_start = now; op.timerRunning = true; op.timerStart = now;
@@ -669,8 +722,13 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       db.timer_running = false; db.time_spent = card.timeSpent + elapsed; db.timer_start = null;
       op.timerRunning = false; op.timeSpent = card.timeSpent + elapsed; op.timerStart = undefined;
     }
-    if (column === 'postado') { db.archived_at = new Date().toISOString(); op.archivedAt = db.archived_at; }
-    else if (card.archivedAt && card.column === 'postado') { db.archived_at = null; op.archivedAt = undefined; }
+    if (column === 'postado') {
+      db.archived_at = new Date().toISOString();
+      op.archivedAt = db.archived_at;
+    } else {
+      db.archived_at = null;
+      op.archivedAt = undefined;
+    }
 
     pendingOpsRef.current.add(id);
     setKanbanCards(prev => prev.map(c => c.id === id ? { ...c, ...op } : c));
@@ -698,20 +756,27 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         debouncedRefetchCards();
       }
     } finally {
-      setTimeout(() => pendingOpsRef.current.delete(id), 200);
+      setTimeout(() => pendingOpsRef.current.delete(id), 1500);
     }
-  }, [kanbanCards, kanbanColumns, createHistoryAction, debouncedRefetchCards]);
+  }, [createHistoryAction, debouncedRefetchCards]);
 
   const reorderKanbanCards = useCallback(async (rawUpdates: { id: string; position_index: number; column?: string }[]) => {
+    const currentCards = kanbanCardsRef.current;
+    const currentCols = kanbanColumnsRef.current;
     // Descarta updates sem mudança real (mesma posição e mesma coluna).
     // Cada UPDATE no banco vira 1 mensagem Realtime para CADA navegador conectado,
     // então gravar cards que não mudaram multiplica a cobrança do Supabase.
-    const updates = rawUpdates.filter(u => {
-      const current = kanbanCards.find(c => c.id === u.id);
-      if (!current) return false;
-      const columnChanged = !!u.column && u.column !== current.column;
-      return columnChanged || (current.position_index ?? 0) !== u.position_index;
-    });
+    const updates = rawUpdates
+      .map(u => ({
+        ...u,
+        column: u.column ? normalizeColumnKey(u.column) : undefined,
+      }))
+      .filter(u => {
+        const current = currentCards.find(c => c.id === u.id);
+        if (!current) return false;
+        const columnChanged = !!u.column && u.column !== current.column;
+        return columnChanged || (current.position_index ?? 0) !== u.position_index;
+      });
     if (updates.length === 0) return;
 
     // Optimistic UI update
@@ -728,8 +793,8 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
         
         // If the column is changing, we need to handle history and timers
         if (update.column && update.column !== c.column) {
-          const fromCol = kanbanColumns.find(col => col.columnKey === c.column);
-          const toCol = kanbanColumns.find(col => col.columnKey === update.column);
+          const fromCol = currentCols.find(col => col.columnKey === c.column);
+          const toCol = currentCols.find(col => col.columnKey === update.column);
           const fromTitle = fromCol?.title || c.column;
           const toTitle = toCol?.title || update.column;
 
@@ -751,7 +816,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
           // Archiving Logic
           if (update.column === 'postado') {
             newCard.archivedAt = new Date().toISOString();
-          } else if (c.column === 'postado') {
+          } else {
             newCard.archivedAt = undefined;
           }
         }
@@ -765,14 +830,14 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       await monitoring.trackPerformance('REORDER_KANBAN_CARDS', async () => {
         // Execute updates. 
         for (const u of updates) {
-          const card = kanbanCards.find(c => c.id === u.id);
+          const card = currentCards.find(c => c.id === u.id);
           if (!card) continue;
 
           const db: any = { position_index: u.position_index };
           
           if (u.column && u.column !== card.column) {
-            const fromCol = kanbanColumns.find(col => col.columnKey === card.column);
-            const toCol = kanbanColumns.find(col => col.columnKey === u.column);
+            const fromCol = currentCols.find(col => col.columnKey === card.column);
+            const toCol = currentCols.find(col => col.columnKey === u.column);
             const fromTitle = fromCol?.title || card.column;
             const toTitle = toCol?.title || u.column;
             
@@ -790,7 +855,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
             }
 
             if (u.column === 'postado') db.archived_at = new Date().toISOString();
-            else if (card.column === 'postado') db.archived_at = null;
+            else db.archived_at = null;
           }
 
           await supabase.from('kanban_cards').update(db).eq('id', u.id);
@@ -803,12 +868,13 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     } finally {
       setTimeout(() => {
         updates.forEach(u => pendingOpsRef.current.delete(u.id));
-      }, 200);
+      }, 1500);
     }
-  }, [debouncedRefetchCards, kanbanCards, kanbanColumns, createHistoryAction]);
+  }, [debouncedRefetchCards, createHistoryAction]);
 
   const addKanbanColumn = useCallback(async (employeeId: string, title: string, color: string) => {
-    await supabase.from('kanban_columns').insert({ employee_id: employeeId, title, color, column_key: title.toLowerCase().replace(/ /g, '-'), position: kanbanColumns.length });
+    const colKey = normalizeColumnKey(slugify(title));
+    await supabase.from('kanban_columns').insert({ employee_id: employeeId, title, color, column_key: colKey, position: kanbanColumns.length });
   }, [kanbanColumns]);
   const updateKanbanColumn = useCallback(async (id: string, updates: Partial<KanbanColumnDef>) => {
     await supabase.from('kanban_columns').update(updates).eq('id', id);

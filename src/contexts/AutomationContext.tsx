@@ -98,26 +98,36 @@ Detectar e ajustar todas as unidades para o formato correto (Kg, L, g, ml, etc.)
 Corrigir preços para o formato R$ 0,00, mesmo que estejam incompletos ou com vírgula/ponto trocados.
 Garantir que o preço sempre venha por último, separado do produto por " - ".
 Manter uma linha por produto, mesmo que a lista esteja em linhas incompletas ou com múltiplos espaços.
-Reconhecer automaticamente unidades junto ao produto (ex.: "2kg" → "2Kg", "1k" → "1Kg").
-NÃO ADICIONAR números à unidade de medida se o texto original não possuir número. Exemplo: se estiver apenas "kg" ou "Kg", MANTENHA apenas "Kg", NUNCA altere para "1Kg".
+Reconhecer automaticamente unidades junto ao produto quando já houver número no original (ex.: "2kg" → "2Kg", "500g" → "500g").
+
+🔒 REGRA CRÍTICA ABSOLUTA – PROIBIDO ADICIONAR "1" ANTES DE KG OU OUTRAS UNIDADES:
+- Se o produto estiver escrito apenas "KG", "kg" ou "Kg" (sem o número 1 antes, como em carnes, frios, hortifrúti ou produtos vendidos por quilo), MANTENHA APENAS "Kg" (ou "KG").
+- É TERMINANTEMENTE PROIBIDO transformar "KG" em "1Kg" ou "1KG".
+- NUNCA adicione o número "1" na frente de unidades (KG, UN, G, L, ML, etc.) se esse número "1" não existir no texto original daquele produto.
+- Exemplo CORRETO: "PICANHA BOVINA KG 49,90" → "PICANHA BOVINA Kg - R$ 49,90" (SEM o número 1).
+- Exemplo PROIBIDO/ERRADO: "PICANHA BOVINA KG 49,90" → "PICANHA BOVINA 1Kg - R$ 49,90".
+
 🔒 REGRA CRÍTICA – POSICIONAMENTO DA MARCA:
 
 A MARCA NUNCA DEVE APARECER NO INÍCIO DO NOME DO PRODUTO.
 
 A descrição deve seguir obrigatoriamente esta estrutura:
 
-TIPO/DESCRIÇÃO DO PRODUTO + MARCA + QUANTIDADE/UNIDADE
+TIPO/DESCRIÇÃO DO PRODUTO + MARCA (se houver) + UNIDADE (com número SOMENTE se existir no original)
 
 Exemplos corretos:
 ARROZ TIPO 1 CAMIL 5Kg
 REFRIGERANTE COLA COCA-COLA 2L
 LEITE UHT INTEGRAL PIRACANJUBA 1L
 CAFÉ TRADICIONAL 3 CORAÇÕES 500g
+CONTRA FILÉ BOVINO Kg
+TOMATE LONGA VIDA Kg
 
 Exemplos incorretos:
 CAMIL ARROZ TIPO 1 5Kg
 COCA-COLA REFRIGERANTE COLA 2L
 PIRACANJUBA LEITE UHT INTEGRAL 1L
+CONTRA FILÉ BOVINO 1Kg (ERRADO quando o original era apenas KG)
 
 Sempre que identificar uma marca no início, reorganizar automaticamente para o formato correto.
 
@@ -129,7 +139,7 @@ O código de barras deve ser movido apenas para o INÍCIO da linha do produto.
 
 FORMATO FINAL OBRIGATÓRIO:
 
-CÓDIGO_DE_BARRAS  DESCRIÇÃO_DO_PRODUTO MARCA QUANTIDADE_UNIDADE R$ PREÇO
+CÓDIGO_DE_BARRAS  DESCRIÇÃO_DO_PRODUTO MARCA UNIDADE R$ PREÇO
 
 🔒 REGRA DE FORMATAÇÃO DE ESPAÇO:
 
@@ -168,8 +178,9 @@ REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original d
 
 REGRAS DE PRESERVAÇÃO:
 1. NÃO remova nem altere: Embalagem (pote, lata, fardo, caixa, garrafa), Unidade (un, kg, g, ml, l), Sabor, Tipo, Peso ou Volume.
-2. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
-3. Mantenha a ordem das informações conforme o texto original.
+2. NUNCA adicione o número "1" na frente de "KG" / "Kg" se o texto original tiver apenas "KG" (ex: mantenha "Kg", NUNCA troque "KG" por "1Kg" ou "1KG").
+3. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
+4. Mantenha a ordem das informações conforme o texto original.
 
 TAREFA: Organizar a lista por setores (Categorias).
 1. Corrija a ortografia dos produtos preservando os detalhes técnicos acima.
@@ -186,12 +197,13 @@ REGRA PRINCIPAL: Você NÃO pode remover informações da descrição original d
 
 REGRAS DE PRESERVAÇÃO:
 1. NÃO remova nem altere: Embalagem (pote, lata, fardo, caixa, garrafa), Unidade (un, kg, g, ml, l), Sabor, Tipo, Peso ou Volume.
-2. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
-3. MANTENHA EXATAMENTE a sequência em que os produtos aparecem.
-4. Formate os preços com vírgula (ex: 5.99 -> 5,99).
-5. NUNCA use asteriscos (*), markdown, ou listas numeradas.
-6. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
-7. Se o texto original tiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.`;
+2. NUNCA adicione o número "1" na frente de "KG" / "Kg" se o texto original tiver apenas "KG" (ex: mantenha "Kg", NUNCA troque "KG" por "1Kg" ou "1KG").
+3. Exemplo: "mionesa hellmas pote 400g" -> "maionese hellmann's pote 400g" (O "pote" DEVE ser mantido).
+4. MANTENHA EXATAMENTE a sequência em que os produtos aparecem.
+5. Formate os preços com vírgula (ex: 5.99 -> 5,99).
+6. NUNCA use asteriscos (*), markdown, ou listas numeradas.
+7. Retorne APENAS o texto processado. Nenhuma explicação ou comentário adicional.
+8. Se o texto original tiver informações de cabeçalho (Data, Cliente), mantenha-as no topo.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -212,6 +224,61 @@ REGRAS DE PRESERVAÇÃO:
       
       // Cleanup for safety
       fixedText = fixedText.replace(/\*/g, '').replace(/###/g, '');
+
+      // Post-processing guarantee: never allow the AI to turn standalone "KG"/"Kg" into "1Kg"/"1KG"
+      // unless the corresponding original line explicitly had "1kg" / "1 kg" / "1k".
+      const origLines = (card.description || '').split(/\r?\n/);
+      const hasExplicitOneKg = (line: string) => /(?:^|[^\d.,])1\s*k(?:g|ilo)?\b/i.test(line);
+      const hasStandaloneKg = (line: string) => /(?:^|[^\d])kg\b/i.test(line);
+
+      fixedText = fixedText
+        .split(/\r?\n/)
+        .map(outLine => {
+          if (!/\b1\s*kg\b/i.test(outLine)) return outLine;
+
+          // 1. Try matching original line by barcode (4+ digits)
+          const barcodeMatch = outLine.match(/^\s*(\d{4,14})\b/);
+          let matchedOrigLine: string | undefined;
+          if (barcodeMatch) {
+            const code = barcodeMatch[1];
+            matchedOrigLine = origLines.find(l => l.includes(code));
+          }
+
+          // 2. Fallback: match original line by shared words (>= 4 chars)
+          if (!matchedOrigLine) {
+            const norm = (s: string) =>
+              s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const outWords = norm(outLine)
+              .replace(/^\s*\d+\s*/, '')
+              .split(/[^a-z0-9]+/)
+              .filter(w => w.length >= 4 && w !== 'tipo' && w !== 'para');
+            if (outWords.length > 0) {
+              let bestScore = 0;
+              for (const cand of origLines) {
+                const candNorm = norm(cand);
+                const score = outWords.filter(w => candNorm.includes(w)).length;
+                if (score > bestScore) {
+                  bestScore = score;
+                  matchedOrigLine = cand;
+                }
+              }
+            }
+          }
+
+          if (matchedOrigLine) {
+            if (!hasExplicitOneKg(matchedOrigLine)) {
+              return outLine.replace(/\b1\s*(Kg|KG|kg)\b/g, '$1');
+            }
+          } else if (!hasExplicitOneKg(card.description || '') || hasStandaloneKg(card.description || '')) {
+            // If no line in original had "1kg", strip the invented "1"
+            if (!hasExplicitOneKg(card.description || '')) {
+              return outLine.replace(/\b1\s*(Kg|KG|kg)\b/g, '$1');
+            }
+          }
+
+          return outLine;
+        })
+        .join('\n');
 
       await updateKanbanCard(cardId, { description: fixedText }, `IA: ${mode === 'barcode' ? 'Correção com código de barras' : mode === 'organize' ? 'Organizou por categorias' : 'Refinou mantendo ordem'}`);
       toast.success('✨ Descrição atualizada com sucesso!');

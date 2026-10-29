@@ -17,6 +17,12 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useApp } from '@/contexts/useApp';
 import KanbanCard from './KanbanCard';
+import {
+  compareKanbanCards,
+  computePositionUpdatesAtIndex,
+  getTopPositionIndex,
+  normalizeColumnKey,
+} from '@/features/kanban/utils/cardOrder';
 
 interface Props {
   children: React.ReactNode;
@@ -131,47 +137,49 @@ export function KanbanBoardDndContext({ children, onReorderColumns }: Props) {
     const isOverColumn = overData.type === 'Column';
     const isOverTask = overData.type === 'Card';
 
-    let destColumnKey = activeCard.column;
+    const currentColumnKey = normalizeColumnKey(activeCard.column);
+    let destColumnKey = currentColumnKey;
     if (isOverColumn) {
-      destColumnKey = overData.columnKey;
+      destColumnKey = normalizeColumnKey(overData.columnKey);
     } else if (isOverTask) {
-      destColumnKey = overData.card.column;
+      destColumnKey = normalizeColumnKey(overData.card.column);
     }
 
-    // Filtra apenas cards do MESMO funcionário e não arquivados.
-    // Antes filtrava só pela chave da coluna (ex: "postado"), o que pegava cards de
-    // todos os funcionários + arquivados e gerava milhares de UPDATEs por arraste.
-    const destCards = kanbanCards
-      .filter(c => c.column === destColumnKey && c.employeeId === activeCard.employeeId && !c.archivedAt)
-      .sort((a, b) => (a.position_index || 0) - (b.position_index || 0));
+    // Case 1: Same column -> allow manual reordering up/down inside the column
+    if (currentColumnKey === destColumnKey) {
+      if (activeId === overId) return;
 
-    // Case 1: Same column reorder
-    if (activeCard.column === destColumnKey) {
-      const oldIndex = destCards.findIndex(c => c.id === activeId);
-      const newIndex = isOverColumn ? destCards.length - 1 : destCards.findIndex(c => c.id === overId);
-      
-      if (oldIndex === newIndex || newIndex === -1) return;
+      const colCards = kanbanCards
+        .filter(c => normalizeColumnKey(c.column) === destColumnKey)
+        .sort(compareKanbanCards);
 
-      const newOrder = arrayMove(destCards, oldIndex, newIndex);
-      const updates = newOrder.map((card, index) => ({
-        id: card.id,
-        position_index: (index + 1) * 1024,
-      }));
+      const oldIndex = colCards.findIndex(c => c.id === activeId);
+      const newIndex = isOverTask
+        ? colCards.findIndex(c => c.id === overId)
+        : colCards.length - 1;
+
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+      const cardsWithoutActive = colCards.filter(c => c.id !== activeId);
+      const updates = computePositionUpdatesAtIndex(
+        kanbanCards,
+        cardsWithoutActive,
+        activeId,
+        destColumnKey,
+        newIndex
+      );
       reorderKanbanCards(updates);
-    } 
-    // Case 2: Move to different column
+    }
+    // Case 2: Move to different column -> ALWAYS place at the VERY TOP (#1)
     else {
-      const newOrder = [...destCards];
-      const targetIndex = isOverColumn ? destCards.length : destCards.findIndex(c => c.id === overId);
-      
-      newOrder.splice(targetIndex, 0, activeCard);
-      
-      const updates = newOrder.map((card, index) => ({
-        id: card.id,
-        position_index: (index + 1) * 1024,
-        column: card.id === activeId ? destColumnKey : undefined
-      }));
-      reorderKanbanCards(updates);
+      const topPositionIndex = getTopPositionIndex(kanbanCards, destColumnKey, activeId);
+      reorderKanbanCards([
+        {
+          id: activeId,
+          position_index: topPositionIndex,
+          column: destColumnKey,
+        },
+      ]);
     }
   };
 
@@ -187,10 +195,14 @@ export function KanbanBoardDndContext({ children, onReorderColumns }: Props) {
       onDragEnd={handleDragEnd}
     >
       {children}
-      <DragOverlay>
-        {activeType === 'Card' && activeCard ? <KanbanCard card={activeCard} /> : null}
+      <DragOverlay dropAnimation={null}>
+        {activeType === 'Card' && activeCard ? (
+          <div className="pointer-events-none w-[290px] opacity-95 shadow-2xl">
+            <KanbanCard card={activeCard} />
+          </div>
+        ) : null}
         {activeType === 'Column' && activeColumn ? (
-          <div className="w-[300px] h-20 bg-secondary/80 rounded-xl border border-border shadow-2xl flex items-center justify-center backdrop-blur-sm">
+          <div className="pointer-events-none w-[300px] h-20 bg-secondary/80 rounded-xl border border-border shadow-2xl flex items-center justify-center backdrop-blur-sm">
             <span className="font-bold text-foreground opacity-70 uppercase tracking-wider">{activeColumn.title}</span>
           </div>
         ) : null}

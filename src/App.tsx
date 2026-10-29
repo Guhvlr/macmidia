@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/contexts/AppContext";
 import { useApp } from "@/contexts/useApp";
 import { useAutoUpdate } from "@/hooks/useAutoUpdate";
+import { ReleaseNotesDialog } from "@/components/layout/ReleaseNotesDialog";
 import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import MainLayout from "@/components/layout/MainLayout";
@@ -112,6 +113,7 @@ const App = () => (
       <BrowserRouter>
         <AppProvider>
           <AutoUpdateListener />
+          <ReleaseNotesDialog />
           <ErrorBoundary>
             <ThemeProvider>
                 <AppRoutes />

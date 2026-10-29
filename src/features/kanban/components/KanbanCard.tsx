@@ -1,5 +1,6 @@
 import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import type { KanbanCard as KanbanCardType, Employee, SystemUser } from '@/contexts/app-types';
+import type { QueuedTask } from '@/contexts/KanbanContext';
 import Timer from './Timer';
 import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles, Clock, MoveRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,21 +23,20 @@ const CardDetailDialog = lazy(() => import('./CardDetailDialog'));
 
 interface KanbanCardProps {
   card: KanbanCardType;
-  employees: Employee[];
+  employee?: Employee;
+  mainTask?: QueuedTask;
   updateKanbanCard: (id: string, updates: Partial<KanbanCardType>, actionDescription?: string) => Promise<void>;
+  uploadKanbanAsset: (cardId: string, file: File) => Promise<void>;
   triggerAICorrection: (cardId: string) => Promise<void>;
   dragAttributes?: any;
   dragListeners?: any;
 }
 
-const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrection, dragAttributes, dragListeners }: KanbanCardProps) => {
+const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, uploadKanbanAsset, triggerAICorrection, dragAttributes, dragListeners }: KanbanCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const { activeTasks, uploadKanbanAsset } = useApp();
   
-  const cardTasks = activeTasks.filter(t => t.cardId === card.id);
-  const isProcessing = cardTasks.length > 0;
-  const mainTask = cardTasks[0];
+  const isProcessing = !!mainTask;
 
   // Stuck Card Detection (>24h without activity and not in final column)
   const isCompletedCol = isFinalColumn(card.column);
@@ -81,7 +81,6 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
     coverImage = images.find(img => isImageUrl(img)) || null;
   }
 
-  const employee = employees.find(e => e.id === card.employeeId);
   const safeChecklists = Array.isArray(card.checklists) ? card.checklists : [];
   const safeComments = Array.isArray(card.comments) ? card.comments : [];
   const safeAssignees = Array.isArray(card.assignedUsers) ? (card.assignedUsers as SystemUser[]) : [];
@@ -359,17 +358,21 @@ const KanbanCardInner = ({ card, employees, updateKanbanCard, triggerAICorrectio
         </ContextMenuContent>
       </ContextMenu>
 
-      <MoveCardDialog 
-        card={card} 
-        open={moveDialogOpen} 
-        onOpenChange={setMoveDialogOpen} 
-      />
+      {moveDialogOpen && (
+        <MoveCardDialog 
+          card={card} 
+          open={moveDialogOpen} 
+          onOpenChange={setMoveDialogOpen} 
+        />
+      )}
 
-      <DuplicateCardDialog 
-        card={card} 
-        open={duplicateDialogOpen} 
-        onOpenChange={setDuplicateDialogOpen} 
-      />
+      {duplicateDialogOpen && (
+        <DuplicateCardDialog 
+          card={card} 
+          open={duplicateDialogOpen} 
+          onOpenChange={setDuplicateDialogOpen} 
+        />
+      )}
 
       {detailOpen && (
         <Suspense fallback={null}>
@@ -384,6 +387,7 @@ const KanbanCard = memo(KanbanCardInner, (prev, next) => {
   return (
     prev.card.id === next.card.id &&
     prev.card.column === next.card.column &&
+    prev.card.position_index === next.card.position_index &&
     prev.card.clientName === next.card.clientName &&
     prev.card.description === next.card.description &&
     prev.card.checklists === next.card.checklists &&
@@ -396,9 +400,8 @@ const KanbanCard = memo(KanbanCardInner, (prev, next) => {
     prev.card.employeeId === next.card.employeeId &&
     prev.card.calendarClientId === next.card.calendarClientId &&
     prev.card.calendarClientName === next.card.calendarClientName &&
-    prev.employees === next.employees &&
-    prev.updateKanbanCard === next.updateKanbanCard &&
-    prev.triggerAICorrection === next.triggerAICorrection
+    prev.employee === next.employee &&
+    prev.mainTask === next.mainTask
   );
 });
 
@@ -406,18 +409,24 @@ KanbanCard.displayName = 'KanbanCard';
 
 
 
-const KanbanCardContainer = ({ card, dragAttributes, dragListeners }: { card: KanbanCardType, dragAttributes?: any, dragListeners?: any }) => {
-  const { employees, updateKanbanCard, triggerAICorrection } = useApp();
+const KanbanCardContainer = memo(({ card, dragAttributes, dragListeners }: { card: KanbanCardType, dragAttributes?: any, dragListeners?: any }) => {
+  const { employees, activeTasks, updateKanbanCard, uploadKanbanAsset, triggerAICorrection } = useApp();
+  const employee = employees.find(e => e.id === card.employeeId);
+  const mainTask = activeTasks.length > 0 ? activeTasks.find(t => t.cardId === card.id) : undefined;
   return (
     <KanbanCard 
       card={card} 
-      employees={employees} 
+      employee={employee}
+      mainTask={mainTask}
       updateKanbanCard={updateKanbanCard} 
+      uploadKanbanAsset={uploadKanbanAsset}
       triggerAICorrection={triggerAICorrection} 
       dragAttributes={dragAttributes}
       dragListeners={dragListeners}
     />
   );
-};
+});
+
+KanbanCardContainer.displayName = 'KanbanCardContainer';
 
 export default KanbanCardContainer;

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import KanbanCard from './KanbanCard';
@@ -7,7 +8,7 @@ interface SortableKanbanCardProps {
   card: KanbanCardType;
 }
 
-export function SortableKanbanCard({ card }: SortableKanbanCardProps) {
+export const SortableKanbanCard = memo(function SortableKanbanCard({ card }: SortableKanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -23,19 +24,21 @@ export function SortableKanbanCard({ card }: SortableKanbanCardProps) {
     }
   });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.35 : 1,
+    willChange: transform ? 'transform' : undefined,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`touch-manipulation transition-all duration-200 ${isDragging ? 'z-50 scale-[1.05] shadow-2xl rotate-2 opacity-90' : ''}`}
+      className={`touch-manipulation ${isDragging ? 'z-50 pointer-events-none' : ''}`}
     >
       <KanbanCard card={card} dragAttributes={attributes} dragListeners={listeners} />
     </div>
   );
-}
+});
+

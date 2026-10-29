@@ -118,9 +118,18 @@ const ArchivedCards = () => {
   };
 
   const handleRestore = async (cardId: string) => {
+    const { data: topRow } = await supabase
+      .from('kanban_cards')
+      .select('position_index')
+      .eq('column', 'aprovado-programar')
+      .order('position_index', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const topPosition = ((topRow as any)?.position_index ?? 0) - 1024;
+
     const { error } = await supabase
       .from('kanban_cards')
-      .update({ archived_at: null })
+      .update({ archived_at: null, column: 'aprovado-programar', position_index: topPosition })
       .eq('id', cardId);
     
     if (error) {

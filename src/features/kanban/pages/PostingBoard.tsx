@@ -106,7 +106,6 @@ const PostingBoard = () => {
 
   const activeCards = useMemo(() =>
     kanbanCards.filter(c => {
-      if (c.archivedAt && c.column !== 'postado') return false; 
       if (!KANBAN_COLUMNS.some(col => col.key === c.column)) return false;
 
       // Visitor restrictions
@@ -162,68 +161,91 @@ const PostingBoard = () => {
   return (
     <div className="h-screen overflow-hidden flex flex-col kanban-custom-bg">
       <header className="page-header flex-shrink-0">
-        <div className="flex items-center justify-between px-3 py-2 md:px-6 md:py-3.5">
-          <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => {
-                const dest = sessionStorage.getItem('mobile_destination_chosen') || '/';
-                navigate(dest);
-              }} 
-              className="hover:bg-secondary rounded-xl h-8 w-8 md:h-10 md:w-10"
-            >
-              <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
-            </Button>
-            <div className="flex items-center gap-2 md:gap-2.5">
-              <div className="p-1.5 md:p-2 rounded-xl bg-primary/8">
-                <Send className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+        <div className="flex flex-col gap-2 px-3 py-2 md:px-6 md:py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => {
+                  const dest = sessionStorage.getItem('mobile_destination_chosen') || '/';
+                  navigate(dest);
+                }} 
+                className="hover:bg-secondary rounded-xl h-8 w-8 md:h-10 md:w-10"
+              >
+                <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+              </Button>
+              <div className="flex items-center gap-2 md:gap-2.5">
+                <div className="p-1.5 md:p-2 rounded-xl bg-primary/8">
+                  <Send className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-sm md:text-lg font-bold text-foreground">Quadros de Postagem</h1>
+                  <p className="hidden md:block text-[11px] text-muted-foreground">Gerencie conteúdos para publicação</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-sm md:text-lg font-bold text-foreground">Quadros de Postagem</h1>
-                <p className="hidden md:block text-[11px] text-muted-foreground">Gerencie conteúdos para publicação</p>
-              </div>
-            </div>
-            
-            <div className="hidden md:block flex-1 max-w-4xl mx-8">
-              <div className="flex items-center gap-3 w-full">
-                <div className="w-[300px]">
-                  <Select value={clientFilter} onValueChange={setClientFilter}>
-                    <SelectTrigger className="bg-secondary/40 border-border/50 h-10 rounded-xl">
-                      <SelectValue placeholder="Selecionar Pasta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="cursor-pointer">
-                        <div className="flex items-center gap-2">
-                          <Folder className="w-4 h-4 text-muted-foreground" />
-                          <span>Todas as Pastas</span>
-                        </div>
-                      </SelectItem>
-                      {visibleClients.map(client => (
-                        <SelectItem key={client.id} value={client.id} className="cursor-pointer">
+              
+              <div className="hidden md:block flex-1 max-w-4xl mx-8">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-[300px]">
+                    <Select value={clientFilter} onValueChange={setClientFilter}>
+                      <SelectTrigger className="bg-secondary/40 border-border/50 h-10 rounded-xl">
+                        <SelectValue placeholder="Selecionar Pasta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all" className="cursor-pointer">
                           <div className="flex items-center gap-2">
                             <Folder className="w-4 h-4 text-muted-foreground" />
-                            <span>{client.name}</span>
+                            <span>Todas as Pastas</span>
                           </div>
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <KanbanSearch />
+                        {visibleClients.map(client => (
+                          <SelectItem key={client.id} value={client.id} className="cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              <Folder className="w-4 h-4 text-muted-foreground" />
+                              <span>{client.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
+                    <KanbanSearch />
+                  </div>
                 </div>
               </div>
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/arquivados')} 
+              className="hidden md:flex border-border/50 hover:border-primary/30 rounded-xl text-xs bg-secondary/20 h-9 px-4 transition-all hover:bg-secondary/40"
+            >
+              <Archive className="w-4 h-4 mr-2 text-primary" /> Central de Arquivados
+            </Button>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => navigate('/arquivados')} 
-            className="hidden md:flex border-border/50 hover:border-primary/30 rounded-xl text-xs bg-secondary/20 h-9 px-4 transition-all hover:bg-secondary/40"
-          >
-            <Archive className="w-4 h-4 mr-2 text-primary" /> Central de Arquivados
-          </Button>
+
+          <div className="flex md:hidden items-center gap-2 w-full">
+            <div className="w-[140px] shrink-0">
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger className="bg-secondary/40 border-border/50 h-9 rounded-xl text-xs">
+                  <SelectValue placeholder="Pasta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="cursor-pointer">Todas as Pastas</SelectItem>
+                  {visibleClients.map(client => (
+                    <SelectItem key={client.id} value={client.id} className="cursor-pointer">
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-0">
+              <KanbanSearch />
+            </div>
+          </div>
         </div>
       </header>
 

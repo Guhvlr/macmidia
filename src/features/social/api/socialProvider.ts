@@ -507,14 +507,13 @@ async function call<T = Record<string, unknown>>(
     const isScheduled =
       Boolean(scheduledAt) && new Date(scheduledAt!).getTime() > Date.now() + 30_000;
 
-    // A API do Post for Me exige que "caption" seja uma string não-vazia (mesmo em Stories,
-    // onde o Instagram ignora a legenda e publica apenas a imagem/vídeo).
+    // Em Stories não enviamos legenda para o Instagram não exibir balão de texto no canto inferior
     const safeCaption =
-      caption && caption.trim().length > 0
-        ? caption.trim()
-        : placement === 'stories'
-          ? 'Stories'
-          : '.';
+      placement === 'stories'
+        ? ''
+        : caption && caption.trim().length > 0
+          ? caption.trim()
+          : '';
 
     const platformConfigs: Record<string, unknown> = {};
     if (networks.includes('instagram')) {

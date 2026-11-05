@@ -470,7 +470,7 @@ export function useSocialPosts() {
           label: 'Stories',
           placement: 'stories',
           media: storiesList,
-          caption: 'Stories',
+          caption: '',
         });
       }
 

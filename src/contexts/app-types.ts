@@ -128,6 +128,17 @@ export interface CalendarClient {
   phones?: string[];
   address?: string;
   notes?: string;
+  /** @usuario do Instagram (apenas exibição) */
+  instagramUsername?: string;
+  /** ID da conta Instagram conectada no provedor de postagem (Post for Me) */
+  postformeAccountId?: string;
+  instagramConnectedAt?: string;
+  /** Nome/usuário da página do Facebook vinculada */
+  facebookPageName?: string;
+  /** ID da conta Facebook conectada no provedor de postagem (Post for Me) */
+  postformeFacebookAccountId?: string;
+  /** Horário padrão de postagem deste cliente (ex: "20:00") */
+  defaultPostTime?: string;
 }
 
 export const DEFAULT_COLUMNS = [

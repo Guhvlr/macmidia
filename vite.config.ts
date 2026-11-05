@@ -11,6 +11,13 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    proxy: {
+      "/api/postforme": {
+        target: "https://api.postforme.dev/v1",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/postforme/, ""),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

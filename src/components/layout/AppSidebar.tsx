@@ -19,7 +19,8 @@ import {
   LucideIcon,
   Zap,
   FileText,
-  Wallet
+  Wallet,
+  Instagram
 } from 'lucide-react';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 
@@ -39,7 +40,7 @@ export const navItems: NavItem[] = [
   { path: '/cofre', icon: Folder, label: 'Banco de Dados' },
   { path: '/relatorios', icon: FileText, label: 'Relatórios' },
   { path: '/financeiro', icon: Wallet, label: 'Financeiro' },
-  { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp' },
+  { path: '/whatsapp', icon: Instagram, label: 'Auto Post' },
   { path: '/produtos', icon: Home, label: 'Produtos', isBeta: true },
   { path: '/gerador-artes', icon: Zap, label: 'MacOferta Pro' },
 ];

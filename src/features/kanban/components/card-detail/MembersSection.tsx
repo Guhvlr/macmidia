@@ -20,6 +20,7 @@ import { useApp } from '@/contexts/useApp';
 import { ListTodo, Paperclip } from 'lucide-react';
 import { DatesSection } from './DatesSection';
 import { MoveCardDialog } from './MoveCardDialog';
+import { sendKanbanCardToSocialQueue } from '@/features/social/hooks/useSocialPosts';
 
 interface MembersSectionProps {
   card: KanbanCardType;
@@ -82,7 +83,23 @@ export const MembersSection = memo( ({
     'bg-blue-600', 'bg-indigo-600', 'bg-purple-600', 'bg-pink-600', 'bg-slate-600'
   ];
 
-  const { kanbanCards } = useApp();
+  const { kanbanCards, moveKanbanCard } = useApp();
+  const canSendToPost = card.column === 'aprovado-programar' || card.column === 'programar-mais-dias';
+  const [isSendingToPost, setIsSendingToPost] = React.useState(false);
+
+  const handleSendToSocialQueue = async () => {
+    if (isSendingToPost) return;
+    setIsSendingToPost(true);
+    try {
+      await sendKanbanCardToSocialQueue(card);
+      await moveKanbanCard(card.id, 'postado');
+      toast.success('Enviado para a Central de Postagem e movido para Postado!');
+    } catch {
+      toast.error('Erro ao enviar card para a Central de Postagem.');
+    } finally {
+      setIsSendingToPost(false);
+    }
+  };
   const [searchTerm, setSearchTerm] = React.useState('');
   const [hiddenLabels, setHiddenLabels] = React.useState<string[]>(() => {
     const saved = localStorage.getItem('kanban_hidden_labels');
@@ -321,6 +338,18 @@ export const MembersSection = memo( ({
             </Button>
           }
         />
+
+        {canSendToPost && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isSendingToPost}
+            onClick={handleSendToSocialQueue}
+            className="h-8 px-3.5 bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-[11px] font-black uppercase tracking-wider text-white rounded-full flex items-center gap-1.5 shadow-md transition-all"
+          >
+            <Send className="w-3.5 h-3.5" /> Postar
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-start gap-10">

@@ -31,7 +31,7 @@ const MainLayout = ({ children, title }: Props) => {
       else if (segment === 'postagem') pageLabel = 'Postagens';
       else if (segment === 'calendario') pageLabel = 'Calendário';
       else if (segment === 'cofre') pageLabel = 'Banco de Dados';
-      else if (segment === 'whatsapp') pageLabel = 'WhatsApp';
+      else if (segment === 'whatsapp' || segment === 'instagram') pageLabel = 'Central de Postagem';
       else if (segment === 'usuarios') pageLabel = 'Membros';
       else if (segment === 'produtos') pageLabel = 'Produtos';
       else if (segment === 'arquivados') pageLabel = 'Arquivo';

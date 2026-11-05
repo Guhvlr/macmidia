@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/postforme/:path*", "destination": "https://api.postforme.dev/v1/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

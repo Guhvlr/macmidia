@@ -25,7 +25,7 @@ const Vault = lazy(() => import("@/features/vault/pages/Vault"));
 const PostingBoard = lazy(() => import("@/features/kanban/pages/PostingBoard"));
 const CorrectionBoard = lazy(() => import("@/features/kanban/pages/CorrectionBoard"));
 const UsersAdmin = lazy(() => import("@/features/auth/pages/UsersAdmin"));
-const WhatsAppInbox = lazy(() => import("@/features/automation/pages/WhatsAppInbox"));
+const SocialPostingHub = lazy(() => import("@/features/social/pages/SocialPostingHub"));
 const Products = lazy(() => import("@/features/products/pages/Products"));
 const OfferStudio = lazy(() => import("@/features/offer-generator/pages/OfferStudio"));
 const Report = lazy(() => import("@/features/reports/pages/Report"));
@@ -83,7 +83,8 @@ const AppRoutes = () => (
       <Route path="/postagem" element={<ProtectedRoute><PostingBoard /></ProtectedRoute>} />
       <Route path="/correcao" element={<ProtectedRoute><CorrectionBoard /></ProtectedRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute><UsersAdmin /></ProtectedRoute>} />
-      <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppInbox /></ProtectedRoute>} />
+      <Route path="/whatsapp" element={<ProtectedRoute><SocialPostingHub /></ProtectedRoute>} />
+      <Route path="/instagram" element={<ProtectedRoute><SocialPostingHub /></ProtectedRoute>} />
       <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
       <Route path="/gerador-artes" element={<OfferProvider><ProtectedRoute><OfferStudio /></ProtectedRoute></OfferProvider>} />
       <Route path="/relatorios" element={<ProtectedRoute><ReportsHub /></ProtectedRoute>} />

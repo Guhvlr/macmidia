@@ -2,7 +2,7 @@ import { useState, useCallback, lazy, Suspense, memo } from 'react';
 import type { KanbanCard as KanbanCardType, Employee, SystemUser } from '@/contexts/app-types';
 import type { QueuedTask } from '@/contexts/KanbanContext';
 import Timer from './Timer';
-import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles, Clock, MoveRight, Copy } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, CheckSquare, AlignLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Smartphone, Sparkles, Clock, MoveRight, Copy, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressImage, createThumbnail } from '@/lib/utils';
 import { useApp } from '@/contexts/useApp';
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/context-menu";
 import { MoveCardDialog } from './card-detail/MoveCardDialog';
 import { DuplicateCardDialog } from './card-detail/DuplicateCardDialog';
+import { sendKanbanCardToSocialQueue } from '@/features/social/hooks/useSocialPosts';
 
 import { isFinalColumn, formatInactiveTime } from '../utils/stuckCards';
 
@@ -26,15 +27,38 @@ interface KanbanCardProps {
   employee?: Employee;
   mainTask?: QueuedTask;
   updateKanbanCard: (id: string, updates: Partial<KanbanCardType>, actionDescription?: string) => Promise<void>;
+  moveKanbanCard: (id: string, column: string) => Promise<void>;
   uploadKanbanAsset: (cardId: string, file: File) => Promise<void>;
   triggerAICorrection: (cardId: string) => Promise<void>;
   dragAttributes?: any;
   dragListeners?: any;
 }
 
-const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, uploadKanbanAsset, triggerAICorrection, dragAttributes, dragListeners }: KanbanCardProps) => {
+const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanbanCard, uploadKanbanAsset, triggerAICorrection, dragAttributes, dragListeners }: KanbanCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isSendingToPost, setIsSendingToPost] = useState(false);
+
+  const canSendToPost = card.column === 'aprovado-programar' || card.column === 'programar-mais-dias';
+
+  const handleSendToSocialQueue = useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (isSendingToPost) return;
+    setIsSendingToPost(true);
+    try {
+      await sendKanbanCardToSocialQueue(card);
+      await moveKanbanCard(card.id, 'postado');
+      toast.success('Enviado para a Central de Postagem e movido para Postado!');
+    } catch (err) {
+      console.error('Erro ao enviar card para postagem:', err);
+      toast.error('Erro ao enviar card para a Central de Postagem.');
+    } finally {
+      setIsSendingToPost(false);
+    }
+  }, [card, isSendingToPost, moveKanbanCard]);
   
   const isProcessing = !!mainTask;
 
@@ -310,6 +334,24 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, uploadKan
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">
+            {canSendToPost && (
+              <button
+                type="button"
+                data-no-dnd="true"
+                onPointerDown={e => e.stopPropagation()}
+                onClick={handleSendToSocialQueue}
+                disabled={isSendingToPost}
+                title="Enviar para a Central de Postagem e mover para Postado"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white text-[10px] font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isSendingToPost ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Send className="w-3 h-3" />
+                )}
+                Postar
+              </button>
+            )}
             {safeAssignees.length > 0 ? (
               <div className="flex items-center -space-x-1.5">
                 {safeAssignees.map(u => (
@@ -336,6 +378,14 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, uploadKan
           >
             Abrir cartão
           </ContextMenuItem>
+          {canSendToPost && (
+            <ContextMenuItem
+              onClick={() => handleSendToSocialQueue()}
+              className="text-[12px] font-bold text-pink-400 hover:bg-pink-500/10 cursor-pointer rounded-lg px-3 py-2 flex items-center gap-2"
+            >
+              <Send className="w-3.5 h-3.5" /> Postar no Instagram
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator className="bg-white/5" />
           <ContextMenuItem 
             onClick={(e) => {
@@ -410,7 +460,7 @@ KanbanCard.displayName = 'KanbanCard';
 
 
 const KanbanCardContainer = memo(({ card, dragAttributes, dragListeners }: { card: KanbanCardType, dragAttributes?: any, dragListeners?: any }) => {
-  const { employees, activeTasks, updateKanbanCard, uploadKanbanAsset, triggerAICorrection } = useApp();
+  const { employees, activeTasks, updateKanbanCard, moveKanbanCard, uploadKanbanAsset, triggerAICorrection } = useApp();
   const employee = employees.find(e => e.id === card.employeeId);
   const mainTask = activeTasks.length > 0 ? activeTasks.find(t => t.cardId === card.id) : undefined;
   return (
@@ -419,6 +469,7 @@ const KanbanCardContainer = memo(({ card, dragAttributes, dragListeners }: { car
       employee={employee}
       mainTask={mainTask}
       updateKanbanCard={updateKanbanCard} 
+      moveKanbanCard={moveKanbanCard}
       uploadKanbanAsset={uploadKanbanAsset}
       triggerAICorrection={triggerAICorrection} 
       dragAttributes={dragAttributes}

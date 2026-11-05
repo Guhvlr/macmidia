@@ -70,8 +70,13 @@ const CalendarPage = () => {
     if (!clientName.trim()) return;
     
     if (editingClient) {
-      await updateCalendarClient(editingClient.id, { name: clientName.trim(), logoUrl: logoUrl || undefined });
-      toast.success('Cliente atualizado com sucesso!');
+      try {
+        await updateCalendarClient(editingClient.id, { name: clientName.trim(), logoUrl: logoUrl || undefined });
+        toast.success('Cliente atualizado com sucesso!');
+      } catch {
+        toast.error('Erro ao atualizar cliente.');
+        return;
+      }
     } else {
       await addCalendarClient(clientName.trim(), logoUrl || undefined);
       toast.success('Calendário criado com sucesso!');

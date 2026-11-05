@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
-import { ArrowLeft, Plus, Eye, EyeOff, Trash2, Copy, Shield, Globe, User, Loader2, ImageIcon, Search, Phone, Mail, MapPin, FileText, ExternalLink, Settings2, Lock, X, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, EyeOff, Trash2, Copy, Shield, Globe, User, Loader2, ImageIcon, Search, Phone, Mail, MapPin, FileText, ExternalLink, Settings2, Lock, X, RefreshCw, Instagram } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import defaultBanner from '@/assets/banner-mac-midia.png';
 import defaultLogo from '@/assets/logo-mac-midia.png';
 import { CalendarClient, Credential } from '@/contexts/app-types';
+import { ClientInstagramSection } from '@/features/social/components/ClientInstagramSection';
 
 const Vault = () => {
   const navigate = useNavigate();
@@ -59,6 +60,15 @@ const Vault = () => {
     notes: ''
   });
 
+  // Keep selectedClient synchronized with calendarClients updates
+  useEffect(() => {
+    if (!selectedClient) return;
+    const fresh = calendarClients.find(c => c.id === selectedClient.id);
+    if (fresh && fresh !== selectedClient) {
+      setSelectedClient(fresh);
+    }
+  }, [calendarClients, selectedClient]);
+
   // Load client data into local form when selected
   useEffect(() => {
     if (selectedClient) {
@@ -69,7 +79,7 @@ const Vault = () => {
         notes: selectedClient.notes || ''
       });
     }
-  }, [selectedClient]);
+  }, [selectedClient?.id]);
 
   const toggleVisibility = (id: string) => {
     setVisibleIds(prev => {
@@ -84,20 +94,23 @@ const Vault = () => {
     toast.success('Copiado para a área de transferência!');
   };
 
-  const handleSaveClientInfo = () => {
+  const handleSaveClientInfo = async () => {
     if (!selectedClient) return;
     
     // Filter out empty phones
     const cleanedPhones = clientForm.phones.filter(p => p.trim() !== '');
     
-    updateCalendarClient(selectedClient.id, { 
-      email: clientForm.email,
-      phones: cleanedPhones,
-      address: clientForm.address,
-      notes: clientForm.notes
-    });
-    
-    toast.success('Dossiê do cliente atualizado com sucesso!');
+    try {
+      await updateCalendarClient(selectedClient.id, { 
+        email: clientForm.email,
+        phones: cleanedPhones,
+        address: clientForm.address,
+        notes: clientForm.notes
+      });
+      toast.success('Dossiê do cliente atualizado com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar o dossiê do cliente.');
+    }
   };
 
   const handlePhoneChange = (index: number, value: string) => {
@@ -241,13 +254,23 @@ const Vault = () => {
                     )}
                   </div>
                   <h3 className="font-bold text-white text-lg tracking-tight group-hover:text-primary transition-colors">{client.name}</h3>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center flex-wrap justify-center gap-1.5 mt-2">
                      <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/40 font-bold uppercase tracking-tighter">
                        {client.phones && client.phones.length > 0 ? '✓ Contato' : 'Ø Contato'}
                      </span>
                      <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/40 font-bold uppercase tracking-tighter">
                        {credCount} {credCount === 1 ? 'Acesso' : 'Acessos'}
                      </span>
+                     {(client.postformeAccountId || client.instagramUsername) ? (
+                       <span className="text-[10px] px-2 py-0.5 rounded bg-pink-500/15 text-pink-400 border border-pink-500/25 font-bold tracking-tight flex items-center gap-1">
+                         <Instagram className="w-2.5 h-2.5" />
+                         {client.instagramUsername || 'Instagram'}
+                       </span>
+                     ) : (
+                       <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/30 font-bold uppercase tracking-tighter">
+                         Ø Insta
+                       </span>
+                     )}
                   </div>
                 </div>
                 <div className="h-1 w-full bg-white/5 relative">
@@ -283,6 +306,13 @@ const Vault = () => {
                     <TabsList className="bg-transparent border-none p-0 h-14 gap-8">
                       <TabsTrigger value="info" className="data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full px-0 font-bold text-xs uppercase tracking-widest border-b-2 border-transparent transition-all">
                         <User className="w-4 h-4 mr-2" /> Informações
+                      </TabsTrigger>
+                      <TabsTrigger value="instagram" className="data-[state=active]:bg-transparent data-[state=active]:text-pink-400 data-[state=active]:border-b-2 data-[state=active]:border-pink-500 rounded-none h-full px-0 font-bold text-xs uppercase tracking-widest border-b-2 border-transparent transition-all flex items-center gap-2">
+                        <Instagram className="w-4 h-4" />
+                        Instagram
+                        {(selectedClient.postformeAccountId || selectedClient.instagramUsername) && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        )}
                       </TabsTrigger>
                       <TabsTrigger value="creds" className="data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full px-0 font-bold text-xs uppercase tracking-widest border-b-2 border-transparent transition-all">
                         <Lock className="w-4 h-4 mr-2" /> Chaves de Acesso ({getClientCredentials(selectedClient.id).length})
@@ -391,6 +421,13 @@ const Vault = () => {
                           Salvar Dossiê do Cliente
                         </Button>
                       </div>
+                    </TabsContent>
+
+                    <TabsContent value="instagram" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-300 outline-none">
+                      <ClientInstagramSection
+                        client={selectedClient}
+                        onUpdateClient={updateCalendarClient}
+                      />
                     </TabsContent>
 
                     <TabsContent value="creds" className="m-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 outline-none pb-12">

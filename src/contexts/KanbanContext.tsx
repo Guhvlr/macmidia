@@ -152,8 +152,82 @@ function mapCalendarTask(row: any): CalendarTask {
 function mapCredential(row: any): Credential {
   return { id: row.id, label: row.label, username: row.username, password: row.password, url: row.url || undefined, employeeId: row.employee_id, calendarClientId: row.calendar_client_id || undefined };
 }
+const CLIENT_IG_CACHE_KEY = 'macmidia_client_instagram_cache_v1';
+
+function readClientIgCache(): Record<
+  string,
+  {
+    instagramUsername?: string;
+    postformeAccountId?: string;
+    instagramConnectedAt?: string;
+    facebookPageName?: string;
+    postformeFacebookAccountId?: string;
+    defaultPostTime?: string;
+  }
+> {
+  try {
+    const raw = localStorage.getItem(CLIENT_IG_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeClientIgCache(
+  id: string,
+  patch: {
+    instagramUsername?: string;
+    postformeAccountId?: string;
+    instagramConnectedAt?: string;
+    facebookPageName?: string;
+    postformeFacebookAccountId?: string;
+    defaultPostTime?: string;
+  }
+) {
+  try {
+    const current = readClientIgCache();
+    current[id] = { ...(current[id] || {}), ...patch };
+    localStorage.setItem(CLIENT_IG_CACHE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
+
 function mapCalendarClient(row: any): CalendarClient {
-  return { id: row.id, name: row.name, logoUrl: row.logo_url || undefined, email: row.email || undefined, phones: Array.isArray(row.phones) ? row.phones : [], address: row.address || undefined, notes: row.notes || undefined };
+  const cached = readClientIgCache()[row.id] || {};
+  // Se o navegador antigo tinha vínculo salvo localmente antes de rodar o SQL,
+  // sincroniza automaticamente para o Supabase em background
+  if (
+    (cached.instagramUsername && !row.instagram_username) ||
+    (cached.postformeAccountId && !row.postforme_account_id) ||
+    (cached.facebookPageName && !row.facebook_page_name) ||
+    (cached.postformeFacebookAccountId && !row.postforme_facebook_account_id) ||
+    (cached.defaultPostTime && !row.default_post_time)
+  ) {
+    supabase
+      .from('calendar_clients')
+      .update({
+        instagram_username: row.instagram_username ?? cached.instagramUsername ?? null,
+        postforme_account_id: row.postforme_account_id ?? cached.postformeAccountId ?? null,
+        instagram_connected_at: row.instagram_connected_at ?? cached.instagramConnectedAt ?? null,
+        facebook_page_name: row.facebook_page_name ?? cached.facebookPageName ?? null,
+        postforme_facebook_account_id:
+          row.postforme_facebook_account_id ?? cached.postformeFacebookAccountId ?? null,
+        default_post_time: row.default_post_time ?? cached.defaultPostTime ?? null,
+      } as any)
+      .eq('id', row.id)
+      .then(() => {});
+  }
+  return {
+    id: row.id, name: row.name, logoUrl: row.logo_url || undefined, email: row.email || undefined,
+    phones: Array.isArray(row.phones) ? row.phones : [], address: row.address || undefined, notes: row.notes || undefined,
+    instagramUsername: row.instagram_username ?? cached.instagramUsername ?? undefined,
+    postformeAccountId: row.postforme_account_id ?? cached.postformeAccountId ?? undefined,
+    instagramConnectedAt: row.instagram_connected_at ?? cached.instagramConnectedAt ?? undefined,
+    facebookPageName: row.facebook_page_name ?? cached.facebookPageName ?? undefined,
+    postformeFacebookAccountId: row.postforme_facebook_account_id ?? cached.postformeFacebookAccountId ?? undefined,
+    defaultPostTime: row.default_post_time ?? cached.defaultPostTime ?? undefined,
+  };
 }
 
 // Paginated fetch for all kanban_cards with deterministic ordering (position_index, id)
@@ -1164,7 +1238,62 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     if (updates.phones !== undefined) db.phones = updates.phones;
     if (updates.address !== undefined) db.address = updates.address;
     if (updates.notes !== undefined) db.notes = updates.notes;
-    await supabase.from('calendar_clients').update(db).eq('id', id);
+    if ('instagramUsername' in updates) db.instagram_username = updates.instagramUsername || null;
+    if ('postformeAccountId' in updates) db.postforme_account_id = updates.postformeAccountId || null;
+    if ('instagramConnectedAt' in updates) db.instagram_connected_at = updates.instagramConnectedAt || null;
+    if ('facebookPageName' in updates) db.facebook_page_name = updates.facebookPageName || null;
+    if ('postformeFacebookAccountId' in updates) db.postforme_facebook_account_id = updates.postformeFacebookAccountId || null;
+    if ('defaultPostTime' in updates) db.default_post_time = updates.defaultPostTime || null;
+
+    if (
+      'instagramUsername' in updates ||
+      'postformeAccountId' in updates ||
+      'instagramConnectedAt' in updates ||
+      'facebookPageName' in updates ||
+      'postformeFacebookAccountId' in updates ||
+      'defaultPostTime' in updates
+    ) {
+      const prevCache = readClientIgCache()[id] || {};
+      writeClientIgCache(id, {
+        instagramUsername: 'instagramUsername' in updates ? updates.instagramUsername : prevCache.instagramUsername,
+        postformeAccountId: 'postformeAccountId' in updates ? updates.postformeAccountId : prevCache.postformeAccountId,
+        instagramConnectedAt: 'instagramConnectedAt' in updates ? updates.instagramConnectedAt : prevCache.instagramConnectedAt,
+        facebookPageName: 'facebookPageName' in updates ? updates.facebookPageName : prevCache.facebookPageName,
+        postformeFacebookAccountId: 'postformeFacebookAccountId' in updates ? updates.postformeFacebookAccountId : prevCache.postformeFacebookAccountId,
+        defaultPostTime: 'defaultPostTime' in updates ? updates.defaultPostTime : prevCache.defaultPostTime,
+      });
+    }
+
+    // Atualização otimista local imediata
+    setCalendarClients(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+
+    if (Object.keys(db).length === 0) return;
+    const { error } = await supabase.from('calendar_clients').update(db).eq('id', id);
+    if (error) {
+      const errMsg = String(error.message || '').toLowerCase();
+      // Se a migration do Instagram/Facebook ainda não foi rodada no banco remoto, salva os demais campos sem erro
+      if (
+        errMsg.includes('instagram_') ||
+        errMsg.includes('facebook_') ||
+        errMsg.includes('postforme_') ||
+        errMsg.includes('default_post_time') ||
+        errMsg.includes('schema cache')
+      ) {
+        const fallbackDb = { ...db };
+        delete fallbackDb.instagram_username;
+        delete fallbackDb.postforme_account_id;
+        delete fallbackDb.instagram_connected_at;
+        delete fallbackDb.facebook_page_name;
+        delete fallbackDb.postforme_facebook_account_id;
+        delete fallbackDb.default_post_time;
+        if (Object.keys(fallbackDb).length > 0) {
+          await supabase.from('calendar_clients').update(fallbackDb).eq('id', id);
+        }
+        return;
+      }
+      console.error('Erro ao atualizar cliente:', error);
+      throw error;
+    }
   }, []);
   const deleteCalendarClient = useCallback(async (id: string) => {
     await supabase.from('calendar_clients').delete().eq('id', id);

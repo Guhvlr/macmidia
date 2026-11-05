@@ -133,14 +133,45 @@ export const ClientInstagramSection: React.FC<ClientInstagramSectionProps> = ({
     client.postformeFacebookAccountId || client.facebookPageName || facebookAccountId
   );
 
-  // Filtra as contas pelo campo de busca
+  const stripAccents = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+  // Quando o usuário digita na busca, consulta também a API do Post for Me por esse termo
+  useEffect(() => {
+    const q = accountSearch.trim();
+    if (!hasApiKey || q.length < 2) return;
+    const timer = setTimeout(async () => {
+      const res = await socialProvider.listAccounts(q);
+      if (res.ok && res.data?.accounts && res.data.accounts.length > 0) {
+        setAvailableAccounts(prev => {
+          const map = new Map<string, PostForMeAccount>();
+          for (const item of prev) map.set(item.id, item);
+          for (const item of res.data!.accounts) map.set(item.id, item);
+          return Array.from(map.values()).sort((a, b) => {
+            const aIg = String(a.platform || '').toLowerCase().includes('instagram') ? 0 : 1;
+            const bIg = String(b.platform || '').toLowerCase().includes('instagram') ? 0 : 1;
+            if (aIg !== bIg) return aIg - bIg;
+            return String(a.username || a.name || '').localeCompare(
+              String(b.username || b.name || '')
+            );
+          });
+        });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [accountSearch, hasApiKey]);
+
+  // Filtra as contas pelo campo de busca (ignorando acentos, ex: "prátiko" == "pratiko")
   const filteredAccounts = useMemo(() => {
-    const q = accountSearch.trim().toLowerCase().replace(/^@/, '');
+    const q = stripAccents(accountSearch.trim().replace(/^@/, ''));
     if (!q) return availableAccounts;
     return availableAccounts.filter(acc => {
-      const u = String(acc.username || '').toLowerCase();
-      const n = String(acc.name || '').toLowerCase();
-      const id = String(acc.id || '').toLowerCase();
+      const u = stripAccents(String(acc.username || ''));
+      const n = stripAccents(String(acc.name || ''));
+      const id = stripAccents(String(acc.id || ''));
       return u.includes(q) || n.includes(q) || id.includes(q);
     });
   }, [availableAccounts, accountSearch]);

@@ -210,63 +210,70 @@ async function fetchAllConnectedAccounts(searchUsername?: string): Promise<{
     return [];
   };
 
-  // 1. Se temos um username específico para buscar, tenta buscar filtrado por username/platform primeiro
   const collected: PostForMeAccount[] = [];
-  const addUnique = (items: PostForMeAccount[]) => {
+  const addUnique = (items: PostForMeAccount[]): number => {
+    let added = 0;
     for (const item of items) {
       if (item && item.id && !collected.some(x => x.id === item.id)) {
         collected.push(item);
+        added++;
       }
     }
+    return added;
   };
 
+  // 1. Se temos um username/termo específico para buscar, consulta direto na API também
   if (searchUsername) {
     const clean = searchUsername.trim().replace(/^@/, '');
     if (clean) {
       const byUserRes = await directPostForMeRequest<any>(
-        `/social-accounts?username=${encodeURIComponent(clean)}`,
+        `/social-accounts?username=${encodeURIComponent(clean)}&limit=100`,
         { method: 'GET' }
       );
       if (byUserRes.ok) {
         addUnique(extractList(byUserRes.data));
+      } else {
+        const byUserFallback = await directPostForMeRequest<any>(
+          `/social-accounts?username=${encodeURIComponent(clean)}`,
+          { method: 'GET' }
+        );
+        if (byUserFallback.ok) {
+          addUnique(extractList(byUserFallback.data));
+        }
       }
     }
   }
 
-  // 2. Busca contas do Instagram especificamente
-  const igRes = await directPostForMeRequest<any>(
-    '/social-accounts?platform=instagram&limit=100',
-    { method: 'GET' }
-  );
-  if (igRes.ok) {
-    addUnique(extractList(igRes.data));
-  } else {
-    const igFallback = await directPostForMeRequest<any>(
-      '/social-accounts?platform=instagram',
-      { method: 'GET' }
-    );
-    if (igFallback.ok) {
-      addUnique(extractList(igFallback.data));
+  // Função auxiliar para buscar TODAS as páginas (acima de 100 contas!) usando offset
+  const fetchPaginated = async (baseQuery: string) => {
+    const pageSize = 100;
+    for (let page = 0; page < 10; page++) {
+      const offset = page * pageSize;
+      const sep = baseQuery.includes('?') ? '&' : '?';
+      const url = `${baseQuery}${sep}limit=${pageSize}&offset=${offset}`;
+      const res = await directPostForMeRequest<any>(url, { method: 'GET' });
+      if (!res.ok) {
+        if (page === 0) {
+          const fallbackRes = await directPostForMeRequest<any>(baseQuery, { method: 'GET' });
+          if (fallbackRes.ok) {
+            addUnique(extractList(fallbackRes.data));
+          }
+        }
+        break;
+      }
+      const list = extractList(res.data);
+      const added = addUnique(list);
+      // Se retornou menos que 100 itens ou não adicionou nenhum item novo, chegamos na última página
+      if (list.length < pageSize || added === 0) {
+        break;
+      }
     }
-  }
+  };
 
-  // 3. Busca geral (todas as plataformas)
-  let res = await directPostForMeRequest<any>('/social-accounts?limit=100', {
-    method: 'GET',
-  });
-  if (!res.ok) {
-    res = await directPostForMeRequest<any>('/social-accounts', {
-      method: 'GET',
-    });
-  }
-
-  if (res.ok) {
-    addUnique(extractList(res.data));
-  }
-
-  if (collected.length === 0 && !res.ok) {
-    return { ok: false, accounts: [], message: res.message };
-  }
+  // 2. Busca todas as páginas gerais + Instagram + Facebook (para suportar 200, 300+ contas!)
+  await fetchPaginated('/social-accounts');
+  await fetchPaginated('/social-accounts?platform=instagram');
+  await fetchPaginated('/social-accounts?platform=facebook');
 
   return { ok: true, accounts: collected };
 }
@@ -304,7 +311,8 @@ async function call<T = Record<string, unknown>>(
   }
 
   if (action === 'list_accounts') {
-    const listRes = await fetchAllConnectedAccounts();
+    const search = payload.search ? String(payload.search) : undefined;
+    const listRes = await fetchAllConnectedAccounts(search);
     if (!listRes.ok) {
       return { ok: false, message: listRes.message };
     }
@@ -507,13 +515,17 @@ async function call<T = Record<string, unknown>>(
     const isScheduled =
       Boolean(scheduledAt) && new Date(scheduledAt!).getTime() > Date.now() + 30_000;
 
-    // Em Stories não enviamos legenda para o Instagram não exibir balão de texto no canto inferior
+    // O validador do Post for Me rejeita string vazia "" com "caption is required".
+    // Para Stories (ou post sem legenda), enviamos primeiro um espaço em branco ' ' (que passa no
+    // check `if (!caption)` do Post for Me e é ignorado/limpo pela Meta sem criar balão no Story).
+    // Caso o validador exija caractere não-espaço no `.trim()`, fazemos fallback automático para
+    // Zero-Width Space ('\u200B'), que é 100% invisível e não cria palavra visível no Story.
     const safeCaption =
       placement === 'stories'
-        ? ''
+        ? ' '
         : caption && caption.trim().length > 0
           ? caption.trim()
-          : '';
+          : ' ';
 
     const platformConfigs: Record<string, unknown> = {};
     if (networks.includes('instagram')) {
@@ -538,10 +550,19 @@ async function call<T = Record<string, unknown>>(
       body.scheduled_at = new Date(scheduledAt).toISOString();
     }
 
-    const res = await directPostForMeRequest<{ id?: string; status?: string }>('/social-posts', {
+    let res = await directPostForMeRequest<{ id?: string; status?: string }>('/social-posts', {
       method: 'POST',
       body: JSON.stringify(body),
     });
+
+    // Se o Post for Me fez `.trim()` no espaço simples e pediu caption, reenvia com caractere invisível Zero-Width Space
+    if (!res.ok && res.status === 400 && safeCaption === ' ') {
+      body.caption = '\u200B';
+      res = await directPostForMeRequest<{ id?: string; status?: string }>('/social-posts', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+    }
 
     if (!res.ok) {
       return {
@@ -714,9 +735,9 @@ export const socialProvider = {
   getConnectLink: (clientId: string) =>
     call<{ url: string }>('connect_link', { clientId }),
 
-  /** Lista todas as contas do Instagram já conectadas no seu painel do Post for Me */
-  listAccounts: () =>
-    call<{ accounts: PostForMeAccount[] }>('list_accounts'),
+  /** Lista todas as contas do Instagram e Facebook já conectadas no seu painel do Post for Me */
+  listAccounts: (search?: string) =>
+    call<{ accounts: PostForMeAccount[] }>('list_accounts', search ? { search } : {}),
 
   /** Verifica se o cliente já autorizou e salva o ID da conta */
   syncAccount: (clientId: string) =>

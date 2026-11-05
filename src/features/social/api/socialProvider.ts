@@ -154,17 +154,188 @@ async function directPostForMeRequest<T = any>(
   }
 }
 
+const VIDEO_URL_RE = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i;
+
+/**
+ * Quando uma arte de Feed (ex: 4:5 1080x1350 ou 1:1 1080x1080) é enviada para o Stories,
+ * o Instagram corta as laterais se ela não estiver na proporção 9:16 (1080x1920).
+ * Esta função verifica a proporção da imagem e, se não for 9:16, encaixa a arte inteira
+ * centralizada num canvas 1080x1920 com fundo degradê/suave extraído das próprias cores
+ * do topo e da base da arte (igual ao comportamento nativo do Instagram Stories).
+ */
+async function formatImageForStory9x16(rawUrl: string, index: number): Promise<string | null> {
+  if (!rawUrl || VIDEO_URL_RE.test(rawUrl) || rawUrl.startsWith('data:video/')) {
+    return null;
+  }
+
+  let objectUrl: string | null = null;
+  try {
+    let img: HTMLImageElement;
+
+    // Tenta primeiro carregar via fetch para Blob (evita problemas de cache e canvas tainting)
+    try {
+      const fetched = await fetch(rawUrl);
+      if (fetched.ok) {
+        const blob = await fetched.blob();
+        if (blob.type && blob.type.startsWith('video/')) {
+          return null;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = err => reject(err);
+          el.src = objectUrl!;
+        });
+      } else {
+        throw new Error(`Fetch status ${fetched.status}`);
+      }
+    } catch {
+      // Fallback: carregar diretamente com crossOrigin anonymous
+      img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.crossOrigin = 'anonymous';
+        el.onload = () => resolve(el);
+        el.onerror = err => reject(err);
+        el.src = rawUrl;
+      });
+    }
+
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    if (!w || !h) return null;
+
+    const ratio = w / h;
+    // Proporção padrão de Story é 9:16 = 0.5625.
+    // Se já estiver entre 0.52 e 0.60, já é formato Story vertical nativo — mantém o original.
+    if (ratio >= 0.52 && ratio <= 0.60 && /^https?:\/\//i.test(rawUrl)) {
+      return rawUrl;
+    }
+
+    const TARGET_W = 1080;
+    const TARGET_H = 1920;
+
+    // Extrai a cor média do topo e da base da imagem para criar o degradê de fundo igual ao Instagram
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const sampleCtx = sampleCanvas.getContext('2d');
+    let topColor = 'rgb(24, 24, 28)';
+    let bottomColor = 'rgb(24, 24, 28)';
+
+    if (sampleCtx) {
+      sampleCtx.drawImage(img, 0, 0, 32, 32);
+      const imgData = sampleCtx.getImageData(0, 0, 32, 32).data;
+      const avgRowRange = (yStart: number, yEnd: number) => {
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let count = 0;
+        for (let y = yStart; y < yEnd; y++) {
+          for (let x = 0; x < 32; x++) {
+            const idx = (y * 32 + x) * 4;
+            r += imgData[idx];
+            g += imgData[idx + 1];
+            b += imgData[idx + 2];
+            count++;
+          }
+        }
+        if (!count) return 'rgb(24, 24, 28)';
+        return `rgb(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)})`;
+      };
+      topColor = avgRowRange(0, 4);
+      bottomColor = avgRowRange(28, 32);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = TARGET_W;
+    canvas.height = TARGET_H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // 1. Preenche o fundo 1080x1920 com degradê suave das cores do topo e da base da arte
+    const grad = ctx.createLinearGradient(0, 0, 0, TARGET_H);
+    grad.addColorStop(0, topColor);
+    grad.addColorStop(0.5, topColor);
+    grad.addColorStop(1, bottomColor);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, TARGET_W, TARGET_H);
+
+    // 2. Camada suavemente desfocada para transição natural das cores da arte no topo e base
+    try {
+      ctx.save();
+      ctx.filter = 'blur(55px)';
+      ctx.globalAlpha = 0.45;
+      ctx.drawImage(img, -40, -40, TARGET_W + 80, TARGET_H + 80);
+      ctx.restore();
+    } catch {
+      // Caso o navegador não suporte ctx.filter, o degradê já garante o fundo
+    }
+
+    // 3. Desenha a arte inteira (sem cortar nada nas laterais!) centralizada no Story 1080x1920
+    const scale = Math.min(TARGET_W / w, TARGET_H / h);
+    const drawW = Math.round(w * scale);
+    const drawH = Math.round(h * scale);
+    const drawX = Math.round((TARGET_W - drawW) / 2);
+    const drawY = Math.round((TARGET_H - drawH) / 2);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+    const outBlob = await new Promise<Blob | null>(resolve =>
+      canvas.toBlob(b => resolve(b), 'image/jpeg', 0.94)
+    );
+    if (!outBlob) return null;
+
+    const filePath = `social/story_9x16_${Date.now()}_${index}_${Math.random()
+      .toString(36)
+      .slice(2, 7)}.jpg`;
+    const { error: upErr } = await supabase.storage
+      .from('kanban_assets')
+      .upload(filePath, outBlob, { upsert: true, contentType: 'image/jpeg' });
+
+    if (!upErr) {
+      const { data: pub } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
+      if (pub?.publicUrl) {
+        return pub.publicUrl;
+      }
+    }
+  } catch (e) {
+    console.warn('Aviso ao formatar imagem para Story 9:16 (usando original):', e);
+  } finally {
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  return null;
+}
+
 /**
  * Garante que todas as imagens enviadas ao Post for Me sejam URLs públicas `https://`.
  * Caso alguma imagem esteja em `data:image/...` ou `blob:...`, faz upload automático
  * para o bucket público `kanban_assets` do Supabase.
+ * Quando `placement === 'stories'`, adapta automaticamente artes quadradas/4:5 para 9:16 (1080x1920)
+ * sem cortar as bordas!
  */
-async function ensurePublicMediaUrls(mediaUrls: string[]): Promise<string[]> {
+async function ensurePublicMediaUrls(
+  mediaUrls: string[],
+  placement?: string
+): Promise<string[]> {
   const result: string[] = [];
 
   for (let i = 0; i < mediaUrls.length; i++) {
     const raw = (mediaUrls[i] || '').trim();
     if (!raw) continue;
+
+    if (placement === 'stories') {
+      const storyUrl = await formatImageForStory9x16(raw, i);
+      if (storyUrl) {
+        result.push(storyUrl);
+        continue;
+      }
+    }
 
     if (/^https?:\/\//i.test(raw)) {
       result.push(raw);
@@ -498,7 +669,7 @@ async function call<T = Record<string, unknown>>(
       };
     }
 
-    const publicMediaUrls = await ensurePublicMediaUrls(media || []);
+    const publicMediaUrls = await ensurePublicMediaUrls(media || [], placement);
     if (publicMediaUrls.length === 0) {
       return {
         ok: false,

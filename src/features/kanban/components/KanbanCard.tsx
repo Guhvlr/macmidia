@@ -465,6 +465,9 @@ const KanbanCard = memo(KanbanCardInner, (prev, next) => {
     prev.card.position_index === next.card.position_index &&
     prev.card.clientName === next.card.clientName &&
     prev.card.description === next.card.description &&
+    prev.card.images === next.card.images &&
+    prev.card.history === next.card.history &&
+    prev.card.notes === next.card.notes &&
     prev.card.checklists === next.card.checklists &&
     prev.card.comments === next.card.comments &&
     prev.card.assignedUsers === next.card.assignedUsers &&

@@ -227,6 +227,46 @@ const SocialPostingHub: React.FC = () => {
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditData, setAuditData] = useState<{
+    totalResults: number;
+    totalSocialPosts: number;
+    storiesPostsCount: number;
+    feedPostsCount: number;
+    totalAccountTargetsInPosts: number;
+    totalMediaItemsInPosts: number;
+    instagramCount: number;
+    facebookCount: number;
+    successCount: number;
+    failedCount: number;
+    byAccount: {
+      accountId: string;
+      name: string;
+      username: string;
+      platform: string;
+      total: number;
+      success: number;
+      failed: number;
+    }[];
+  } | null>(null);
+
+  const handleOpenAudit = async () => {
+    setAuditModalOpen(true);
+    setIsAuditing(true);
+    try {
+      const res = await socialProvider.auditPostResults();
+      if (res.ok && res.data) {
+        setAuditData(res.data);
+      } else {
+        toast.error(res.message || 'Não foi possível consultar /v1/social-post-results.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao consultar auditoria do Post for Me.');
+    } finally {
+      setIsAuditing(false);
+    }
+  };
 
   React.useEffect(() => {
     getStoredPostForMeApiKey().then(k => {
@@ -612,6 +652,18 @@ const SocialPostingHub: React.FC = () => {
               type="button"
               variant="outline"
               size="sm"
+              onClick={handleOpenAudit}
+              className="h-9 px-2.5 rounded-xl border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold"
+              title="Auditar consumo e disparos em /v1/social-post-results"
+            >
+              <Layers className="w-3.5 h-3.5 sm:mr-1.5 text-purple-400" />
+              <span className="hidden sm:inline">Auditoria API</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/cofre')}
               className="h-9 px-2.5 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
               title="Gerenciar Contas Instagram"
@@ -846,6 +898,127 @@ const SocialPostingHub: React.FC = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Auditoria de Disparos (GET /v1/social-post-results) */}
+      <Dialog open={auditModalOpen} onOpenChange={setAuditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-[#121214] border-white/10 text-white rounded-2xl custom-scrollbar">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-black">
+              <Layers className="w-5 h-5 text-purple-400" />
+              Auditoria de Disparos • Post for Me (/v1/social-post-results)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-white/50">
+              Detalhamento em tempo real de cada entrega registrada na API do Post for Me por conta e rede social.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isAuditing ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-3 text-white/60 text-xs">
+              <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+              <span>Consultando /v1/social-post-results e /v1/social-posts...</span>
+            </div>
+          ) : auditData ? (
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-[10px] text-white/40 uppercase font-bold">Social Posts (Pedidos)</div>
+                  <div className="text-lg font-black text-white">{auditData.totalSocialPosts}</div>
+                  <div className="text-[10px] text-white/40">
+                    Feed: {auditData.feedPostsCount} • Stories: {auditData.storiesPostsCount}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/25">
+                  <div className="text-[10px] text-purple-300 uppercase font-bold">Entregas (/post-results)</div>
+                  <div className="text-lg font-black text-purple-200">{auditData.totalResults}</div>
+                  <div className="text-[10px] text-purple-300/70">
+                    Contas somadas: {auditData.totalAccountTargetsInPosts}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-pink-500/10 border border-pink-500/25">
+                  <div className="text-[10px] text-pink-300 uppercase font-bold">Por Rede</div>
+                  <div className="text-sm font-black text-white mt-0.5">
+                    IG: {auditData.instagramCount} • FB: {auditData.facebookCount}
+                  </div>
+                  <div className="text-[10px] text-pink-300/70">
+                    Mídias × Contas: {auditData.totalMediaItemsInPosts}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+                  <div className="text-[10px] text-emerald-300 uppercase font-bold">Status de Entrega</div>
+                  <div className="text-sm font-black text-white mt-0.5">
+                    ✓ {auditData.successCount} • ✕ {auditData.failedCount}
+                  </div>
+                  <div className="text-[10px] text-emerald-300/70">Sucesso vs Falha</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-200 space-y-1">
+                <div className="font-bold">Por que 179 pedidos viram {auditData.totalMediaItemsInPosts || '672'} no consumo?</div>
+                <p className="text-amber-200/80 leading-relaxed">
+                  1) Cada card com <strong>Feed + Stories</strong> gera <strong>2 pedidos</strong> separados (1 pro Feed e 1 pro Stories).<br />
+                  2) Quando <strong>Instagram + Facebook</strong> estão marcados juntos, cada pedido dispara para <strong>2 contas</strong>.<br />
+                  3) Nos <strong>Stories com várias fotos</strong>, diferente do carrossel do Feed, cada foto do Story é publicada individualmente na API da Meta.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-white/80 uppercase tracking-wider">
+                  Disparos por Conta ({auditData.byAccount.length} contas)
+                </div>
+                <div className="border border-white/10 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-white/5 text-white/50 text-[10px] uppercase">
+                      <tr>
+                        <th className="py-2 px-3">Conta / Cliente</th>
+                        <th className="py-2 px-3">Rede</th>
+                        <th className="py-2 px-3 text-right">Sucesso</th>
+                        <th className="py-2 px-3 text-right">Falha</th>
+                        <th className="py-2 px-3 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {auditData.byAccount.map(acc => (
+                        <tr key={acc.accountId} className="hover:bg-white/5">
+                          <td className="py-2 px-3 font-medium text-white">
+                            {acc.name}
+                            {acc.username && acc.username !== acc.name ? (
+                              <span className="text-white/40 ml-1">(@{acc.username})</span>
+                            ) : null}
+                          </td>
+                          <td className="py-2 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                acc.platform === 'facebook'
+                                  ? 'bg-blue-500/20 text-blue-300'
+                                  : 'bg-pink-500/20 text-pink-300'
+                              }`}
+                            >
+                              {acc.platform}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right text-emerald-400 font-semibold">
+                            {acc.success}
+                          </td>
+                          <td className="py-2 px-3 text-right text-red-400 font-semibold">
+                            {acc.failed}
+                          </td>
+                          <td className="py-2 px-3 text-right font-black text-white">
+                            {acc.total}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-white/50">
+              Nenhum dado retornado. Verifique se sua Chave de API está ativa.
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

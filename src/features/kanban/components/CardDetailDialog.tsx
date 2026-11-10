@@ -124,28 +124,28 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const [showMembersSelection, setShowMembersSelection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-
+  const { kanbanCards } = useApp();
+  const currentCard = kanbanCards.find(c => c.id === card.id) || card;
 
   useEffect(() => {
-    setClientName(card.clientName || '');
-    setCalendarClientId(card.calendarClientId || '');
-    setCalendarClientName(card.calendarClientName || '');
-    setDescription(card.description || '');
-    setLocalImages(Array.isArray(card.images) ? card.images : []);
-    setCoverImage(card.coverImage || null);
-    setLabels(Array.isArray(card.labels) ? card.labels : []);
-    setChecklists(Array.isArray(card.checklists) ? card.checklists : []);
-    setComments(Array.isArray(card.comments) ? card.comments : []);
-    setAssignedUsers(Array.isArray(card.assignedUsers) ? card.assignedUsers : []);
-    setStartDate(card.startDate || '');
-    setDueDate(card.dueDate || '');
-    setDueTime(card.dueTime || '');
-    setRecurrence(card.recurrence || 'never');
-    setReminder(card.reminder || '1_day_before');
-    setDueDateCompleted(card.dueDateCompleted || false);
-  }, [card.id, card.clientName, card.calendarClientId, card.calendarClientName, card.description, card.images, card.coverImage, card.labels, card.checklists, card.comments, card.assignedUsers, card.history, card.startDate, card.dueDate, card.dueTime, card.recurrence, card.reminder, card.dueDateCompleted]);
+    setClientName(currentCard.clientName || '');
+    setCalendarClientId(currentCard.calendarClientId || '');
+    setCalendarClientName(currentCard.calendarClientName || '');
+    setDescription(currentCard.description || '');
+    setLocalImages(Array.isArray(currentCard.images) ? currentCard.images : []);
+    setCoverImage(currentCard.coverImage || null);
+    setLabels(Array.isArray(currentCard.labels) ? currentCard.labels : []);
+    setChecklists(Array.isArray(currentCard.checklists) ? currentCard.checklists : []);
+    setComments(Array.isArray(currentCard.comments) ? currentCard.comments : []);
+    setAssignedUsers(Array.isArray(currentCard.assignedUsers) ? currentCard.assignedUsers : []);
+    setStartDate(currentCard.startDate || '');
+    setDueDate(currentCard.dueDate || '');
+    setDueTime(currentCard.dueTime || '');
+    setRecurrence(currentCard.recurrence || 'never');
+    setReminder(currentCard.reminder || '1_day_before');
+    setDueDateCompleted(currentCard.dueDateCompleted || false);
+  }, [currentCard.id, currentCard.clientName, currentCard.calendarClientId, currentCard.calendarClientName, currentCard.description, currentCard.images, currentCard.coverImage, currentCard.labels, currentCard.checklists, currentCard.comments, currentCard.assignedUsers, currentCard.history, currentCard.startDate, currentCard.dueDate, currentCard.dueTime, currentCard.recurrence, currentCard.reminder, currentCard.dueDateCompleted]);
 
-  const { kanbanCards } = useApp();
   useEffect(() => {
     if (open && !kanbanCards.some(c => c.id === card.id)) {
       onOpenChange(false);
@@ -261,13 +261,13 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const handleImagesUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     
-    const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB (suporte a arquivos grandes no plano Pro)
     const validFiles = Array.from(files);
     
     // Check for files exceeding the size limit
     const oversizedFiles = validFiles.filter(f => f.size > MAX_FILE_SIZE);
     if (oversizedFiles.length > 0) {
-      toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 60MB.`);
+      toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => `${f.name} (${(f.size / (1024 * 1024)).toFixed(1)}MB)`).join(', ')}. O limite máximo de upload é de 500MB.`);
       return;
     }
 
@@ -289,15 +289,31 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
         const safeName = sanitizeFileName(file.name);
         const fileName = `${Date.now()}-${safeName}`;
         const filePath = `${card.id}/${fileName}`;
+
+        // Inferir contentType caso o navegador retorne file.type vazio (comum em arquivos baixados do WhatsApp)
+        let mimeType = file.type;
+        if (!mimeType) {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'mp4') mimeType = 'video/mp4';
+          else if (ext === 'mov') mimeType = 'video/quicktime';
+          else if (ext === 'webm') mimeType = 'video/webm';
+          else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+          else if (ext === 'png') mimeType = 'image/png';
+        }
         
         const { error } = await supabase.storage.from('kanban_assets').upload(filePath, file, {
-          contentType: file.type,
+          contentType: mimeType || undefined,
           upsert: true
         });
         
         if (error) {
           console.error("Storage upload error:", error);
-          toast.error(`Erro ao enviar ${file.name}`);
+          const isSizeError = (error as any)?.statusCode === '413' || error.message?.toLowerCase().includes('exceeded the maximum') || error.message?.toLowerCase().includes('payload too large');
+          if (isSizeError) {
+            toast.error(`O vídeo ${file.name} excede o limite configurado no Supabase Storage (padrão 50MB). Aumente em Project Settings > Storage no Supabase.`);
+          } else {
+            toast.error(`Erro ao enviar ${file.name}: ${error.message || 'Falha no servidor'}`);
+          }
         } else {
           const { data: { publicUrl } } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
           newUploads.push(publicUrl);
@@ -453,26 +469,40 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
 
   const uploadCommentImage = async (file: File): Promise<string | null> => {
     try {
+      if (file.size > 500 * 1024 * 1024) {
+        toast.error(`O arquivo ${file.name} excede o limite máximo de 500MB.`);
+        return null;
+      }
       const safeName = sanitizeFileName(file.name || 'pasted-image.png');
       const fileName = `${Date.now()}-${safeName}`;
       const filePath = `${card.id}/comments/${fileName}`;
+
+      let mimeType = file.type;
+      if (!mimeType) {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext === 'mp4') mimeType = 'video/mp4';
+        else if (ext === 'mov') mimeType = 'video/quicktime';
+        else if (ext === 'webm') mimeType = 'video/webm';
+        else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+        else if (ext === 'png') mimeType = 'image/png';
+      }
       
       const { error } = await supabase.storage.from('kanban_assets').upload(filePath, file, {
-        contentType: file.type,
+        contentType: mimeType || undefined,
         upsert: true
       });
       
       if (error) {
         console.error("Comment image upload error:", error);
-        toast.error('Erro ao enviar imagem');
+        toast.error(`Erro ao enviar anexo: ${error.message || 'Falha no upload'}`);
         return null;
       }
       
       const { data: { publicUrl } } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
       return publicUrl;
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Erro ao enviar imagem');
+      toast.error(`Erro ao enviar anexo: ${err?.message || 'Falha no upload'}`);
       return null;
     }
   };

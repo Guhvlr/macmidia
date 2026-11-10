@@ -882,6 +882,161 @@ async function call<T = Record<string, unknown>>(
     return { ok: true, data: merged as unknown as T };
   }
 
+  if (action === 'audit_post_results') {
+    const accRes = await fetchAllConnectedAccounts();
+    const accountMap = new Map<string, PostForMeAccount>();
+    for (const acc of accRes.accounts) {
+      accountMap.set(acc.id, acc);
+    }
+
+    const extractItems = (raw: any): any[] =>
+      Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+
+    // 1. Pagina todos os resultados de /social-post-results
+    const allResults: any[] = [];
+    const seenResultIds = new Set<string>();
+    for (let page = 0; page < 12; page++) {
+      const offset = page * 100;
+      const r = await directPostForMeRequest<any>(
+        `/social-post-results?limit=100&offset=${offset}`,
+        { method: 'GET' }
+      );
+      if (!r.ok) break;
+      const items = extractItems(r.data);
+      let added = 0;
+      for (const item of items) {
+        const key = String(item?.id || `${item?.social_post_id}_${item?.social_account_id}_${allResults.length}`);
+        if (!seenResultIds.has(key)) {
+          seenResultIds.add(key);
+          allResults.push(item);
+          added++;
+        }
+      }
+      if (items.length < 100 || added === 0) break;
+    }
+
+    // 2. Pagina /social-posts para comparar (ex: 179 posts vs 672 entregas)
+    const allPosts: any[] = [];
+    const seenPostIds = new Set<string>();
+    for (let page = 0; page < 5; page++) {
+      const offset = page * 100;
+      const p = await directPostForMeRequest<any>(
+        `/social-posts?limit=100&offset=${offset}`,
+        { method: 'GET' }
+      );
+      if (!p.ok) break;
+      const items = extractItems(p.data);
+      let added = 0;
+      for (const item of items) {
+        const key = String(item?.id || allPosts.length);
+        if (!seenPostIds.has(key)) {
+          seenPostIds.add(key);
+          allPosts.push(item);
+          added++;
+        }
+      }
+      if (items.length < 100 || added === 0) break;
+    }
+
+    let instagramCount = 0;
+    let facebookCount = 0;
+    let successCount = 0;
+    let failedCount = 0;
+
+    const byAccountMap = new Map<
+      string,
+      {
+        accountId: string;
+        name: string;
+        username: string;
+        platform: string;
+        total: number;
+        success: number;
+        failed: number;
+      }
+    >();
+
+    for (const item of allResults) {
+      const accId = String(
+        item?.social_account_id || item?.social_account?.id || item?.account_id || 'desconhecida'
+      );
+      const acc = accountMap.get(accId);
+      const rawPlatform = String(
+        item?.platform || item?.provider || acc?.platform || acc?.provider || ''
+      ).toLowerCase();
+      const platform = rawPlatform.includes('facebook')
+        ? 'facebook'
+        : rawPlatform.includes('instagram')
+          ? 'instagram'
+          : rawPlatform || 'instagram';
+
+      if (platform === 'facebook') facebookCount++;
+      else instagramCount++;
+
+      const isFail =
+        item?.success === false ||
+        item?.status === 'failed' ||
+        item?.status === 'error' ||
+        Boolean(item?.error);
+
+      if (isFail) failedCount++;
+      else successCount++;
+
+      const cur = byAccountMap.get(accId) || {
+        accountId: accId,
+        name: acc?.name || item?.social_account?.name || acc?.username || accId,
+        username: acc?.username || item?.social_account?.username || '',
+        platform,
+        total: 0,
+        success: 0,
+        failed: 0,
+      };
+      cur.total++;
+      if (isFail) cur.failed++;
+      else cur.success++;
+      byAccountMap.set(accId, cur);
+    }
+
+    // Também soma a partir de social-posts quantas contas/mídias foram enviadas
+    let totalAccountTargetsInPosts = 0;
+    let totalMediaItemsInPosts = 0;
+    let storiesPostsCount = 0;
+    let feedPostsCount = 0;
+
+    for (const sp of allPosts) {
+      const accs = Array.isArray(sp?.social_accounts) ? sp.social_accounts.length : 1;
+      const medias = Array.isArray(sp?.media) ? sp.media.length : 1;
+      totalAccountTargetsInPosts += accs;
+      totalMediaItemsInPosts += medias * accs;
+      const igPlacement = sp?.platform_configurations?.instagram?.placement;
+      const fbPlacement = sp?.platform_configurations?.facebook?.placement;
+      if (igPlacement === 'stories' || fbPlacement === 'stories') {
+        storiesPostsCount++;
+      } else {
+        feedPostsCount++;
+      }
+    }
+
+    const byAccount = Array.from(byAccountMap.values()).sort((a, b) => b.total - a.total);
+
+    return {
+      ok: true,
+      data: {
+        totalResults: allResults.length,
+        totalSocialPosts: allPosts.length,
+        storiesPostsCount,
+        feedPostsCount,
+        totalAccountTargetsInPosts,
+        totalMediaItemsInPosts,
+        instagramCount,
+        facebookCount,
+        successCount,
+        failedCount,
+        byAccount,
+      } as unknown as T,
+    };
+  }
+
   return {
     ok: false,
     code: 'unsupported_action',
@@ -1078,6 +1233,30 @@ export const socialProvider = {
 
   /** Atualiza o status dos posts programados/publicando */
   syncPosts: () => call<{ updated: number }>('sync_posts'),
+
+  /** Consulta GET /v1/social-post-results e /v1/social-posts para auditar o consumo por conta */
+  auditPostResults: () =>
+    call<{
+      totalResults: number;
+      totalSocialPosts: number;
+      storiesPostsCount: number;
+      feedPostsCount: number;
+      totalAccountTargetsInPosts: number;
+      totalMediaItemsInPosts: number;
+      instagramCount: number;
+      facebookCount: number;
+      successCount: number;
+      failedCount: number;
+      byAccount: {
+        accountId: string;
+        name: string;
+        username: string;
+        platform: string;
+        total: number;
+        success: number;
+        failed: number;
+      }[];
+    }>('audit_post_results'),
 };
 
 export const NOT_CONFIGURED_MESSAGE =

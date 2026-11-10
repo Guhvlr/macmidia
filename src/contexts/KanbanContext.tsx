@@ -1315,9 +1315,19 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
       const safeName = sanitizeFileName(file.name);
       const fileName = `${cardId}/${Date.now()}-${safeName}`;
       
+      let mimeType = file.type;
+      if (!mimeType) {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext === 'mp4') mimeType = 'video/mp4';
+        else if (ext === 'mov') mimeType = 'video/quicktime';
+        else if (ext === 'webm') mimeType = 'video/webm';
+        else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+        else if (ext === 'png') mimeType = 'image/png';
+      }
+
       updateTask(taskId, { progress: 50 });
       const { data, error } = await supabase.storage.from('kanban_assets').upload(fileName, file, { 
-        contentType: file.type, 
+        contentType: mimeType || undefined, 
         cacheControl: '3600' 
       });
       if (error) throw error;

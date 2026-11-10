@@ -99,8 +99,10 @@ export function useSocialPosts() {
         };
       });
 
-      // Posts salvos localmente que ainda não constam no Supabase (ex: recém-criados no Kanban)
-      const unsyncedLocals = localItems.filter(l => !dbIds.has(l.id));
+      // Posts salvos localmente que ainda não constam no Supabase (apenas novos rascunhos vindos do Kanban)
+      const unsyncedLocals = localItems.filter(
+        l => !dbIds.has(l.id) && l.status === 'para_postar' && !l.providerPostId
+      );
 
       // Sincroniza os cards locais para o Supabase (enviando apenas colunas válidas do banco)
       if (unsyncedLocals.length > 0) {
@@ -406,7 +408,14 @@ export function useSocialPosts() {
       const existing = readLocalFallback().find(p => p.id === id) || posts.find(p => p.id === id);
       let providerPostId = existing?.providerPostId;
 
-      // Se não encontrou providerPostId em memória, busca diretamente no Supabase para garantir
+      // 1. Remove imediatamente da memória e do localStorage do navegador
+      setPosts(prev => {
+        const next = prev.filter(p => p.id !== id);
+        writeLocalFallback(next);
+        return next;
+      });
+
+      // 2. Se não encontrou providerPostId em memória, busca diretamente no Supabase antes de deletar
       if (!providerPostId && !usingFallback) {
         try {
           const { data } = await (supabase as any)
@@ -422,27 +431,30 @@ export function useSocialPosts() {
         }
       }
 
-      // Se o post foi enviado para o Post for Me e não está postado no feed, cancela e exclui lá
-      if (providerPostId && existing?.status !== 'postado') {
-        const delRes = await socialProvider.deleteRemotePost(providerPostId);
-        if (delRes.ok) {
-          console.log(`[Post for Me] Post ${providerPostId} excluído com sucesso.`);
-        } else {
-          console.warn(`[Post for Me] Falha ao excluir post ${providerPostId}:`, delRes.message);
+      // 3. Remove imediatamente do Supabase
+      if (!usingFallback) {
+        try {
+          const { error } = await (supabase as any).from('social_posts').delete().eq('id', id);
+          if (error && !isMissingTableError(error)) {
+            console.error('Erro ao excluir social_post no Supabase:', error);
+            toast.error('Erro ao remover post da fila.');
+          }
+        } catch (dbErr) {
+          console.error('Erro ao excluir no Supabase:', dbErr);
         }
       }
 
-      setPosts(prev => {
-        const next = prev.filter(p => p.id !== id);
-        writeLocalFallback(next);
-        return next;
-      });
-
-      if (!usingFallback) {
-        const { error } = await (supabase as any).from('social_posts').delete().eq('id', id);
-        if (error && !isMissingTableError(error)) {
-          console.error('Erro ao excluir social_post no Supabase:', error);
-          toast.error('Erro ao remover post da fila.');
+      // 4. Se o post foi enviado para o Post for Me e não está postado no feed, cancela e exclui lá também
+      if (providerPostId && existing?.status !== 'postado') {
+        try {
+          const delRes = await socialProvider.deleteRemotePost(providerPostId);
+          if (delRes.ok) {
+            console.log(`[Post for Me] Post ${providerPostId} excluído com sucesso.`);
+          } else {
+            console.warn(`[Post for Me] Falha ao excluir post ${providerPostId}:`, delRes.message);
+          }
+        } catch (remoteErr) {
+          console.warn('Aviso ao cancelar post no Post for Me (já removido localmente):', remoteErr);
         }
       }
     },

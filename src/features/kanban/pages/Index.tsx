@@ -31,7 +31,8 @@ import {
   ChevronDown,
   Activity,
   CheckCircle2,
-  History
+  History,
+  Instagram
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -432,7 +433,7 @@ const Index = () => {
               { icon: CalendarIcon, label: 'Calendário', sub: `${metrics.currMonthTasks.length} artes geradas`, path: selectedClientId !== 'all' ? `/calendario/${selectedClientId}` : '/calendario' },
               { icon: FileEdit, label: 'Alterações', sub: `${metrics.changesCount} tarefas`, path: '/correcao', urgent: metrics.changesCount > 0, hideForGuest: true },
               { icon: Folder, label: 'Banco de Dados', sub: 'Hub Operacional', path: '/cofre', hideForGuest: true },
-              { icon: MessageSquare, label: 'WhatsApp', sub: 'Mensagens diretas', path: '/whatsapp', hideForGuest: true },
+              { icon: Instagram, label: 'Auto Post', sub: 'Publicações no Instagram', path: '/whatsapp', hideForGuest: true },
               { icon: Briefcase, label: 'Produtos', sub: 'E-commerce Mac', path: '/produtos', hideForGuest: true },
               { icon: Send, label: 'Postagem', sub: 'Hub de Midia', path: '/postagem', hideForGuest: true },
             ].filter(item => loggedUserRole !== 'GUEST' || !item.hideForGuest).map(item => (

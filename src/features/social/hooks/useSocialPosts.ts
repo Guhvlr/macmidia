@@ -87,6 +87,7 @@ export function useSocialPosts() {
           media: p.media || [],
           feed_media: p.feedMedia || [],
           stories_media: p.storiesMedia || [],
+          reels_media: p.reelsMedia || [],
           caption: p.caption || '',
           scheduled_at: p.scheduledAt || null,
           published_at: p.publishedAt || null,
@@ -95,6 +96,12 @@ export function useSocialPosts() {
           permalink: p.permalink || null,
           error_message: p.errorMessage || null,
           created_at: p.createdAt || new Date().toISOString(),
+          cover_url: p.coverUrl || null,
+          reels_cover_url: p.reelsCoverUrl || null,
+          repeat_until_date: p.repeatUntilDate || null,
+          repeat_group_id: p.repeatGroupId || null,
+          repeat_index: p.repeatIndex ?? null,
+          repeat_total: p.repeatTotal ?? null,
         }));
         await (supabase as any).from('social_posts').upsert(toInsert, { onConflict: 'id' });
         setPosts(localItems);
@@ -119,6 +126,12 @@ export function useSocialPosts() {
             m.reelsMedia && m.reelsMedia.length > 0
               ? m.reelsMedia
               : localMatch?.reelsMedia,
+          coverUrl: m.coverUrl || localMatch?.coverUrl,
+          reelsCoverUrl: m.reelsCoverUrl || localMatch?.reelsCoverUrl,
+          repeatUntilDate: m.repeatUntilDate || localMatch?.repeatUntilDate,
+          repeatGroupId: m.repeatGroupId || localMatch?.repeatGroupId,
+          repeatIndex: m.repeatIndex ?? localMatch?.repeatIndex,
+          repeatTotal: m.repeatTotal ?? localMatch?.repeatTotal,
         };
       });
       setPosts(mapped);
@@ -177,6 +190,12 @@ export function useSocialPosts() {
           | 'errorMessage'
           | 'calendarClientId'
           | 'providerPostId'
+          | 'coverUrl'
+          | 'reelsCoverUrl'
+          | 'repeatUntilDate'
+          | 'repeatGroupId'
+          | 'repeatIndex'
+          | 'repeatTotal'
         >
       >
     ) => {
@@ -195,6 +214,7 @@ export function useSocialPosts() {
         if (updates.media !== undefined) db.media = updates.media;
         if (updates.feedMedia !== undefined) db.feed_media = updates.feedMedia;
         if (updates.storiesMedia !== undefined) db.stories_media = updates.storiesMedia;
+        if (updates.reelsMedia !== undefined) db.reels_media = updates.reelsMedia;
         if (updates.caption !== undefined) db.caption = updates.caption;
         if ('scheduledAt' in updates) db.scheduled_at = updates.scheduledAt || null;
         if ('publishedAt' in updates) db.published_at = updates.publishedAt || null;
@@ -202,6 +222,12 @@ export function useSocialPosts() {
         if ('errorMessage' in updates) db.error_message = updates.errorMessage || null;
         if ('calendarClientId' in updates) db.calendar_client_id = updates.calendarClientId || null;
         if ('providerPostId' in updates) db.provider_post_id = updates.providerPostId || null;
+        if ('coverUrl' in updates) db.cover_url = updates.coverUrl || null;
+        if ('reelsCoverUrl' in updates) db.reels_cover_url = updates.reelsCoverUrl || null;
+        if ('repeatUntilDate' in updates) db.repeat_until_date = updates.repeatUntilDate || null;
+        if ('repeatGroupId' in updates) db.repeat_group_id = updates.repeatGroupId || null;
+        if ('repeatIndex' in updates) db.repeat_index = updates.repeatIndex ?? null;
+        if ('repeatTotal' in updates) db.repeat_total = updates.repeatTotal ?? null;
 
         const { error } = await (supabase as any).from('social_posts').update(db).eq('id', id);
         if (error && !isMissingTableError(error)) {
@@ -248,7 +274,7 @@ export function useSocialPosts() {
                   status: 'postado',
                   publishedAt: new Date().toISOString(),
                   permalink: check.data.permalink,
-                  errorMessage: undefined,
+                  errorMessage: check.data.warning,
                 });
                 toast.success(`Horário atingido! "${p.title}" foi publicado no Instagram!`);
               }
@@ -294,9 +320,18 @@ export function useSocialPosts() {
       title: string;
       placement?: SocialPlacement;
       media: string[];
+      feedMedia?: string[];
+      storiesMedia?: string[];
+      reelsMedia?: string[];
       caption?: string;
       scheduledAt?: string;
       status?: SocialPostStatus;
+      coverUrl?: string;
+      reelsCoverUrl?: string;
+      repeatUntilDate?: string;
+      repeatGroupId?: string;
+      repeatIndex?: number;
+      repeatTotal?: number;
     }): Promise<SocialPost | null> => {
       const nowIso = new Date().toISOString();
       const newPost: SocialPost = {
@@ -307,11 +342,20 @@ export function useSocialPosts() {
         status: input.status || 'para_postar',
         placement: input.placement || 'feed',
         media: input.media,
+        feedMedia: input.feedMedia,
+        storiesMedia: input.storiesMedia,
+        reelsMedia: input.reelsMedia,
         caption: input.caption || '',
         scheduledAt: input.scheduledAt,
         provider: 'postforme',
         createdAt: nowIso,
         updatedAt: nowIso,
+        coverUrl: input.coverUrl,
+        reelsCoverUrl: input.reelsCoverUrl,
+        repeatUntilDate: input.repeatUntilDate,
+        repeatGroupId: input.repeatGroupId,
+        repeatIndex: input.repeatIndex,
+        repeatTotal: input.repeatTotal,
       };
 
       setPosts(prev => {
@@ -331,9 +375,18 @@ export function useSocialPosts() {
             status: newPost.status,
             placement: newPost.placement,
             media: newPost.media,
+            feed_media: newPost.feedMedia || null,
+            stories_media: newPost.storiesMedia || null,
+            reels_media: newPost.reelsMedia || null,
             caption: newPost.caption,
             scheduled_at: newPost.scheduledAt || null,
             provider: newPost.provider,
+            cover_url: newPost.coverUrl || null,
+            reels_cover_url: newPost.reelsCoverUrl || null,
+            repeat_until_date: newPost.repeatUntilDate || null,
+            repeat_group_id: newPost.repeatGroupId || null,
+            repeat_index: newPost.repeatIndex ?? null,
+            repeat_total: newPost.repeatTotal ?? null,
           })
           .select()
           .maybeSingle();
@@ -367,8 +420,32 @@ export function useSocialPosts() {
   const deletePost = useCallback(
     async (id: string) => {
       const existing = readLocalFallback().find(p => p.id === id) || posts.find(p => p.id === id);
-      if (existing?.providerPostId && existing.status === 'programado') {
-        await socialProvider.deleteRemotePost(existing.providerPostId);
+      let providerPostId = existing?.providerPostId;
+
+      // Se não encontrou providerPostId em memória, busca diretamente no Supabase para garantir
+      if (!providerPostId && !usingFallback) {
+        try {
+          const { data } = await (supabase as any)
+            .from('social_posts')
+            .select('provider_post_id, status')
+            .eq('id', id)
+            .maybeSingle();
+          if (data?.provider_post_id) {
+            providerPostId = data.provider_post_id;
+          }
+        } catch (err) {
+          console.warn('Aviso ao consultar provider_post_id no banco antes de excluir:', err);
+        }
+      }
+
+      // Se o post foi enviado para o Post for Me e não está postado no feed, cancela e exclui lá
+      if (providerPostId && existing?.status !== 'postado') {
+        const delRes = await socialProvider.deleteRemotePost(providerPostId);
+        if (delRes.ok) {
+          console.log(`[Post for Me] Post ${providerPostId} excluído com sucesso.`);
+        } else {
+          console.warn(`[Post for Me] Falha ao excluir post ${providerPostId}:`, delRes.message);
+        }
       }
 
       setPosts(prev => {
@@ -380,13 +457,51 @@ export function useSocialPosts() {
       if (!usingFallback) {
         const { error } = await (supabase as any).from('social_posts').delete().eq('id', id);
         if (error && !isMissingTableError(error)) {
-          console.error('Erro ao excluir social_post:', error);
+          console.error('Erro ao excluir social_post no Supabase:', error);
           toast.error('Erro ao remover post da fila.');
         }
       }
     },
     [usingFallback, posts]
   );
+
+  /**
+   * Limpa todos os posts da coluna "Postado" de uma vez (para não acumular na tela).
+   */
+  const clearPostedPosts = useCallback(async (): Promise<{ ok: boolean; count: number }> => {
+    const postedList = posts.filter(p => p.status === 'postado');
+    if (postedList.length === 0) {
+      toast.info('Nenhum card na coluna "Postado" para limpar.');
+      return { ok: true, count: 0 };
+    }
+
+    const idsToDelete = postedList.map(p => p.id);
+
+    setPosts(prev => {
+      const next = prev.filter(p => p.status !== 'postado');
+      writeLocalFallback(next);
+      return next;
+    });
+
+    if (!usingFallback) {
+      try {
+        const { error } = await (supabase as any)
+          .from('social_posts')
+          .delete()
+          .in('id', idsToDelete);
+        if (error && !isMissingTableError(error)) {
+          console.error('Erro ao limpar posts postados no Supabase:', error);
+          toast.error('Erro ao limpar posts postados no banco de dados.');
+          return { ok: false, count: 0 };
+        }
+      } catch (err) {
+        console.error('Erro na exclusão em lote de posts postados:', err);
+      }
+    }
+
+    toast.success(`${postedList.length} card(s) postado(s) removido(s) com sucesso!`);
+    return { ok: true, count: postedList.length };
+  }, [posts, usingFallback]);
 
   /**
    * Envia o post para o provedor (Post for Me) ou agenda se tiver `scheduledAt`.
@@ -408,6 +523,8 @@ export function useSocialPosts() {
         reelsMedia?: string[];
         placement?: SocialPlacement;
         scheduledAt?: string;
+        coverUrl?: string;
+        reelsCoverUrl?: string;
       }
     ): Promise<{ ok: boolean; simulated?: boolean }> => {
       // Lê do cache local atualizado para nunca pegar estado antigo logo após onUpdatePost
@@ -419,6 +536,8 @@ export function useSocialPosts() {
       const finalCaption = options?.caption ?? target.caption;
       const finalPlacement = options?.placement ?? target.placement;
       const finalScheduledAt = options?.scheduledAt ?? target.scheduledAt;
+      const finalCoverUrl = options?.coverUrl ?? target.coverUrl;
+      const finalReelsCoverUrl = options?.reelsCoverUrl ?? target.reelsCoverUrl;
 
       const isScheduled =
         !!finalScheduledAt && new Date(finalScheduledAt).getTime() > Date.now() + 30_000;
@@ -475,51 +594,140 @@ export function useSocialPosts() {
       }
 
       if (jobs.length > 0) {
-        let firstPostId: string | undefined;
         let firstPermalink: string | undefined;
+        // Mantém IDs de envios anteriores que já deram certo (reenvio só do que falhou)
+        const allProviderIds: string[] =
+          target.status === 'erro' && target.providerPostId
+            ? target.providerPostId.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+        const okLabels: string[] = [];
+        const failedJobs: { label: string; placement: SocialPlacement; message: string }[] = [];
+        const warnings: string[] = [];
 
+        // Uma falha NÃO interrompe os outros formatos (ex: erro no Feed não impede o Stories)
         for (const job of jobs) {
-          const jobRes = await socialProvider.publishDirect({
-            socialAccountId: options?.socialAccountId || '',
-            instagramUsername: options?.instagramUsername,
-            facebookAccountId: options?.facebookAccountId,
-            facebookPageName: options?.facebookPageName,
-            targetNetworks: options?.targetNetworks,
-            caption: job.caption,
-            media: job.media,
-            placement: job.placement,
-            scheduledAt: finalScheduledAt,
+          try {
+            const jobRes = await socialProvider.publishDirect({
+              socialAccountId: options?.socialAccountId || '',
+              instagramUsername: options?.instagramUsername,
+              facebookAccountId: options?.facebookAccountId,
+              facebookPageName: options?.facebookPageName,
+              targetNetworks: options?.targetNetworks,
+              caption: job.caption,
+              media: job.media,
+              placement: job.placement,
+              scheduledAt: finalScheduledAt,
+              coverUrl: finalCoverUrl,
+              reelsCoverUrl: finalReelsCoverUrl,
+            });
+
+            if (!jobRes.ok) {
+              failedJobs.push({
+                label: job.label,
+                placement: job.placement,
+                message: jobRes.message || `Falha ao enviar ${job.label}.`,
+              });
+              continue;
+            }
+
+            okLabels.push(job.label);
+            if (jobRes.data?.id) allProviderIds.push(jobRes.data.id);
+            if (!firstPermalink && jobRes.data?.permalink) firstPermalink = jobRes.data.permalink;
+            if (jobRes.data?.warning) warnings.push(`${job.label}: ${jobRes.data.warning}`);
+          } catch (jobErr: any) {
+            console.error(`Erro ao disparar ${job.label}:`, jobErr);
+            failedJobs.push({
+              label: job.label,
+              placement: job.placement,
+              message: jobErr?.message || `Erro inesperado ao enviar ${job.label}.`,
+            });
+          }
+        }
+
+        const combinedProviderId = allProviderIds.length > 0 ? allProviderIds.join(',') : undefined;
+
+        // Se todas as "falhas" foram avisos temporários do Facebook (onde o post saiu no Instagram e gerou ID):
+        const isAllFbUnknown =
+          failedJobs.length > 0 &&
+          failedJobs.every(f => {
+            const m = f.message.toLowerCase();
+            return (
+              m.includes('unknown error') ||
+              m.includes('failed to post to facebook') ||
+              m.includes('an unknown error occurred')
+            );
           });
 
-          if (!jobRes.ok) {
-            await updatePost(postId, {
-              status: 'erro',
-              errorMessage: `Erro no ${job.label}: ${
-                jobRes.message || `Falha ao enviar ${job.label}.`
-              }`,
-            });
-            toast.error(`Erro ao enviar ${job.label}: ${jobRes.message}`);
-            return { ok: false };
-          }
+        if (okLabels.length === 0 && isAllFbUnknown && allProviderIds.length > 0) {
+          const labelsStr = jobs.map(j => j.label).join(' + ');
+          const warningMsg =
+            'Publicado no Instagram. O Facebook retornou aviso temporário da Meta (verifique diretamente na sua página).';
+          await updatePost(postId, {
+            status: isScheduled ? 'programado' : 'postado',
+            publishedAt: isScheduled ? undefined : new Date().toISOString(),
+            providerPostId: combinedProviderId,
+            permalink: firstPermalink,
+            errorMessage: warningMsg,
+          });
+          toast.warning(
+            `${labelsStr} publicado no Instagram! O Facebook retornou aviso temporário da Meta.`
+          );
+          return { ok: true };
+        }
 
-          if (!firstPostId && jobRes.data?.id) firstPostId = jobRes.data.id;
-          if (!firstPermalink && jobRes.data?.permalink) firstPermalink = jobRes.data.permalink;
+        // Tudo falhou
+        if (okLabels.length === 0) {
+          const msg = failedJobs.map(f => `Erro no ${f.label}: ${f.message}`).join(' | ');
+          await updatePost(postId, {
+            status: 'erro',
+            errorMessage: msg,
+            providerPostId: combinedProviderId,
+          });
+          toast.error(msg);
+          return { ok: false };
+        }
+
+        // Parte deu certo, parte falhou: o card fica em "Deu Erro" só com os formatos que falharam
+        // marcados, para que o próximo envio mande APENAS eles (sem duplicar o que já saiu).
+        if (failedJobs.length > 0) {
+          const failedPlacements = new Set(failedJobs.map(f => f.placement));
+          const msg =
+            `Enviado com sucesso: ${okLabels.join(' + ')}. ` +
+            failedJobs.map(f => `Erro no ${f.label}: ${f.message}`).join(' | ') +
+            ` — Ao tentar de novo, só ${failedJobs.map(f => f.label).join(' + ')} será reenviado.`;
+          await updatePost(postId, {
+            status: 'erro',
+            errorMessage: msg,
+            providerPostId: combinedProviderId,
+            feedMedia: failedPlacements.has('feed') ? feedList : [],
+            storiesMedia: failedPlacements.has('stories') ? storiesList : [],
+            reelsMedia: failedPlacements.has('reels') ? reelsList : [],
+          });
+          toast.warning(msg);
+          return { ok: false };
         }
 
         const nextStatus: SocialPostStatus = isScheduled ? 'programado' : 'postado';
-        const labelsStr = jobs.map(j => j.label).join(' + ');
+        const labelsStr = okLabels.join(' + ');
         await updatePost(postId, {
           status: nextStatus,
           publishedAt: isScheduled ? undefined : new Date().toISOString(),
-          providerPostId: firstPostId,
+          providerPostId: combinedProviderId,
           permalink: firstPermalink,
-          errorMessage: undefined,
+          // Aviso (ex: "erro desconhecido" do Facebook que publica mesmo assim) fica visível no card
+          errorMessage: warnings.length > 0 ? warnings.join(' | ') : undefined,
         });
-        toast.success(
-          isScheduled
-            ? `${labelsStr} programado(s) com sucesso!`
-            : `${labelsStr} enviado(s) com sucesso!`
-        );
+        if (warnings.length > 0) {
+          toast.warning(
+            `${labelsStr} enviado(s). Aviso: o Facebook respondeu "erro desconhecido", mas normalmente publica. Confira na página antes de reenviar.`
+          );
+        } else {
+          toast.success(
+            isScheduled
+              ? `${labelsStr} programado(s) com sucesso!`
+              : `${labelsStr} enviado(s) com sucesso!`
+          );
+        }
         return { ok: true };
       }
 
@@ -533,6 +741,8 @@ export function useSocialPosts() {
         media: finalMedia,
         placement: finalPlacement,
         scheduledAt: finalScheduledAt,
+        coverUrl: finalCoverUrl,
+        reelsCoverUrl: finalReelsCoverUrl,
       });
 
       if (res.ok) {
@@ -562,6 +772,124 @@ export function useSocialPosts() {
     [posts, updatePost]
   );
 
+  const createRecurringOfferBatch = useCallback(
+    async (params: {
+      basePostId: string;
+      startDate: string; // YYYY-MM-DD
+      untilDate: string; // YYYY-MM-DD
+      time: string; // HH:MM
+      calendarClientId?: string;
+      title: string;
+      caption?: string;
+      media: string[];
+      feedMedia?: string[];
+      storiesMedia?: string[];
+      reelsMedia?: string[];
+      coverUrl?: string;
+      reelsCoverUrl?: string;
+      targetNetworks?: ('instagram' | 'facebook')[];
+      socialAccountId?: string;
+      instagramUsername?: string;
+      facebookAccountId?: string;
+      facebookPageName?: string;
+    }): Promise<{ ok: boolean; count: number }> => {
+      const timePart = params.time || '09:00';
+      const start = new Date(`${params.startDate}T${timePart}:00`);
+      const end = new Date(`${params.untilDate}T${timePart}:00`);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+        toast.error('Data final da oferta inválida ou anterior à data inicial.');
+        return { ok: false, count: 0 };
+      }
+
+      const dates: Date[] = [];
+      const cur = new Date(start);
+      while (cur <= end) {
+        dates.push(new Date(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      if (dates.length === 0) {
+        toast.error('Nenhuma data gerada para o período informado.');
+        return { ok: false, count: 0 };
+      }
+
+      const repeatGroupId = crypto.randomUUID();
+      const totalDays = dates.length;
+      let scheduledCount = 0;
+
+      for (let i = 0; i < dates.length; i++) {
+        const d = dates[i];
+        const dayIso = d.toISOString();
+        const dayIndex = i + 1;
+        const dayFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const dayTitle = `${params.title} (Dia ${dayIndex}/${totalDays} • ${dayFormatted})`;
+
+        let targetId = params.basePostId;
+        if (i === 0) {
+          await updatePost(params.basePostId, {
+            title: dayTitle,
+            scheduledAt: dayIso,
+            coverUrl: params.coverUrl,
+            reelsCoverUrl: params.reelsCoverUrl,
+            repeatUntilDate: params.untilDate,
+            repeatGroupId,
+            repeatIndex: dayIndex,
+            repeatTotal: totalDays,
+          });
+        } else {
+          const created = await createPost({
+            calendarClientId: params.calendarClientId,
+            title: dayTitle,
+            placement: 'feed',
+            media: params.media,
+            feedMedia: params.feedMedia,
+            storiesMedia: params.storiesMedia,
+            reelsMedia: params.reelsMedia,
+            caption: params.caption,
+            scheduledAt: dayIso,
+            status: 'programado',
+            coverUrl: params.coverUrl,
+            reelsCoverUrl: params.reelsCoverUrl,
+            repeatUntilDate: params.untilDate,
+            repeatGroupId,
+            repeatIndex: dayIndex,
+            repeatTotal: totalDays,
+          });
+          if (created) {
+            targetId = created.id;
+          } else {
+            console.warn(`Falha ao criar post para o dia ${dayFormatted}, pulando agendamento deste dia.`);
+            continue;
+          }
+        }
+
+        const subRes = await submitPost(targetId, {
+          socialAccountId: params.socialAccountId,
+          instagramUsername: params.instagramUsername,
+          facebookAccountId: params.facebookAccountId,
+          facebookPageName: params.facebookPageName,
+          targetNetworks: params.targetNetworks,
+          caption: params.caption,
+          media: params.media,
+          feedMedia: params.feedMedia,
+          storiesMedia: params.storiesMedia,
+          reelsMedia: params.reelsMedia,
+          scheduledAt: dayIso,
+          coverUrl: params.coverUrl,
+          reelsCoverUrl: params.reelsCoverUrl,
+        });
+
+        if (subRes.ok) scheduledCount++;
+      }
+
+      toast.success(
+        `Oferta programada com sucesso para ${scheduledCount} dias (até ${params.untilDate})!`
+      );
+      return { ok: true, count: scheduledCount };
+    },
+    [updatePost, createPost, submitPost]
+  );
+
   return {
     posts,
     loading,
@@ -570,7 +898,9 @@ export function useSocialPosts() {
     createPost,
     updatePost,
     deletePost,
+    clearPostedPosts,
     submitPost,
+    createRecurringOfferBatch,
   };
 }
 
@@ -625,6 +955,9 @@ export async function sendKanbanCardToSocialQueue(card: KanbanCard): Promise<Soc
         status: newPost.status,
         placement: newPost.placement,
         media: newPost.media,
+        feed_media: newPost.feedMedia || null,
+        stories_media: newPost.storiesMedia || null,
+        reels_media: newPost.reelsMedia || null,
         caption: newPost.caption,
         provider: newPost.provider,
       })

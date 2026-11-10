@@ -1304,9 +1304,9 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     updateTask(taskId, { status: 'processing', progress: 10 });
 
     try {
-      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB
       if (file.size > MAX_FILE_SIZE) {
-        throw new Error('Arquivo muito grande. O limite é de 10MB.');
+        throw new Error('Arquivo muito grande. O limite é de 60MB.');
       }
 
       const { sanitizeFileName } = await import('@/lib/utils');

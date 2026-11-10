@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Instagram,
   Calendar as CalendarIcon,
@@ -19,6 +19,8 @@ import {
   Flame,
   Zap,
   Film,
+  Star,
+  X,
 } from 'lucide-react';
 import {
   Dialog,
@@ -39,7 +41,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { compressImage } from '@/lib/utils';
+import { compressImageToBlob } from '@/lib/utils';
 import type { CalendarClient, KanbanCard } from '@/contexts/app-types';
 import {
   INSTAGRAM_CAPTION_LIMIT,
@@ -81,8 +83,30 @@ interface SocialPostComposerDialogProps {
       reelsMedia?: string[];
       placement?: SocialPlacement;
       scheduledAt?: string;
+      coverUrl?: string;
+      reelsCoverUrl?: string;
     }
   ) => Promise<{ ok: boolean; simulated?: boolean }>;
+  onCreateRecurringBatch?: (params: {
+    basePostId: string;
+    startDate: string;
+    untilDate: string;
+    time: string;
+    calendarClientId?: string;
+    title: string;
+    caption?: string;
+    media: string[];
+    feedMedia?: string[];
+    storiesMedia?: string[];
+    reelsMedia?: string[];
+    coverUrl?: string;
+    reelsCoverUrl?: string;
+    targetNetworks?: ('instagram' | 'facebook')[];
+    socialAccountId?: string;
+    instagramUsername?: string;
+    facebookAccountId?: string;
+    facebookPageName?: string;
+  }) => Promise<{ ok: boolean; count: number }>;
 }
 
 function toLocalDateTimeParts(iso?: string): { date: string; time: string } {
@@ -107,6 +131,7 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
   onCreatePost,
   onDeletePost,
   onSubmitPost,
+  onCreateRecurringBatch,
 }) => {
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState<string>('none');
@@ -116,22 +141,43 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
   const [feedMedia, setFeedMedia] = useState<string[]>([]);
   const [storiesMedia, setStoriesMedia] = useState<string[]>([]);
   const [reelsMedia, setReelsMedia] = useState<string[]>([]);
+  // Capa do Reels (Anexar Imagem - Opcional)
+  const [reelsCoverUrl, setReelsCoverUrl] = useState<string>('');
+  const [isUploadingReelsCover, setIsUploadingReelsCover] = useState(false);
+  const reelsCoverInputRef = useRef<HTMLInputElement | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
+  // Repetição diária de ofertas (válidas até dia X)
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [repeatUntilDate, setRepeatUntilDate] = useState('');
   const [postOnInstagram, setPostOnInstagram] = useState(true);
   const [postOnFacebook, setPostOnFacebook] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [failedMediaUrls, setFailedMediaUrls] = useState<Record<string, boolean>>({});
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<
     { id: string; title: string; badge: string; text: string }[]
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const linkedKanbanCard = useMemo(() => {
-    if (!post?.kanbanCardId) return null;
-    return kanbanCards.find(c => c.id === post.kanbanCardId) || null;
-  }, [post?.kanbanCardId, kanbanCards]);
+  const linkedKanbanCard = post?.kanbanCardId
+    ? kanbanCards.find(c => c.id === post.kanbanCardId) || null
+    : null;
+
+  let recurringSummary: { daysCount: number; startFormatted: string; endFormatted: string } | null = null;
+  if (isRecurring && repeatUntilDate) {
+    const startStr = scheduleDate || new Date().toISOString().split('T')[0];
+    const s = new Date(`${startStr}T00:00:00`);
+    const e = new Date(`${repeatUntilDate}T00:00:00`);
+    if (!Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime()) && e >= s) {
+      const diffMs = e.getTime() - s.getTime();
+      const daysCount = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+      const startFormatted = `${String(s.getDate()).padStart(2, '0')}/${String(s.getMonth() + 1).padStart(2, '0')}`;
+      const endFormatted = `${String(e.getDate()).padStart(2, '0')}/${String(e.getMonth() + 1).padStart(2, '0')}`;
+      recurringSummary = { daysCount, startFormatted, endFormatted };
+    }
+  }
 
   useEffect(() => {
     if (!post || !open) return;
@@ -179,6 +225,16 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
     const { date, time } = toLocalDateTimeParts(post.scheduledAt);
     setScheduleDate(date);
     setScheduleTime(time);
+
+    // Inicializa capa do Reels (opcional) e repetição de ofertas
+    setReelsCoverUrl(post.reelsCoverUrl || '');
+    if (post.repeatUntilDate) {
+      setIsRecurring(true);
+      setRepeatUntilDate(post.repeatUntilDate);
+    } else {
+      setIsRecurring(false);
+      setRepeatUntilDate('');
+    }
   }, [post?.id, open, linkedKanbanCard]);
 
   if (!post) return null;
@@ -274,12 +330,26 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
       const uploadedImageUrls: string[] = [];
       for (const file of files) {
         const isVidFile = file.type.startsWith('video/');
-        const compressed = file.type.startsWith('image/') ? await compressImage(file) : file;
-        const ext = file.name.split('.').pop() || (isVidFile ? 'mp4' : 'jpg');
+        let uploadPayload: Blob | File = file;
+        let contentType = file.type || (isVidFile ? 'video/mp4' : 'image/jpeg');
+
+        if (file.type.startsWith('image/')) {
+          try {
+            uploadPayload = await compressImageToBlob(file);
+            contentType = 'image/jpeg';
+          } catch (e) {
+            console.warn('Fallback para arquivo original no upload:', e);
+            uploadPayload = file;
+          }
+        }
+
+        const ext = isVidFile
+          ? file.name.split('.').pop() || 'mp4'
+          : 'jpg';
         const path = `social/${post.id}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from('kanban_assets')
-          .upload(path, compressed, { upsert: true });
+          .upload(path, uploadPayload, { upsert: true, contentType });
         if (upErr) throw upErr;
         const { data: pub } = supabase.storage.from('kanban_assets').getPublicUrl(path);
         if (pub?.publicUrl) {
@@ -323,6 +393,43 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
     }
   };
 
+  const handleUploadReelsCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingReelsCover(true);
+    try {
+      let uploadPayload: Blob | File = file;
+      if (file.type.startsWith('image/')) {
+        try {
+          uploadPayload = await compressImageToBlob(file);
+        } catch (e) {
+          console.warn('Fallback para arquivo original na capa do Reels:', e);
+          uploadPayload = file;
+        }
+      }
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `social/reels_cover/${post.id}/${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 7)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('kanban_assets')
+        .upload(path, uploadPayload, { upsert: true, contentType: 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('kanban_assets').getPublicUrl(path);
+      if (pub?.publicUrl) {
+        setReelsCoverUrl(pub.publicUrl);
+        toast.success('Imagem de capa do Reels anexada com sucesso!');
+      }
+    } catch (err) {
+      console.error('Erro no upload da capa do Reels:', err);
+      toast.error('Erro ao anexar capa do Reels.');
+    } finally {
+      setIsUploadingReelsCover(false);
+      if (reelsCoverInputRef.current) reelsCoverInputRef.current.value = '';
+    }
+  };
+
   const handleGenerateAICaptions = async (
     preferredStyle: 'auto' | 'ofertas' | 'calmo' | 'curto' = 'auto'
   ) => {
@@ -356,27 +463,50 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
       const clientHandle = selectedClient?.instagramUsername || '';
       const cardText = linkedKanbanCard?.description || '';
 
-      const systemPrompt = `Você é um copywriter especialista em redes sociais para Supermercados, Varejo e Agências Digitais no Brasil.
-Sua missão é olhar a(s) imagem(ns) da postagem (lendo todos os textos, títulos como "Quinta da Carne", "Terça Verde", "Festival de Prêmios", preços, produtos ou eventos na arte) e criar 3 opções de legendas prontas para Instagram e Facebook do cliente "${clientName}" ${clientHandle ? `(${clientHandle})` : ''}.
+      const systemPrompt = `Você é um copywriter de redes sociais especializado em supermercados, atacarejos e varejo alimentar no Brasil.
+Sua missão é gerar legendas de alto engajamento para Instagram e Facebook para o cliente "${clientName}".
 
-Retorne OBRIGATORIAMENTE um JSON válido com estas 3 chaves:
+SIGA ESTRITAMENTE ESTE PADRÃO EM TODAS AS OPÇÕES:
+- Comece com o nome da campanha + nome do supermercado (Ex: "Sacolão da Economia no Supermercado Garotão!" ou "Quinta da Carne no Bem Atacarejo!").
+- Use linguagem comercial, direta, natural e animada.
+- Faça 2 ou 3 parágrafos curtos.
+- Deixe uma linha em branco entre os parágrafos.
+- Use poucos emojis, sempre relacionados ao tema, no máximo 2 a 5 na legenda toda.
+- Finalize com uma chamada para ação (CTA).
+- Use no máximo 5 hashtags, todas no final.
+- Não use negrito (proibido asteriscos ** ou qualquer formatação em negrito).
+- Não mencione na legenda os produtos nem os preços que aparecem nas ofertas.
+- Não invente datas, preços, produtos, horários ou regras.
+- Não coloque preço do produto em hipótese alguma.
+- Entregue somente a legenda pronta (sem saudações, introduções ou aspas).
+
+Retorne OBRIGATORIAMENTE um JSON válido com 3 opções que sigam 100% esse padrão:
 {
-  "ofertas": "Legenda com CTA mais agressivo / chamada de ofertas (se for encarte ou promoção como Quinta da Carne, destaque o tema da oferta, cite os destaques da arte, gere senso de urgência como 'Corra aproveitar hoje!' e inclua hashtags relevantes)",
-  "calmo": "Legenda com tom mais calmo, convidativo e elegante (ideal para institucional, eventos, relacionamento com o cliente ou convite leve, com CTA acolhedor e hashtags)",
-  "curto": "Legenda curta, direta ao ponto e impactante (2 a 3 linhas + CTA rápido + hashtags)"
-}
-
-REGRAS:
-- Não use markdown (**negrito** com asteriscos), pois o Instagram não formata asteriscos.
-- Use emojis na medida certa e quebras de linha limpas para facilitar a leitura no Feed.
-- Leia o que está escrito na imagem da arte para falar exatamente sobre o tema do post!`;
+  "ofertas": "Legenda seguindo todas as regras acima, com tom comercial mais vibrante e foco em economia e vantagens para a família",
+  "calmo": "Legenda seguindo todas as regras acima, com tom convidativo, acolhedor e focado no dia a dia",
+  "curto": "Legenda seguindo todas as regras acima, com 2 parágrafos bem curtos e objetivos + CTA + hashtags"
+}`;
 
       const userContent: any[] = [
         {
           type: 'text',
-          text: `Cliente: ${clientName} ${clientHandle}\nTítulo/Descrição do Card: ${title}${
-            cardText ? `\nTexto de apoio do card: ${cardText}` : ''
-          }\nLeia a(s) arte(s) anexada(s) e gere as 3 opções de legenda em JSON.`,
+          text: `Cliente / Supermercado: ${clientName} ${clientHandle ? `(${clientHandle})` : ''}
+Título do Card: ${title}
+${cardText ? `Briefing/Observações: ${cardText}\n` : ''}
+PADRÃO OBRIGATÓRIO A SEGUIR:
+- Comece com o nome da campanha + nome do supermercado "${clientName}".
+- Use linguagem comercial, direta, natural e animada.
+- Faça 2 ou 3 parágrafos curtos.
+- Deixe uma linha em branco entre os parágrafos.
+- Use poucos emojis, sempre relacionados ao tema, no máximo 2 a 5 na legenda toda.
+- Finalize com uma chamada para ação.
+- Use no máximo 5 hashtags, todas no final.
+- Não use negrito.
+- Não mencione na legenda os produtos nem os preços que aparecem nas ofertas.
+- Não invente datas, preços, produtos, horários ou regras.
+- NÃO COLOQUE PREÇO DO PRODUTO.
+- Entregue somente a legenda pronta.
+Gere o JSON com as 3 opções ("ofertas", "calmo", "curto") seguindo rigorosamente essas instruções.`,
         },
       ];
 
@@ -414,26 +544,66 @@ REGRAS:
       const rawContent = data?.choices?.[0]?.message?.content || '{}';
       const parsed = JSON.parse(rawContent);
 
-      const cleanText = (t?: string) => (t || '').replace(/\*\*/g, '').trim();
+      const sanitizeCaption = (raw?: string): string => {
+        if (!raw) return '';
+        let text = raw.trim();
+
+        // Remove aspas no início/fim
+        text = text.replace(/^["'“”«»]+|["'“”«»]+$/g, '').trim();
+
+        // Remove eventuais prefixos (ex: "Legenda:", "Opção 1:")
+        text = text.replace(/^(Legenda|Opção\s*\d*|Sugestão\s*\d*)\s*:\s*/i, '').trim();
+
+        // Remove asteriscos de markdown (**negrito** ou *itálico*)
+        text = text.replace(/\*/g, '');
+
+        // Converte caracteres unicode negrito/itálico se houver
+        text = text.normalize('NFKD');
+
+        // Remove qualquer menção acidental a preços (ex: R$ 9,99 ou 9,99)
+        text = text.replace(/R\$\s*\d+([.,]\d{2})?/gi, '').replace(/\b\d+,\d{2}\b/g, '');
+
+        // Remove múltiplos espaços horizontais
+        text = text.replace(/[ \t]{2,}/g, ' ');
+
+        // Normaliza quebras de linha para manter exatamente 1 linha em branco entre parágrafos
+        text = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+
+        // Garante no máximo 5 hashtags no final
+        const parts = text.split('\n\n');
+        const lastPart = parts[parts.length - 1] || '';
+        if (lastPart.includes('#')) {
+          const words = lastPart.split(/\s+/);
+          const hashtags = words.filter(w => w.startsWith('#')).slice(0, 5);
+          const nonHashtags = words.filter(w => !w.startsWith('#'));
+          const rebuiltLast = [...nonHashtags, ...hashtags].join(' ').trim();
+          if (rebuiltLast) {
+            parts[parts.length - 1] = rebuiltLast;
+            text = parts.join('\n\n');
+          }
+        }
+
+        return text.trim();
+      };
 
       const suggestions = [
         {
           id: 'ofertas',
-          title: '🔥 Chamada de Ofertas / CTA Agressivo',
-          badge: 'Ofertas & Urgência',
-          text: cleanText(parsed.ofertas),
+          title: '🔥 Comercial / Ofertas',
+          badge: 'Comercial & Animada',
+          text: sanitizeCaption(parsed.ofertas),
         },
         {
           id: 'calmo',
-          title: '✨ Institucional / CTA Calmo',
-          badge: 'Leve & Convidativo',
-          text: cleanText(parsed.calmo),
+          title: '✨ Convidativa / Acolhedora',
+          badge: 'Natural & Leve',
+          text: sanitizeCaption(parsed.calmo),
         },
         {
           id: 'curto',
           title: '⚡ Curta & Direta',
-          badge: 'Rápida',
-          text: cleanText(parsed.curto),
+          badge: '2 Parágrafos',
+          text: sanitizeCaption(parsed.curto),
         },
       ].filter(s => s.text.length > 0);
 
@@ -497,6 +667,8 @@ REGRAS:
       reelsMedia,
       caption: hasFeedSelected || hasReelsSelected ? caption : '',
       scheduledAt: scheduledIso,
+      reelsCoverUrl: reelsCoverUrl || undefined,
+      repeatUntilDate: isRecurring && repeatUntilDate ? repeatUntilDate : undefined,
     });
     toast.success('Alterações salvas no card!');
     onOpenChange(false);
@@ -538,6 +710,39 @@ REGRAS:
     );
     const finalCaption = hasFeedSelected || hasReelsSelected ? caption : '';
 
+    // Se for campanha de repetição diária de ofertas
+    if (isRecurring && repeatUntilDate && onCreateRecurringBatch) {
+      setIsSubmitting(true);
+      try {
+        const res = await onCreateRecurringBatch({
+          basePostId: post.id,
+          startDate: scheduleDate || new Date().toISOString().split('T')[0],
+          untilDate: repeatUntilDate,
+          time: scheduleTime || selectedClient?.defaultPostTime || '09:00',
+          calendarClientId: clientId === 'none' ? undefined : clientId,
+          title: baseTitle,
+          caption: finalCaption,
+          media: combinedMedia,
+          feedMedia,
+          storiesMedia,
+          reelsMedia,
+          reelsCoverUrl: reelsCoverUrl || undefined,
+          targetNetworks,
+          socialAccountId: selectedClient?.postformeAccountId,
+          instagramUsername: selectedClient?.instagramUsername,
+          facebookAccountId: selectedClient?.postformeFacebookAccountId,
+          facebookPageName: selectedClient?.facebookPageName,
+        });
+
+        if (res.ok) {
+          onOpenChange(false);
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await onUpdatePost(post.id, {
@@ -550,6 +755,8 @@ REGRAS:
         reelsMedia,
         caption: finalCaption,
         scheduledAt: scheduledIso,
+        reelsCoverUrl: reelsCoverUrl || undefined,
+        repeatUntilDate: isRecurring && repeatUntilDate ? repeatUntilDate : undefined,
       });
 
       const res = await onSubmitPost(post.id, {
@@ -566,6 +773,7 @@ REGRAS:
         reelsMedia,
         placement: targetPlacement,
         scheduledAt: scheduledIso,
+        reelsCoverUrl: reelsCoverUrl || undefined,
       });
 
       if (res.ok) {
@@ -583,30 +791,52 @@ REGRAS:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl bg-[#121214] border-white/10 text-white p-0 rounded-2xl overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
-        <DialogHeader className="px-6 py-4 bg-[#1C1C1E] border-b border-white/5 flex flex-row items-center justify-between space-y-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
-              <Instagram className="w-5 h-5" />
+      <DialogContent className="w-full sm:max-w-4xl h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[90vh] bg-[#121214] border-white/10 text-white p-0 rounded-none sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+        <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 bg-[#1C1C1E] border-b border-white/5 flex flex-row items-center justify-between space-y-0 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
+              <Instagram className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <DialogTitle className="text-base font-black tracking-tight text-white">
+            <div className="min-w-0">
+              <DialogTitle className="text-sm sm:text-base font-black tracking-tight text-white truncate">
                 Configurar Postagem (Instagram & Facebook)
               </DialogTitle>
-              <DialogDescription className="text-xs text-white/40">
-                Escolha em qual rede postar (Instagram e/ou Facebook), marque Feed ou Stories em cada imagem, escreva a legenda e programe o horário.
+              <DialogDescription className="text-[11px] sm:text-xs text-white/40 line-clamp-1 sm:line-clamp-none">
+                Escolha em qual rede postar, Feed/Stories/Reels, legenda e horário.
               </DialogDescription>
             </div>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+            className="h-8 w-8 rounded-lg text-white/60 hover:text-white shrink-0 sm:hidden"
+            title="Fechar"
+          >
+            <X className="w-4 h-4" />
+          </Button>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3.5 sm:p-6 space-y-4 sm:space-y-6">
           {post.status === 'erro' && post.errorMessage && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3 text-xs text-red-300">
               <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <div>
                 <strong className="font-bold block text-red-200 mb-0.5">
                   Motivo do erro na última tentativa:
+                </strong>
+                {post.errorMessage}
+              </div>
+            </div>
+          )}
+
+          {post.status === 'postado' && post.errorMessage && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs text-amber-300">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-bold block text-amber-200 mb-0.5">
+                  Aviso da publicação:
                 </strong>
                 {post.errorMessage}
               </div>
@@ -825,19 +1055,29 @@ REGRAS:
                     >
                       {/* Preview de Imagem ou Vídeo */}
                       <div className="relative bg-black/60 h-48 flex items-center justify-center overflow-hidden">
-                        {isVid ? (
+                        {failedMediaUrls[url] ? (
+                          <div className="flex flex-col items-center justify-center p-3 text-center text-amber-300">
+                            <AlertTriangle className="w-6 h-6 mb-1 text-amber-400" />
+                            <span className="text-[11px] font-bold">Arquivo indisponível</span>
+                            <span className="text-[9px] text-white/50 mt-0.5">
+                              Link expirado ou excluído no Kanban
+                            </span>
+                          </div>
+                        ) : isVid ? (
                           <video
                             src={url}
                             controls
                             muted
                             playsInline
                             preload="metadata"
+                            onError={() => setFailedMediaUrls(prev => ({ ...prev, [url]: true }))}
                             className="w-full h-full object-contain p-1.5"
                           />
                         ) : (
                           <img
                             src={url}
                             alt=""
+                            onError={() => setFailedMediaUrls(prev => ({ ...prev, [url]: true }))}
                             className="w-full h-full object-contain p-1.5"
                           />
                         )}
@@ -950,6 +1190,91 @@ REGRAS:
             )}
           </div>
 
+          {/* Anexar Imagem de Capa do Reels (Aparece somente quando houver Reels selecionado) */}
+          {hasReelsSelected && (
+            <div className="bg-purple-950/20 border border-purple-500/30 rounded-2xl p-4 space-y-3 animate-in fade-in duration-200">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600/30 text-purple-300 flex items-center justify-center border border-purple-500/40 shrink-0">
+                    <Film className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-purple-200 flex items-center gap-1.5">
+                      Capa do Reels (Opcional)
+                    </h4>
+                    <p className="text-[11px] text-purple-300/60">
+                      Anexe uma imagem para ser a capa do Reels no Instagram. Se não anexar, o Instagram usa o frame do vídeo automaticamente.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={reelsCoverInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleUploadReelsCover}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isUploadingReelsCover}
+                    onClick={() => reelsCoverInputRef.current?.click()}
+                    className="h-8 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold shadow-md shadow-purple-600/25"
+                  >
+                    {isUploadingReelsCover ? (
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {reelsCoverUrl ? 'Trocar Imagem de Capa' : 'Anexar Imagem de Capa'}
+                  </Button>
+
+                  {reelsCoverUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setReelsCoverUrl('')}
+                      className="h-8 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 text-[11px] font-bold border border-red-500/20"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      Remover
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {reelsCoverUrl ? (
+                <div className="flex items-center gap-3 p-2.5 bg-black/40 rounded-xl border border-purple-500/30">
+                  <div className="w-16 h-24 rounded-lg overflow-hidden bg-black border border-purple-500/50 shrink-0 shadow">
+                    <img
+                      src={reelsCoverUrl}
+                      alt="Capa Reels"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="px-2 py-0.5 rounded-md bg-purple-500/30 text-purple-200 text-[10px] font-black uppercase border border-purple-400/40 inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Capa Anexada ✓
+                    </span>
+                    <p className="text-[11px] text-white/80 font-medium">
+                      Esta imagem será enviada como a capa oficial do seu Reels.
+                    </p>
+                    <p className="text-[10px] text-white/40">
+                      Caso queira trocar, clique em "Trocar Imagem de Capa" acima.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-3 px-4 text-center border border-dashed border-purple-500/25 rounded-xl text-[11px] text-purple-300/50 bg-black/20">
+                  Nenhuma imagem anexada. O Instagram usará a imagem do início do vídeo.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 3. Caixinha de Legenda — APARECE SE TIVER FEED OU REELS SELECIONADO */}
           {hasFeedSelected || hasReelsSelected ? (
             <div className="space-y-3 animate-in fade-in duration-200 bg-white/[0.02] border border-white/10 rounded-2xl p-4">
@@ -992,10 +1317,10 @@ REGRAS:
                     disabled={isGeneratingCaption}
                     onClick={() => handleGenerateAICaptions('ofertas')}
                     className="h-8 px-2.5 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
-                    title="Gera legenda focada em ofertas (ex: Quinta da Carne) e CTA agressivo"
+                    title="Gera legenda comercial animada focada na campanha e na economia"
                   >
                     <Flame className="w-3 h-3" />
-                    Ofertas / Agressivo
+                    Comercial / Ofertas
                   </button>
 
                   <button
@@ -1003,10 +1328,10 @@ REGRAS:
                     disabled={isGeneratingCaption}
                     onClick={() => handleGenerateAICaptions('calmo')}
                     className="h-8 px-2.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
-                    title="Gera legenda institucional com CTA calmo e convidativo"
+                    title="Gera legenda convidativa e acolhedora para o dia a dia"
                   >
                     <Sparkles className="w-3 h-3" />
-                    Calmo / Institucional
+                    Convidativa / Leve
                   </button>
 
                   <button
@@ -1014,10 +1339,10 @@ REGRAS:
                     disabled={isGeneratingCaption}
                     onClick={() => handleGenerateAICaptions('curto')}
                     className="h-8 px-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
-                    title="Gera legenda curta e direta ao ponto"
+                    title="Gera legenda direta ao ponto em 2 parágrafos curtos"
                   >
                     <Zap className="w-3 h-3" />
-                    Curta
+                    Curta (2 Parágrafos)
                   </button>
                 </div>
               </div>
@@ -1187,7 +1512,7 @@ REGRAS:
                       setScheduleTime('09:00');
                     }
                   }}
-                  className="bg-white/5 border-white/10 rounded-xl h-10 text-xs text-white"
+                  className="bg-white/5 border-white/10 rounded-xl h-11 text-xs text-white [color-scheme:dark]"
                 />
               </div>
               <div className="space-y-1">
@@ -1200,7 +1525,7 @@ REGRAS:
                     type="time"
                     value={scheduleTime}
                     onChange={e => setScheduleTime(e.target.value)}
-                    className="bg-white/5 border-white/10 rounded-xl h-10 pl-9 text-xs text-white"
+                    className="bg-white/5 border-white/10 rounded-xl h-11 pl-9 text-xs text-white [color-scheme:dark]"
                   />
                 </div>
               </div>
@@ -1210,12 +1535,102 @@ REGRAS:
               <strong className="text-purple-300">Programado</strong> e, assim que der o horário, move sozinho para{' '}
               <strong className="text-emerald-300">Postado</strong>.
             </p>
+
+            {/* Repetição Diária de Ofertas (ex: até o dia 30) */}
+            <div className="pt-3 border-t border-white/10 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+                      Repetir Postagem Diária (Ofertas)
+                    </h5>
+                    <p className="text-[10px] text-white/50">
+                      Posta todos os dias até a data final da promoção (ex: até dia 30)
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isRecurring;
+                    setIsRecurring(next);
+                    if (next && !repeatUntilDate) {
+                      const base = scheduleDate ? new Date(scheduleDate) : new Date();
+                      base.setDate(base.getDate() + 3);
+                      const yyyy = base.getFullYear();
+                      const mm = String(base.getMonth() + 1).padStart(2, '0');
+                      const dd = String(base.getDate()).padStart(2, '0');
+                      setRepeatUntilDate(`${yyyy}-${mm}-${dd}`);
+                      if (!scheduleDate) {
+                        const now = new Date();
+                        setScheduleDate(
+                          `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+                            now.getDate()
+                          ).padStart(2, '0')}`
+                        );
+                      }
+                      if (!scheduleTime) setScheduleTime(selectedClient?.defaultPostTime || '09:00');
+                    }
+                  }}
+                  className={`h-8 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    isRecurring
+                      ? 'bg-orange-500 border-orange-400 text-white shadow-md shadow-orange-500/25'
+                      : 'bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  {isRecurring ? 'Repetição Ativada ✓' : 'Ativar Repetição Diária'}
+                </button>
+              </div>
+
+              {isRecurring && (
+                <div className="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/25 space-y-3 animate-in fade-in duration-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-orange-300 uppercase ml-1">
+                        Oferta Válida Até o Dia:
+                      </label>
+                      <Input
+                        type="date"
+                        value={repeatUntilDate}
+                        onChange={e => setRepeatUntilDate(e.target.value)}
+                        className="bg-black/40 border-orange-500/30 rounded-xl h-11 text-xs text-white [color-scheme:dark]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-center">
+                      {recurringSummary ? (
+                        <div className="text-xs text-orange-200 bg-orange-500/20 rounded-lg p-2.5 border border-orange-500/30 space-y-1">
+                          <p className="font-black flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-orange-300 shrink-0" />
+                            {recurringSummary.daysCount} postagens diárias programadas!
+                          </p>
+                          <p className="text-[11px] text-orange-200/80">
+                            De <strong>{recurringSummary.startFormatted}</strong> até{' '}
+                            <strong>{recurringSummary.endFormatted}</strong> todos os dias às{' '}
+                            <strong>{scheduleTime || '09:00'}</strong>.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-orange-300/70 pt-2">
+                          Selecione uma data final válida para calcular os dias da oferta.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-[#1C1C1E] border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="p-3 sm:px-6 sm:py-4 bg-[#1C1C1E] border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -1231,9 +1646,12 @@ REGRAS:
               className="h-10 px-3 rounded-xl text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20"
             >
               <Trash2 className="w-4 h-4 mr-1.5" />
-              {post.status === 'programado'
-                ? 'Cancelar Agendamento e Excluir'
-                : 'Excluir do Painel'}
+              <span className="hidden sm:inline">
+                {post.status === 'programado'
+                  ? 'Cancelar Agendamento e Excluir'
+                  : 'Excluir do Painel'}
+              </span>
+              <span className="sm:hidden">Excluir</span>
             </Button>
 
             {post.status === 'postado' && (
@@ -1249,17 +1667,19 @@ REGRAS:
                 className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-pink-400"
                 title="A Meta exige que posts já publicados no feed sejam apagados clicando nos 3 pontinhos dentro do próprio Instagram"
               >
-                Abrir no Instagram (Apagar do Feed) <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Abrir no Instagram (Apagar do Feed)</span>
+                <span className="sm:hidden">Instagram</span>
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="secondary"
               onClick={handleSaveDraft}
-              className="h-10 px-4 rounded-xl text-xs font-bold"
+              className="flex-1 sm:flex-initial h-11 sm:h-10 px-4 rounded-xl text-xs font-bold"
             >
               Salvar Rascunho
             </Button>
@@ -1268,16 +1688,26 @@ REGRAS:
               type="button"
               onClick={handlePublishOrSchedule}
               disabled={isSubmitting}
-              className="h-10 px-5 rounded-xl bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white text-xs font-black uppercase tracking-wider shadow-lg"
+              className={`flex-1 sm:flex-initial h-11 sm:h-10 px-5 rounded-xl text-white text-xs font-black uppercase tracking-wider shadow-lg ${
+                isRecurring
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600'
+                  : 'bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400'
+              }`}
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : isRecurring ? (
+                <Flame className="w-4 h-4 mr-2" />
               ) : isScheduledFuture ? (
                 <CalendarIcon className="w-4 h-4 mr-2" />
               ) : (
                 <Send className="w-4 h-4 mr-2" />
               )}
-              {isScheduledFuture ? 'Programar Postagem' : 'Postar Agora'}
+              {isRecurring
+                ? `Programar (${recurringSummary?.daysCount || 1}d)`
+                : isScheduledFuture
+                  ? 'Programar'
+                  : 'Postar Agora'}
             </Button>
           </div>
         </div>

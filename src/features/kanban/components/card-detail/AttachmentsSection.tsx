@@ -1,5 +1,5 @@
 import React, { memo, useState } from "react";
-import { Paperclip, ZoomIn, Trash2, Download, FileText, FileSpreadsheet, File } from 'lucide-react';
+import { Paperclip, ZoomIn, Trash2, Download, FileText, FileSpreadsheet, File, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
@@ -20,7 +20,8 @@ interface AttachmentsSectionProps {
 const isPdf = (url: string) => url.toLowerCase().includes('pdf') || url.toLowerCase().endsWith('.pdf');
 const isExcel = (url: string) => url.toLowerCase().includes('spreadsheet') || url.toLowerCase().includes('excel') || url.toLowerCase().includes('sheet') || url.match(/\.(xls|xlsx|csv|ods)$/i);
 const isWord = (url: string) => url.toLowerCase().includes('word') || url.toLowerCase().includes('officedocument.word') || url.toLowerCase().includes('msword') || url.toLowerCase().includes('opendocument.text') || url.match(/\.(doc|docx|odt|rtf)$/i);
-const isImage = (url: string) => url.startsWith('data:image') || url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+const isVideo = (url: string) => url.startsWith('data:video') || url.match(/\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i);
+const isImage = (url: string) => !isVideo(url) && (url.startsWith('data:image') || url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)(\?|#|$)/i));
 
 export const AttachmentsSection = memo(({
   localImages,
@@ -168,7 +169,7 @@ export const AttachmentsSection = memo(({
       <input 
         ref={fileInputRef} 
         type="file" 
-        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" 
+        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov,.m4v,.webm,.avi,.mkv,.3gp" 
         multiple 
         className="hidden" 
         onChange={e => handleImagesUpload(e.target.files)} 
@@ -176,6 +177,7 @@ export const AttachmentsSection = memo(({
       {localImages.length > 0 && (
         <div className="grid grid-cols-2 gap-4">
           {localImages.map((img, i) => {
+             const isVid = isVideo(img);
              const isImg = isImage(img);
              const isP = isPdf(img);
              const isE = isExcel(img);
@@ -194,6 +196,19 @@ export const AttachmentsSection = memo(({
                     <img src={img} alt="" className="absolute inset-0 w-full h-full object-cover blur-xl opacity-50 scale-110" />
                     <img src={img} className="relative z-10 max-w-full max-h-full object-contain drop-shadow-lg" alt={`Anexo ${i + 1}`} />
                   </>
+                ) : isVid ? (
+                  <div className="w-full h-full relative flex items-center justify-center bg-black/70">
+                    <video
+                      src={img}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="relative z-10 max-w-full max-h-full object-contain drop-shadow-lg"
+                    />
+                    <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-black/80 text-purple-300 border border-purple-400/40 text-[9px] font-black uppercase flex items-center gap-1 shadow">
+                      <Film className="w-3 h-3" /> Vídeo
+                    </span>
+                  </div>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a1c] p-4 text-center">
                      {isP ? <FileText className="w-8 h-8 text-red-400 mb-2" /> : isE ? <FileSpreadsheet className="w-8 h-8 text-green-400 mb-2" /> : isW ? <FileText className="w-8 h-8 text-blue-400 mb-2" /> : <File className="w-8 h-8 text-white/50 mb-2" />}
@@ -206,10 +221,10 @@ export const AttachmentsSection = memo(({
                 <div className="absolute inset-0 z-20 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   {deleteConfirmIdx !== i ? (
                     <>
-                      {isImg && <Button size="icon" variant="ghost" onClick={() => setPreviewIndex(i)}><ZoomIn className="w-4 h-4" /></Button>}
-                      <Button size="icon" variant="ghost" onClick={(e) => downloadAttachment(img, i, e)}><Download className="w-4 h-4 text-white" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => setDeleteConfirmIdx(i)} className="text-red-400"><Trash2 className="w-4 h-4" /></Button>
-                      {isImg && coverImage !== img && (
+                      {(isImg || isVid) && <Button size="icon" variant="ghost" onClick={() => setPreviewIndex(i)} title="Visualizar em tela cheia"><ZoomIn className="w-4 h-4" /></Button>}
+                      <Button size="icon" variant="ghost" onClick={(e) => downloadAttachment(img, i, e)} title="Baixar anexo"><Download className="w-4 h-4 text-white" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteConfirmIdx(i)} className="text-red-400" title="Excluir"><Trash2 className="w-4 h-4" /></Button>
+                      {coverImage !== img && (
                         <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => setAsCover(img)}>
                           Usar Capa
                         </Button>

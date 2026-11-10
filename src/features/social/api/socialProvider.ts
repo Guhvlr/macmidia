@@ -295,7 +295,9 @@ async function formatImageForStory9x16(rawUrl: string, index: number): Promise<s
       .from('kanban_assets')
       .upload(filePath, outBlob, { upsert: true, contentType: 'image/jpeg' });
 
-    if (!upErr) {
+    if (upErr) {
+      console.error('Erro no upload da imagem 9:16 para kanban_assets:', upErr);
+    } else {
       const { data: pub } = supabase.storage.from('kanban_assets').getPublicUrl(filePath);
       if (pub?.publicUrl) {
         return pub.publicUrl;
@@ -533,6 +535,8 @@ async function call<T = Record<string, unknown>>(
       media,
       placement,
       scheduledAt,
+      coverUrl,
+      reelsCoverUrl,
     } = payload as {
       socialAccountId: string;
       instagramUsername?: string;
@@ -543,6 +547,8 @@ async function call<T = Record<string, unknown>>(
       media: string[];
       placement: 'feed' | 'stories' | 'reels';
       scheduledAt?: string;
+      coverUrl?: string;
+      reelsCoverUrl?: string;
     };
 
     const networks =
@@ -677,6 +683,25 @@ async function call<T = Record<string, unknown>>(
       };
     }
 
+    // Se coverUrl estiver definido e estiver na lista de mídias, reordenamos para ser a primeira (capa do carrossel/feed)
+    let orderedMediaUrls = [...publicMediaUrls];
+    if (coverUrl && placement === 'feed') {
+      const coverIdx = orderedMediaUrls.indexOf(coverUrl);
+      if (coverIdx > -1) {
+        orderedMediaUrls.splice(coverIdx, 1);
+        orderedMediaUrls.unshift(coverUrl);
+      }
+    }
+
+    // Se reelsCoverUrl foi fornecido, também garantimos que ele seja URL pública se necessário
+    let publicReelsCoverUrl: string | undefined = undefined;
+    if (reelsCoverUrl) {
+      const resolvedCover = await ensurePublicMediaUrls([reelsCoverUrl]);
+      if (resolvedCover.length > 0) {
+        publicReelsCoverUrl = resolvedCover[0];
+      }
+    }
+
     const placementMap: Record<string, string> = {
       feed: 'timeline',
       stories: 'stories',
@@ -713,7 +738,12 @@ async function call<T = Record<string, unknown>>(
     const body: Record<string, unknown> = {
       caption: safeCaption,
       social_accounts: targetAccountIds,
-      media: publicMediaUrls.map(url => ({ url })),
+      media: orderedMediaUrls.map(url => ({
+        url,
+        ...(publicReelsCoverUrl && (placement === 'reels' || isVideoUrl(url))
+          ? { thumbnail_url: publicReelsCoverUrl }
+          : {}),
+      })),
       platform_configurations: platformConfigs,
     };
 
@@ -736,9 +766,23 @@ async function call<T = Record<string, unknown>>(
     }
 
     if (!res.ok) {
+      const errMsg = res.message || 'Falha ao enviar postagem para o Post for Me.';
+      // Se a Meta retornou o aviso desconhecido do Facebook, mas o post foi criado
+      if (isFacebookUnknownError(null, errMsg) && res.data?.id) {
+        return {
+          ok: true,
+          data: {
+            id: res.data.id,
+            status: 'postado',
+            warning:
+              'O Facebook retornou aviso temporário da Meta, mas a publicação foi enviada. Confira na sua página.',
+            resolvedAccountId: targetAccountIds[0],
+          } as unknown as T,
+        };
+      }
       return {
         ok: false,
-        message: res.message || 'Falha ao enviar postagem para o Post for Me.',
+        message: errMsg,
       };
     }
 
@@ -760,6 +804,7 @@ async function call<T = Record<string, unknown>>(
           id: providerPostId,
           status: 'postado',
           permalink: check.permalink,
+          warning: check.warning,
           resolvedAccountId: targetAccountIds[0],
         } as unknown as T,
       };
@@ -776,19 +821,34 @@ async function call<T = Record<string, unknown>>(
   }
 
   if (action === 'delete_remote_post') {
-    const providerPostId = String(payload.providerPostId || '');
-    if (!providerPostId) {
+    const rawIds = String(payload.providerPostId || '').trim();
+    if (!rawIds) {
       return { ok: false, message: 'ID do post no provedor não informado.' };
     }
-    const delRes = await directPostForMeRequest(
-      `/social-posts/${encodeURIComponent(providerPostId)}`,
-      { method: 'DELETE' }
-    );
-    if (!delRes.ok) {
+    const idList = rawIds.split(',').map(s => s.trim()).filter(Boolean);
+    let anySuccess = false;
+    let lastError: string | undefined;
+
+    for (const pid of idList) {
+      const delRes = await directPostForMeRequest(
+        `/social-posts/${encodeURIComponent(pid)}`,
+        { method: 'DELETE' }
+      );
+
+      // Se retornou ok (200, 204) ou 404 (já não existe lá no Post for Me), consideramos sucesso
+      if (delRes.ok || delRes.status === 404) {
+        anySuccess = true;
+      } else {
+        console.warn(`Falha ao excluir post ${pid} no Post for Me:`, delRes);
+        lastError = delRes.message;
+      }
+    }
+
+    if (!anySuccess && lastError) {
       return {
         ok: false,
         message:
-          delRes.message ||
+          lastError ||
           'Post já publicado no feed (a API da Meta só permite excluir posts agendados; para apagar do feed publicado, abra o post no Instagram).',
       };
     }
@@ -796,12 +856,30 @@ async function call<T = Record<string, unknown>>(
   }
 
   if (action === 'check_post_status') {
-    const providerPostId = String(payload.providerPostId || '');
-    if (!providerPostId) {
+    const rawIds = String(payload.providerPostId || '');
+    const idList = rawIds.split(',').map(s => s.trim()).filter(Boolean);
+    if (idList.length === 0) {
       return { ok: false, message: 'ID do post no provedor não informado.' };
     }
-    const res = await checkProviderPostStatus(providerPostId);
-    return { ok: true, data: res as unknown as T };
+    // Card com Feed + Stories (+ Reels) guarda vários IDs separados por vírgula: confere cada um
+    const results = [];
+    for (const pid of idList) {
+      results.push(await checkProviderPostStatus(pid));
+    }
+    const erro = results.find(r => r.status === 'erro');
+    const pendente = results.find(r => r.status === 'programado' || r.status === 'publicando');
+    const warnings = results.map(r => r.warning).filter(Boolean);
+    const permalink = results.find(r => r.permalink)?.permalink;
+    const merged = erro
+      ? { status: 'erro' as const, errorMessage: erro.errorMessage }
+      : pendente
+        ? { status: pendente.status }
+        : {
+            status: 'postado' as const,
+            permalink,
+            warning: warnings.length > 0 ? warnings.join(' | ') : undefined,
+          };
+    return { ok: true, data: merged as unknown as T };
   }
 
   return {
@@ -811,91 +889,129 @@ async function call<T = Record<string, unknown>>(
   };
 }
 
+/**
+ * Erro genérico que a Meta devolve no Facebook mesmo quando a publicação SAI normalmente.
+ * Tratamos como aviso (e não como falha) para não travar o Stories nem gerar posts duplicados.
+ */
+function isFacebookUnknownError(item: any, message: string): boolean {
+  const raw = `${JSON.stringify(item || {})} ${message || ''}`.toLowerCase();
+  return (
+    raw.includes('unknown error') ||
+    raw.includes('failed to post to facebook') ||
+    raw.includes('an unknown error occurred') ||
+    (raw.includes('facebook') && raw.includes('unknown'))
+  );
+}
+
+function resultBelongsToPost(item: any, providerPostId: string): boolean | null {
+  const ref =
+    item?.social_post_id ?? item?.post_id ?? item?.social_post?.id ?? item?.socialPostId;
+  if (ref === undefined || ref === null || ref === '') return null; // sem campo para conferir
+  return String(ref) === providerPostId;
+}
+
+function resultErrorMessage(item: any): string {
+  return (
+    item?.error?.message ||
+    item?.error_message ||
+    (typeof item?.error === 'string' ? item.error : '') ||
+    item?.message ||
+    'Erro retornado pela rede social ao publicar a mídia.'
+  );
+}
+
 async function checkProviderPostStatus(providerPostId: string): Promise<{
   status: 'programado' | 'publicando' | 'postado' | 'erro';
   permalink?: string;
   errorMessage?: string;
+  warning?: string;
 }> {
-  // 1. Consulta resultados detalhados por plataforma (/social-post-results)
+  // 1. Consulta o próprio post (/social-posts/{id}). Se ainda está agendado, não olha mais nada.
+  const postRes = await directPostForMeRequest<any>(
+    `/social-posts/${encodeURIComponent(providerPostId)}`,
+    { method: 'GET' }
+  );
+  const postStatus =
+    postRes.ok && postRes.data ? String(postRes.data.status || '').toLowerCase() : '';
+
+  if (postStatus === 'scheduled' || postStatus === 'draft') {
+    return { status: 'programado' };
+  }
+
+  // 2. Consulta resultados por plataforma (/social-post-results).
+  // IMPORTANTE: o Post for Me pode devolver resultados de OUTROS posts da conta, então
+  // só consideramos os itens que pertencem a este post.
   const resultsRes = await directPostForMeRequest<{ data?: any[] }>(
     `/social-post-results?social_post_id=${encodeURIComponent(providerPostId)}`,
     { method: 'GET' }
   );
 
   if (resultsRes.ok) {
-    const items: any[] = Array.isArray(resultsRes.data?.data)
+    const allItems: any[] = Array.isArray(resultsRes.data?.data)
       ? resultsRes.data!.data!
       : Array.isArray(resultsRes.data)
         ? (resultsRes.data as any[])
         : [];
+    const items = allItems.filter(item => resultBelongsToPost(item, providerPostId) === true);
 
     if (items.length > 0) {
-      const failed = items.find(
-        item =>
-          item.success === false ||
-          item.status === 'failed' ||
-          item.status === 'error' ||
-          Boolean(item.error)
+      const isFailed = (item: any) =>
+        item.success === false ||
+        item.status === 'failed' ||
+        item.status === 'error' ||
+        Boolean(item.error);
+      const failed = items.filter(isFailed);
+      const succeeded = items.filter(item => !isFailed(item));
+      const realFailures = failed.filter(
+        item => !isFacebookUnknownError(item, resultErrorMessage(item))
       );
-      if (failed) {
-        const errDetail =
-          failed?.error?.message ||
-          failed?.error_message ||
-          (typeof failed?.error === 'string' ? failed.error : '') ||
-          failed?.message ||
-          'Erro retornado pelo Instagram ao publicar a mídia.';
-        return {
-          status: 'erro',
-          errorMessage: errDetail,
-        };
-      }
+      const fbUnknown = failed.filter(item =>
+        isFacebookUnknownError(item, resultErrorMessage(item))
+      );
+      const firstOk = succeeded.find(
+        item => item.url || item.platform_url || item.permalink || item.platform_data?.url
+      );
+      const permalink =
+        firstOk?.url || firstOk?.platform_url || firstOk?.permalink || firstOk?.platform_data?.url;
 
-      const succeeded = items.find(
-        item =>
-          item.success === true ||
-          item.status === 'published' ||
-          item.status === 'success' ||
-          Boolean(item.url || item.platform_url || item.permalink)
-      );
-      if (succeeded) {
-        return {
-          status: 'postado',
-          permalink:
-            succeeded.url ||
-            succeeded.platform_url ||
-            succeeded.permalink ||
-            succeeded.platform_data?.url ||
-            undefined,
-        };
+      const fbWarning =
+        fbUnknown.length > 0
+          ? 'O Facebook respondeu "erro desconhecido", mas normalmente publica mesmo assim. Confira na página antes de reenviar.'
+          : undefined;
+
+      if (realFailures.length > 0 && succeeded.length === 0) {
+        return { status: 'erro', errorMessage: resultErrorMessage(realFailures[0]) };
+      }
+      if (realFailures.length > 0) {
+        const warning = [
+          `Uma das redes recusou: ${resultErrorMessage(realFailures[0])}`,
+          fbWarning,
+        ]
+          .filter(Boolean)
+          .join(' | ');
+        return { status: 'postado', permalink, warning };
+      }
+      if (succeeded.length > 0 || fbUnknown.length > 0) {
+        return { status: 'postado', permalink, warning: fbWarning };
       }
     }
   }
 
-  // 2. Consulta o próprio post (/social-posts/{id})
-  const postRes = await directPostForMeRequest<any>(
-    `/social-posts/${encodeURIComponent(providerPostId)}`,
-    { method: 'GET' }
-  );
-
-  if (postRes.ok && postRes.data) {
-    const st = String(postRes.data.status || '').toLowerCase();
-    if (st === 'failed' || st === 'error') {
-      return {
-        status: 'erro',
-        errorMessage:
-          postRes.data.error?.message ||
-          postRes.data.error_message ||
-          'Falha ao publicar no Instagram.',
-      };
-    }
-    if (st === 'published' || st === 'processed' || st === 'completed') {
+  // 3. Sem resultados confiáveis: usa só o status do próprio post
+  if (postStatus === 'failed' || postStatus === 'error') {
+    const msg =
+      postRes.data?.error?.message || postRes.data?.error_message || 'Falha ao publicar.';
+    if (isFacebookUnknownError(postRes.data, msg)) {
       return {
         status: 'postado',
+        warning:
+          'O Facebook respondeu "erro desconhecido", mas normalmente publica mesmo assim. Confira na página antes de reenviar.',
       };
     }
-    if (st === 'scheduled') {
-      return { status: 'programado' };
-    }
+    return { status: 'erro', errorMessage: msg };
+  }
+  if (postStatus === 'published' || postStatus === 'processed' || postStatus === 'completed') {
+    return { status: 'postado' };
   }
 
   return { status: 'publicando' };
@@ -933,11 +1049,14 @@ export const socialProvider = {
     media: string[];
     placement: 'feed' | 'stories' | 'reels';
     scheduledAt?: string;
+    coverUrl?: string;
+    reelsCoverUrl?: string;
   }) =>
     call<{
       status: string;
       id?: string;
       permalink?: string;
+      warning?: string;
       resolvedAccountId?: string;
     }>('publish_direct', params),
 
@@ -945,12 +1064,13 @@ export const socialProvider = {
   deleteRemotePost: (providerPostId: string) =>
     call('delete_remote_post', { providerPostId }),
 
-  /** Consulta o status real do post lá no Post for Me / Instagram */
+  /** Consulta o status real do post lá no Post for Me / Instagram (aceita vários IDs separados por vírgula) */
   checkPostStatus: (providerPostId: string) =>
     call<{
       status: 'programado' | 'publicando' | 'postado' | 'erro';
       permalink?: string;
       errorMessage?: string;
+      warning?: string;
     }>('check_post_status', { providerPostId }),
 
   /** Cancela um post programado no provedor e volta para "Para Postar" */

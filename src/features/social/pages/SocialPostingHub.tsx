@@ -19,6 +19,8 @@ import {
   Loader2,
   KeyRound,
   Trash2,
+  Star,
+  Flame,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,23 +77,153 @@ const COLUMNS = [
   {
     key: 'postado' as const,
     title: 'Postado',
-    subtitle: 'Concluídos no Instagram',
+    subtitle: 'Concluídos no Instagram / Facebook',
     badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     dotClass: 'bg-emerald-500',
     icon: CheckCircle2,
   },
 ];
 
+/**
+ * Preview de mídia do card com detecção de falha de carregamento (onError)
+ * e fallback automático para outras fotos do card ou aviso de mídia expirada/excluída.
+ */
+const PostCardMediaPreview: React.FC<{ post: SocialPost }> = ({ post }) => {
+  const candidates = useMemo(() => {
+    const list: string[] = [];
+    if (post.reelsCoverUrl) list.push(post.reelsCoverUrl);
+    if (post.coverUrl) list.push(post.coverUrl);
+    if (post.feedMedia && post.feedMedia.length > 0) list.push(...post.feedMedia);
+    if (post.storiesMedia && post.storiesMedia.length > 0) list.push(...post.storiesMedia);
+    if (post.media && post.media.length > 0) list.push(...post.media);
+    return Array.from(new Set(list.filter(Boolean)));
+  }, [post]);
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [allFailed, setAllFailed] = useState(false);
+
+  const currentMedia = candidates[currentIndex];
+
+  if (!currentMedia || allFailed) {
+    return (
+      <div className="h-44 bg-black/60 border-b border-white/5 flex flex-col items-center justify-center p-3 text-center">
+        <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-2">
+          <AlertTriangle className="w-5 h-5" />
+        </div>
+        <p className="text-xs font-bold text-amber-300">Mídia indisponível</p>
+        <p className="text-[10px] text-white/40 mt-0.5">Link expirado ou excluído no Kanban</p>
+        <span className="mt-2 text-[10px] font-semibold text-pink-400 underline decoration-pink-400/40">
+          Clique para reanexar foto/vídeo
+        </span>
+      </div>
+    );
+  }
+
+  const isVid = isVideoUrl(currentMedia);
+
+  return (
+    <div className="relative bg-black/50 h-44 flex items-center justify-center overflow-hidden">
+      {isVid ? (
+        <video
+          src={currentMedia}
+          muted
+          playsInline
+          preload="metadata"
+          onError={() => {
+            if (currentIndex + 1 < candidates.length) {
+              setCurrentIndex(currentIndex + 1);
+            } else {
+              setAllFailed(true);
+            }
+          }}
+          className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300"
+        />
+      ) : (
+        <img
+          src={currentMedia}
+          alt=""
+          loading="lazy"
+          onError={() => {
+            if (currentIndex + 1 < candidates.length) {
+              setCurrentIndex(currentIndex + 1);
+            } else {
+              setAllFailed(true);
+            }
+          }}
+          className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300"
+        />
+      )}
+
+      {/* Badges no Topo */}
+      <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1 max-w-[80%]">
+        <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-sm border border-white/15 text-[10px] font-black uppercase tracking-wider text-white flex items-center gap-1">
+          {(() => {
+            const activeLabels: string[] = [];
+            if ((post.feedMedia?.length ?? 0) > 0) activeLabels.push('Feed');
+            if ((post.reelsMedia?.length ?? 0) > 0) activeLabels.push('Reels');
+            if ((post.storiesMedia?.length ?? 0) > 0) activeLabels.push('Stories');
+            if (activeLabels.length > 1) {
+              return (
+                <>
+                  <Layers className="w-3 h-3 text-pink-400" />
+                  {activeLabels.join(' + ')}
+                </>
+              );
+            }
+            return (
+              <>
+                {post.placement === 'feed' && <Layers className="w-3 h-3 text-pink-400" />}
+                {post.placement === 'stories' && <ImageIcon className="w-3 h-3 text-orange-400" />}
+                {post.placement === 'reels' && <Film className="w-3 h-3 text-purple-400" />}
+                {PLACEMENT_LABELS[post.placement]}
+              </>
+            );
+          })()}
+        </span>
+
+        {post.reelsCoverUrl && (
+          <span className="px-1.5 py-0.5 rounded-md bg-purple-600 text-white text-[9px] font-black uppercase shadow flex items-center gap-0.5">
+            <Film className="w-2.5 h-2.5" /> Capa Reels
+          </span>
+        )}
+
+        {post.repeatTotal && (
+          <span className="px-1.5 py-0.5 rounded-md bg-orange-500 text-white text-[9px] font-black uppercase shadow flex items-center gap-0.5">
+            <Flame className="w-2.5 h-2.5" /> Dia {post.repeatIndex || 1}/{post.repeatTotal}
+          </span>
+        )}
+      </div>
+
+      {post.media.length > 1 && (
+        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-sm border border-white/15 text-[10px] font-bold text-white">
+          {post.media.length} fotos
+        </span>
+      )}
+    </div>
+  );
+};
+
 const SocialPostingHub: React.FC = () => {
   const navigate = useNavigate();
   const { calendarClients, kanbanCards } = useApp();
-  const { posts, loading, fetchPosts, createPost, updatePost, deletePost, submitPost } =
-    useSocialPosts();
+  const {
+    posts,
+    loading,
+    fetchPosts,
+    createPost,
+    updatePost,
+    deletePost,
+    clearPostedPosts,
+    submitPost,
+    createRecurringOfferBatch,
+  } = useSocialPosts();
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [activeMobileCol, setActiveMobileCol] = useState<'para_postar' | 'programado' | 'erro' | 'postado'>('para_postar');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isClearingPosted, setIsClearingPosted] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -193,6 +325,14 @@ const SocialPostingHub: React.FC = () => {
                 status: 'postado',
                 publishedAt: p.publishedAt || new Date().toISOString(),
                 permalink: check.data.permalink || p.permalink,
+                errorMessage: check.data.warning,
+              });
+            } else if (check.data.status === 'programado' && p.status !== 'programado') {
+              // Ainda está agendado no Post for Me: volta o card para "Programado"
+              await updatePost(p.id, {
+                status: 'programado',
+                publishedAt: undefined,
+                permalink: undefined,
                 errorMessage: undefined,
               });
             }
@@ -206,50 +346,239 @@ const SocialPostingHub: React.FC = () => {
     }
   };
 
+  const renderColumnCards = (colKey: 'para_postar' | 'programado' | 'erro' | 'postado') => {
+    const colPosts = postsByColumn[colKey];
+    const col = COLUMNS.find(c => c.key === colKey)!;
+    const Icon = col.icon;
+
+    if (colPosts.length === 0) {
+      return (
+        <div className="h-44 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center text-center p-4 text-white/25 text-xs">
+          <Icon className="w-6 h-6 mb-2 opacity-30" />
+          Nenhum card em "{col.title}"
+        </div>
+      );
+    }
+
+    return colPosts.map(post => {
+      const client = post.calendarClientId
+        ? clientMap.get(post.calendarClientId)
+        : undefined;
+      return (
+        <div
+          key={post.id}
+          onClick={() => setSelectedPostId(post.id)}
+          className={`group rounded-xl bg-[#1C1C1E] hover:bg-[#242428] border transition-all cursor-pointer overflow-hidden shadow-md ${
+            post.status === 'erro'
+              ? 'border-red-500/40 hover:border-red-500/70'
+              : 'border-white/5 hover:border-white/15'
+          }`}
+        >
+          {/* Preview de Mídia com Fallback Inteligente */}
+          <PostCardMediaPreview post={post} />
+
+          {/* Info do Cliente + Data / Status */}
+          <div className="p-3 space-y-2">
+            {/* Cliente vinculado + Botão Excluir */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-600 to-orange-500 flex items-center justify-center text-[10px] font-black text-white overflow-hidden shrink-0">
+                  {client?.logoUrl ? (
+                    <img
+                      src={client.logoUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    (client?.name || post.title || 'C').substring(0, 2).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">
+                    {client?.name || post.title}
+                  </p>
+                  {client?.instagramUsername && (
+                    <p className="text-[10px] text-pink-400 font-semibold truncate">
+                      {client.instagramUsername}
+                      {client.facebookPageName
+                        ? ` • FB: ${client.facebookPageName}`
+                        : ''}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={async e => {
+                  e.stopPropagation();
+                  if (
+                    confirm(
+                      post.status === 'programado'
+                        ? 'Deseja cancelar o agendamento no Post for Me e excluir este post?'
+                        : 'Deseja excluir este post da Central de Postagem?'
+                    )
+                  ) {
+                    await deletePost(post.id);
+                    toast.success(
+                      post.status === 'programado'
+                        ? 'Agendamento cancelado no Post for Me!'
+                        : 'Post excluído com sucesso!'
+                    );
+                  }
+                }}
+                className="w-7 h-7 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 flex items-center justify-center transition-colors shrink-0"
+                title="Excluir Post"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Snippet da Legenda */}
+            {post.caption && (
+              <p className="text-[11px] text-white/60 line-clamp-2 leading-relaxed">
+                {post.caption}
+              </p>
+            )}
+
+            {/* Rodapé do Card: Data / Status */}
+            <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-white/40">
+              <span className="flex items-center gap-1 font-medium">
+                <Clock className="w-3 h-3 opacity-60" />
+                {post.scheduledAt ? (
+                  <>
+                    {new Date(post.scheduledAt).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                    })}{' '}
+                    às{' '}
+                    {new Date(post.scheduledAt).toLocaleTimeString('pt-BR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </>
+                ) : (
+                  'Não agendado'
+                )}
+              </span>
+
+              {post.status === 'postado' && (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
+                  Publicado ✓
+                </span>
+              )}
+              {post.status === 'programado' && (
+                <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-bold border border-purple-500/20">
+                  Programado
+                </span>
+              )}
+              {post.status === 'erro' && (
+                <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 font-bold border border-red-500/20">
+                  Erro
+                </span>
+              )}
+            </div>
+
+            {/* Link direto para a postagem no Instagram (quando já postado) */}
+            {post.status === 'postado' && (
+              <div className="pt-1 flex items-center justify-end">
+                {post.permalink ? (
+                  <a
+                    href={post.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-[10px] font-bold text-pink-400 hover:underline flex items-center gap-1"
+                  >
+                    Ver no Instagram <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                ) : (
+                  <a
+                    href={
+                      client?.instagramUsername
+                        ? `https://www.instagram.com/${client.instagramUsername.replace(/^@/, '')}/`
+                        : 'https://www.instagram.com/'
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-[10px] font-bold text-pink-400 hover:underline flex items-center gap-1"
+                  >
+                    Abrir <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Motivo do Erro */}
+            {post.status === 'erro' && (
+              <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/25 text-[10px] text-red-300 flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                <span className="line-clamp-2">
+                  {post.errorMessage || 'Erro ao publicar. Clique para revisar e tentar novamente.'}
+                </span>
+              </div>
+            )}
+
+            {/* Alerta/Aviso quando postado (ex: Facebook unknown error que posta mesmo assim) */}
+            {post.status === 'postado' && post.errorMessage && (
+              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] text-amber-300 flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <span className="line-clamp-2">
+                  {post.errorMessage}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    });
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#08080a]">
       {/* Header */}
-      <header className="px-4 md:px-6 py-4 bg-[#121214]/90 backdrop-blur-xl border-b border-white/5 flex flex-wrap items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="px-3 sm:px-6 py-3 sm:py-4 bg-[#121214]/90 backdrop-blur-xl border-b border-white/5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate('/postagem')}
-            className="h-10 w-10 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
+            className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5 shrink-0"
             title="Voltar para o Kanban de Postagem"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
 
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
-            <Instagram className="w-5 h-5" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg shrink-0">
+            <Instagram className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
 
-          <div>
-            <h1 className="text-lg md:text-xl font-black text-white tracking-tight uppercase">
-              Central de Postagem • Instagram
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-black text-white tracking-tight uppercase truncate">
+              Central de Postagem
             </h1>
-            <p className="text-[11px] text-white/40 font-medium">
-              Clique em um card para escolher Feed ou Stories, editar as imagens, escrever a legenda e postar ou programar
+            <p className="hidden sm:block text-[11px] text-white/40 font-medium">
+              Clique em um card para escolher Feed ou Stories, editar imagens, legenda e programar
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Busca */}
-          <div className="relative w-48 sm:w-60">
+          <div className="relative flex-1 sm:w-52 min-w-[140px]">
             <Search className="w-3.5 h-3.5 text-white/30 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar cliente ou post..."
-              className="h-9 pl-8 bg-white/5 border-white/10 rounded-xl text-xs text-white placeholder:text-white/30"
+              placeholder="Buscar cliente..."
+              className="h-9 pl-8 bg-white/5 border-white/10 rounded-xl text-xs text-white placeholder:text-white/30 w-full"
             />
           </div>
 
           {/* Filtro por Cliente */}
           <Select value={clientFilter} onValueChange={setClientFilter}>
-            <SelectTrigger className="w-[190px] h-9 bg-white/5 border-white/10 rounded-xl text-xs text-white font-semibold">
+            <SelectTrigger className="w-full sm:w-[170px] h-9 bg-white/5 border-white/10 rounded-xl text-xs text-white font-semibold">
               <SelectValue placeholder="Filtrar por Cliente" />
             </SelectTrigger>
             <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
@@ -262,55 +591,92 @@ const SocialPostingHub: React.FC = () => {
             </SelectContent>
           </Select>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setApiKeyModalOpen(true)}
-            className={`h-9 rounded-xl border text-xs font-bold ${
-              hasApiKey
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5 mr-1.5" />
-            {hasApiKey ? 'API Ativa' : 'Chave API'}
-          </Button>
+          <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setApiKeyModalOpen(true)}
+              className={`h-9 px-2.5 rounded-xl border text-xs font-bold ${
+                hasApiKey
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+              }`}
+              title={hasApiKey ? 'Chave de API ativa' : 'Configurar chave de API'}
+            >
+              <KeyRound className="w-3.5 h-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">{hasApiKey ? 'API Ativa' : 'Chave API'}</span>
+            </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/cofre')}
-            className="h-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
-          >
-            <Folder className="w-3.5 h-3.5 mr-1.5 text-pink-400" />
-            Contas Instagram
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/cofre')}
+              className="h-9 px-2.5 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
+              title="Gerenciar Contas Instagram"
+            >
+              <Folder className="w-3.5 h-3.5 sm:mr-1.5 text-pink-400" />
+              <span className="hidden sm:inline">Contas</span>
+            </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={isSyncing}
-            className="h-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="h-9 px-2.5 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
+              title="Atualizar fila"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''} sm:mr-1.5`} />
+              <span className="hidden sm:inline">Atualizar</span>
+            </Button>
 
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleCreateStandalonePost}
-            className="h-9 rounded-xl bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white text-xs font-black uppercase tracking-wider shadow-lg"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Novo Post
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleCreateStandalonePost}
+              className="h-9 px-3 rounded-xl bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white text-xs font-black uppercase tracking-wider shadow-lg"
+            >
+              <Plus className="w-3.5 h-3.5 sm:mr-1.5" />
+              <span>Novo Post</span>
+            </Button>
+          </div>
         </div>
       </header>
+
+      {/* Barra de Navegação de Colunas no Celular (md:hidden) */}
+      <div className="md:hidden flex items-center gap-1.5 p-2 bg-[#121214] border-b border-white/5 overflow-x-auto shrink-0 custom-scrollbar">
+        {COLUMNS.map(col => {
+          const isSelected = activeMobileCol === col.key;
+          const count = postsByColumn[col.key].length;
+          const Icon = col.icon;
+          return (
+            <button
+              key={col.key}
+              type="button"
+              onClick={() => setActiveMobileCol(col.key)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                isSelected
+                  ? 'bg-gradient-to-r from-pink-600 to-orange-500 text-white shadow-md'
+                  : 'bg-white/5 text-white/60 hover:text-white'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${col.dotClass}`} />
+              <Icon className="w-3.5 h-3.5" />
+              <span>{col.title}</span>
+              <span
+                className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                  isSelected ? 'bg-black/40 text-white' : 'bg-white/10 text-white/70'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Colunas da Central de Postagem */}
       {loading ? (
@@ -318,8 +684,41 @@ const SocialPostingHub: React.FC = () => {
           <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
         </div>
       ) : (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 h-full min-w-[300px]">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-3 md:p-6">
+          {/* Visualização de Coluna Selecionada no Celular (md:hidden) */}
+          <div className="md:hidden flex-1 overflow-y-auto space-y-3 custom-scrollbar pb-20">
+            {activeMobileCol === 'postado' && postsByColumn.postado.length > 0 && (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
+                <span>{postsByColumn.postado.length} post(s) concluído(s)</span>
+                <button
+                  type="button"
+                  disabled={isClearingPosted}
+                  onClick={async () => {
+                    if (
+                      confirm(
+                        `Deseja limpar todos os ${postsByColumn.postado.length} cards da coluna "Postado"?`
+                      )
+                    ) {
+                      setIsClearingPosted(true);
+                      try {
+                        await clearPostedPosts();
+                      } finally {
+                        setIsClearingPosted(false);
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 text-xs font-bold"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Limpar Coluna
+                </button>
+              </div>
+            )}
+            {renderColumnCards(activeMobileCol)}
+          </div>
+
+          {/* Visualização em Grid Kanban no Tablet/Desktop (hidden md:grid) */}
+          <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-4 h-full min-w-[300px]">
             {COLUMNS.map(col => {
               const colPosts = postsByColumn[col.key];
               const Icon = col.icon;
@@ -340,225 +739,48 @@ const SocialPostingHub: React.FC = () => {
                         <p className="text-[10px] text-white/40">{col.subtitle}</p>
                       </div>
                     </div>
-                    <span
-                      className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border ${col.badgeClass}`}
-                    >
-                      {colPosts.length}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {col.key === 'postado' && colPosts.length > 0 && (
+                        <button
+                          type="button"
+                          disabled={isClearingPosted}
+                          onClick={async e => {
+                            e.stopPropagation();
+                            if (
+                              confirm(
+                                `Deseja limpar todos os ${colPosts.length} cards da coluna "Postado"?\n\nIsso remove os posts concluídos da Central de Postagem para manter sua tela limpa e organizada.`
+                              )
+                            ) {
+                              setIsClearingPosted(true);
+                              try {
+                                await clearPostedPosts();
+                              } finally {
+                                setIsClearingPosted(false);
+                              }
+                            }
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 text-[10px] font-bold transition-all shadow-sm"
+                          title="Limpar todos os cards postados"
+                        >
+                          {isClearingPosted ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3 text-emerald-400" />
+                          )}
+                          <span>Limpar ({colPosts.length})</span>
+                        </button>
+                      )}
+                      <span
+                        className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border ${col.badgeClass}`}
+                      >
+                        {colPosts.length}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Lista de Cards da Coluna */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
-                    {colPosts.length === 0 ? (
-                      <div className="h-44 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center text-center p-4 text-white/25 text-xs">
-                        <Icon className="w-6 h-6 mb-2 opacity-30" />
-                        Nenhum card em "{col.title}"
-                      </div>
-                    ) : (
-                      colPosts.map(post => {
-                        const client = post.calendarClientId
-                          ? clientMap.get(post.calendarClientId)
-                          : undefined;
-                        const cover = post.media[0];
-                        return (
-                          <div
-                            key={post.id}
-                            onClick={() => setSelectedPostId(post.id)}
-                            className={`group rounded-xl bg-[#1C1C1E] hover:bg-[#242428] border transition-all cursor-pointer overflow-hidden shadow-md ${
-                              post.status === 'erro'
-                                ? 'border-red-500/40 hover:border-red-500/70'
-                                : 'border-white/5 hover:border-white/15'
-                            }`}
-                          >
-                            {/* Preview de Imagem ou Vídeo */}
-                            {cover ? (
-                              <div className="relative bg-black/50 h-44 flex items-center justify-center overflow-hidden">
-                                {isVideoUrl(cover) ? (
-                                  <video
-                                    src={cover}
-                                    muted
-                                    playsInline
-                                    preload="metadata"
-                                    className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                ) : (
-                                  <img
-                                    src={cover}
-                                    alt=""
-                                    loading="lazy"
-                                    className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                )}
-
-                                {/* Badge Formato (Feed / Stories / Reels) */}
-                                <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-sm border border-white/15 text-[10px] font-black uppercase tracking-wider text-white flex items-center gap-1">
-                                  {(() => {
-                                    const activeLabels: string[] = [];
-                                    if ((post.feedMedia?.length ?? 0) > 0) activeLabels.push('Feed');
-                                    if ((post.reelsMedia?.length ?? 0) > 0) activeLabels.push('Reels');
-                                    if ((post.storiesMedia?.length ?? 0) > 0)
-                                      activeLabels.push('Stories');
-                                    if (activeLabels.length > 1) {
-                                      return (
-                                        <>
-                                          <Layers className="w-3 h-3 text-pink-400" />
-                                          {activeLabels.join(' + ')}
-                                        </>
-                                      );
-                                    }
-                                    return (
-                                      <>
-                                        {post.placement === 'feed' && (
-                                          <Layers className="w-3 h-3 text-pink-400" />
-                                        )}
-                                        {post.placement === 'stories' && (
-                                          <ImageIcon className="w-3 h-3 text-orange-400" />
-                                        )}
-                                        {post.placement === 'reels' && (
-                                          <Film className="w-3 h-3 text-purple-400" />
-                                        )}
-                                        {PLACEMENT_LABELS[post.placement]}
-                                      </>
-                                    );
-                                  })()}
-                                </span>
-
-                                {/* Quantidade de imagens */}
-                                {post.media.length > 1 && (
-                                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-sm border border-white/15 text-[10px] font-bold text-white">
-                                    {post.media.length} fotos
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="h-24 bg-black/30 flex items-center justify-center text-white/25 text-xs">
-                                <ImageIcon className="w-5 h-5 mr-1.5 opacity-40" /> Sem imagem selecionada
-                              </div>
-                            )}
-
-                            {/* Info do Cliente + Data / Status */}
-                            <div className="p-3 space-y-2">
-                              {/* Cliente vinculado + Botão Excluir */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-600 to-orange-500 flex items-center justify-center text-[10px] font-black text-white overflow-hidden shrink-0">
-                                    {client?.logoUrl ? (
-                                      <img
-                                        src={client.logoUrl}
-                                        alt=""
-                                        className="w-full h-full object-cover"
-                                      />
-                                    ) : (
-                                      (client?.name || post.title || 'C').substring(0, 2).toUpperCase()
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-bold text-white truncate">
-                                      {client?.name || post.title}
-                                    </p>
-                                    {client?.instagramUsername && (
-                                      <p className="text-[10px] text-pink-400 font-semibold truncate">
-                                        {client.instagramUsername}
-                                        {client.facebookPageName
-                                          ? ` • FB: ${client.facebookPageName}`
-                                          : ''}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={async e => {
-                                    e.stopPropagation();
-                                    await deletePost(post.id);
-                                    toast.success(
-                                      post.status === 'programado'
-                                        ? 'Agendamento cancelado e excluído!'
-                                        : 'Card removido!'
-                                    );
-                                  }}
-                                  title={
-                                    post.status === 'programado'
-                                      ? 'Cancelar agendamento no Post for Me e excluir'
-                                      : 'Excluir card do painel'
-                                  }
-                                  className="w-7 h-7 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 flex items-center justify-center shrink-0 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-
-                              {post.title && client?.name && post.title !== client.name && (
-                                <p className="text-[11px] text-white/70 font-medium line-clamp-1">
-                                  {post.title}
-                                </p>
-                              )}
-
-                              {post.caption && (
-                                <p className="text-[11px] text-white/45 line-clamp-2 leading-relaxed">
-                                  {post.caption}
-                                </p>
-                              )}
-
-                              {/* Data Programada */}
-                              {post.scheduledAt && post.status !== 'postado' && (
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2 py-1 rounded-lg w-fit">
-                                  <Clock className="w-3 h-3" />
-                                  Programado:{' '}
-                                  {new Date(post.scheduledAt).toLocaleString('pt-BR', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </div>
-                              )}
-
-                              {/* Data Postado */}
-                              {post.status === 'postado' && (
-                                <div className="flex items-center justify-between gap-2 pt-1">
-                                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    Postado em{' '}
-                                    {new Date(post.publishedAt || post.updatedAt).toLocaleString(
-                                      'pt-BR',
-                                      {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      }
-                                    )}
-                                  </span>
-                                  {post.permalink && (
-                                    <a
-                                      href={post.permalink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={e => e.stopPropagation()}
-                                      className="text-[10px] font-bold text-pink-400 hover:underline flex items-center gap-1"
-                                    >
-                                      Abrir <ExternalLink className="w-2.5 h-2.5" />
-                                    </a>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Motivo do Erro */}
-                              {post.status === 'erro' && (
-                                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/25 text-[10px] text-red-300 flex items-start gap-1.5">
-                                  <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                                  <span className="line-clamp-2">
-                                    {post.errorMessage || 'Erro ao publicar. Clique para revisar e tentar novamente.'}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
+                    {renderColumnCards(col.key)}
                   </div>
                 </div>
               );
@@ -568,19 +790,23 @@ const SocialPostingHub: React.FC = () => {
       )}
 
       {/* Modal Compositor (Legenda, Feed/Stories, Seleção de Imagens e Agendamento) */}
-      <SocialPostComposerDialog
-        post={selectedPost}
-        open={Boolean(selectedPost)}
-        onOpenChange={open => {
-          if (!open) setSelectedPostId(null);
-        }}
-        clients={calendarClients}
-        kanbanCards={kanbanCards}
-        onUpdatePost={updatePost}
-        onCreatePost={createPost}
-        onDeletePost={deletePost}
-        onSubmitPost={submitPost}
-      />
+      {selectedPost && (
+        <SocialPostComposerDialog
+          key={selectedPost.id}
+          post={selectedPost}
+          open={Boolean(selectedPost)}
+          onOpenChange={open => {
+            if (!open) setSelectedPostId(null);
+          }}
+          clients={calendarClients}
+          kanbanCards={kanbanCards}
+          onUpdatePost={updatePost}
+          onCreatePost={createPost}
+          onDeletePost={deletePost}
+          onSubmitPost={submitPost}
+          onCreateRecurringBatch={createRecurringOfferBatch}
+        />
+      )}
 
       {/* Modal para colar a Chave de API do Post for Me */}
       <Dialog open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen}>

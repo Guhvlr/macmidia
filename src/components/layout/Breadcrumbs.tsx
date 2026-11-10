@@ -29,7 +29,7 @@ const Breadcrumbs = () => {
       if (value === 'postagem') label = 'Postagens';
       if (value === 'calendario') label = 'Calendário';
       if (value === 'cofre') label = 'Banco de Dados';
-      if (value === 'whatsapp') label = 'WhatsApp';
+      if (value === 'whatsapp' || value === 'instagram') label = 'Auto Post';
       if (value === 'usuarios') label = 'Membros';
       if (value === 'produtos') label = 'Produtos';
       if (value === 'relatorio') label = 'Relatório';

@@ -261,20 +261,20 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
   const handleImagesUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB
     const validFiles = Array.from(files);
     
     // Check for files exceeding the size limit
     const oversizedFiles = validFiles.filter(f => f.size > MAX_FILE_SIZE);
     if (oversizedFiles.length > 0) {
-      toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 10MB.`);
+      toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 60MB.`);
       return;
     }
 
     setIsUploading(true);
     setUploadProgress(10);
     
-    if (validFiles[0].type.startsWith('image/')) {
+    if (validFiles[0].type.startsWith('image/') || validFiles[0].type.startsWith('video/')) {
        setPreviewInitial(URL.createObjectURL(validFiles[0]));
     }
 
@@ -1042,16 +1042,26 @@ const CardDetailDialog = ({ card, open, onOpenChange }: Props) => {
                     if (e.target === e.currentTarget) setPreviewIndex(null);
                   }}
                 >
-                  <img
-                    src={localImages[previewIndex]}
-                    alt="Preview"
-                    onClick={handleImageZoomClick}
-                    className={`shadow-2xl rounded-md ${
-                      isZoomed 
-                        ? 'cursor-zoom-out w-auto h-auto min-w-[120vw] md:min-w-[100vw] max-w-none' 
-                        : 'cursor-zoom-in max-w-full max-h-[85vh] object-contain'
-                    }`}
-                  />
+                  {localImages[previewIndex]?.match(/\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i) || localImages[previewIndex]?.startsWith('data:video') ? (
+                    <video
+                      src={localImages[previewIndex]}
+                      controls
+                      autoPlay
+                      playsInline
+                      className="shadow-2xl rounded-md max-w-full max-h-[85vh] object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={localImages[previewIndex]}
+                      alt="Preview"
+                      onClick={handleImageZoomClick}
+                      className={`shadow-2xl rounded-md ${
+                        isZoomed 
+                          ? 'cursor-zoom-out w-auto h-auto min-w-[120vw] md:min-w-[100vw] max-w-none' 
+                          : 'cursor-zoom-in max-w-full max-h-[85vh] object-contain'
+                      }`}
+                    />
+                  )}
                 </div>
               </div>
               

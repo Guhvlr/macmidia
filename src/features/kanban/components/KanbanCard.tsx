@@ -136,23 +136,28 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
       e.stopPropagation();
 
       const droppedFiles = Array.from(e.dataTransfer.files);
-      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB
 
       // Check for files exceeding the size limit
       const oversizedFiles = droppedFiles.filter(f => f.size > MAX_FILE_SIZE);
       if (oversizedFiles.length > 0) {
-        toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 10MB.`);
+        toast.error(`Arquivo(s) muito grande(s): ${oversizedFiles.map(f => f.name).join(', ')}. O limite é de 60MB.`);
         return;
       }
 
-      const imagesToUpload = droppedFiles.filter(f => f.type.startsWith('image/'));
+      const mediaToUpload = droppedFiles.filter(
+        f =>
+          f.type.startsWith('image/') ||
+          f.type.startsWith('video/') ||
+          f.name.match(/\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i)
+      );
 
-      if (imagesToUpload.length === 0) {
-        toast.warning('Apenas imagens são permitidas no arraste.');
+      if (mediaToUpload.length === 0) {
+        toast.warning('Apenas imagens e vídeos são permitidos no arraste.');
         return;
       }
 
-      for (const file of imagesToUpload) {
+      for (const file of mediaToUpload) {
         uploadKanbanAsset(card.id, file);
       }
     }
@@ -227,7 +232,24 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
 
         {coverImage && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 min-h-[120px] max-h-[260px] bg-black/40 group/img flex items-center justify-center">
-            <img src={coverImage} alt="Capa" loading="lazy" decoding="async" draggable="false" className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5 pointer-events-none select-none" />
+            {coverImage.match(/\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i) || coverImage.startsWith('data:video') ? (
+              <video
+                src={coverImage}
+                muted
+                playsInline
+                preload="metadata"
+                className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5 pointer-events-none select-none"
+              />
+            ) : (
+              <img
+                src={coverImage}
+                alt="Capa"
+                loading="lazy"
+                decoding="async"
+                draggable="false"
+                className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5 pointer-events-none select-none"
+              />
+            )}
           </div>
         )}
 

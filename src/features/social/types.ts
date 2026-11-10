@@ -25,6 +25,18 @@ export interface SocialPost {
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+  /** URL da capa selecionada para o Feed (primeira imagem do carrossel) — opcional */
+  coverUrl?: string;
+  /** URL da thumbnail/capa do Reels — opcional */
+  reelsCoverUrl?: string;
+  /** Data final da oferta recorrente (YYYY-MM-DD) — posts diários até essa data */
+  repeatUntilDate?: string;
+  /** ID que agrupa posts de uma mesma oferta recorrente */
+  repeatGroupId?: string;
+  /** Índice dentro do grupo de repetição (1, 2, 3...) */
+  repeatIndex?: number;
+  /** Total de posts no grupo de repetição */
+  repeatTotal?: number;
 }
 
 export const PLACEMENT_LABELS: Record<SocialPlacement, string> = {
@@ -51,6 +63,9 @@ export function mapSocialPost(row: any): SocialPost {
     storiesMedia: Array.isArray(row.stories_media)
       ? row.stories_media.filter((m: unknown) => typeof m === 'string')
       : undefined,
+    reelsMedia: Array.isArray(row.reels_media)
+      ? row.reels_media.filter((m: unknown) => typeof m === 'string')
+      : undefined,
     caption: row.caption || '',
     scheduledAt: row.scheduled_at || undefined,
     publishedAt: row.published_at || undefined,
@@ -61,6 +76,12 @@ export function mapSocialPost(row: any): SocialPost {
     createdBy: row.created_by || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    coverUrl: row.cover_url || undefined,
+    reelsCoverUrl: row.reels_cover_url || undefined,
+    repeatUntilDate: row.repeat_until_date || undefined,
+    repeatGroupId: row.repeat_group_id || undefined,
+    repeatIndex: row.repeat_index ?? undefined,
+    repeatTotal: row.repeat_total ?? undefined,
   };
 }
 
@@ -76,7 +97,7 @@ export function isVideoUrl(url: string): boolean {
 /** URLs de mídia (imagem ou vídeo) que podem ir para o Instagram */
 export function isPostableMediaUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false;
-  if (url.startsWith('data:')) return false; // o provedor precisa de URL pública
+  if (url.startsWith('data:') || url.startsWith('blob:')) return false; // o provedor precisa de URL pública acessível
   if (NON_MEDIA_EXT.test(url)) return false;
   return true;
 }

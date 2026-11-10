@@ -17,6 +17,14 @@ const COLUMN_KEY_ALIASES: Record<string, string> = {
   'correção-do-cliente': 'correcao-cliente',
   'para-aprovacao-do-cliente': 'correcao-cliente',
   'para-aprovação-do-cliente': 'correcao-cliente',
+  'correção-institucional': 'correcao-institucional',
+  'correcao_institucional': 'correcao-institucional',
+  'apro-e-institucional': 'aprovado-institucional',
+  'apro-institucional': 'aprovado-institucional',
+  'apro-calendario': 'aprovado-institucional',
+  'apro-calendário': 'aprovado-institucional',
+  'aprovado-e-institucional': 'aprovado-institucional',
+  'aprovado_institucional': 'aprovado-institucional',
 };
 
 export function normalizeColumnKey(key?: string | null): string {

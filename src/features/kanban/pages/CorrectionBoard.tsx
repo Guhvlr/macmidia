@@ -15,6 +15,7 @@ const KANBAN_COLUMNS = [
   { key: 'em-producao', title: 'Em Produção', color: 'bg-warning' },
   { key: 'alteracao', title: 'Alteração', color: 'bg-destructive' },
   { key: 'para-correcao', title: 'Para Correção', color: 'bg-destructive' },
+  { key: 'correcao-institucional', title: 'Correção Institucional', color: 'bg-info' },
   { key: 'correcao-cliente', title: 'Correção do Cliente', color: 'bg-destructive' },
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
 ] as const;

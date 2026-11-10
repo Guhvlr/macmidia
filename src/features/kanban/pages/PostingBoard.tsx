@@ -14,11 +14,29 @@ import { KanbanSearch } from '@/features/kanban/components/KanbanSearch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const KANBAN_COLUMNS = [
+  { key: 'aprovado-institucional', title: 'Apro Calendario', color: 'bg-info' },
   { key: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info' },
   { key: 'postado', title: 'Postado', color: 'bg-success' },
   { key: 'alteracao', title: 'Alteração', color: 'bg-warning' },
   { key: 'programar-mais-dias', title: 'Programar para Mais Dias', color: 'bg-purple-500' },
 ] as const;
+
+const ensurePostingColumnsOrder = (order: string[]): string[] => {
+  const validKeys = KANBAN_COLUMNS.map(c => c.key as string);
+  const filtered = order.filter(k => validKeys.includes(k));
+  if (!filtered.includes('aprovado-institucional')) {
+    const aproIdx = filtered.indexOf('aprovado-programar');
+    if (aproIdx !== -1) {
+      filtered.splice(aproIdx, 0, 'aprovado-institucional');
+    } else {
+      filtered.unshift('aprovado-institucional');
+    }
+  }
+  for (const k of validKeys) {
+    if (!filtered.includes(k)) filtered.push(k);
+  }
+  return filtered;
+};
 
 const PostingBoard = () => {
   const navigate = useNavigate();
@@ -32,12 +50,12 @@ const PostingBoard = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === KANBAN_COLUMNS.length) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          return ensurePostingColumnsOrder(parsed);
         }
       } catch (e) {}
     }
-    return KANBAN_COLUMNS.map(c => c.key);
+    return KANBAN_COLUMNS.map(c => c.key as string);
   });
 
   
@@ -47,8 +65,8 @@ const PostingBoard = () => {
       if (data?.value) {
         try {
           const parsed = JSON.parse(data.value);
-          if (Array.isArray(parsed) && parsed.length === KANBAN_COLUMNS.length) {
-            setColumnsOrder(parsed);
+          if (Array.isArray(parsed)) {
+            setColumnsOrder(ensurePostingColumnsOrder(parsed));
           }
         } catch (e) {}
       }
@@ -69,8 +87,8 @@ const PostingBoard = () => {
           if (payload.new && (payload.new as any).value) {
             try {
               const parsed = JSON.parse((payload.new as any).value);
-              if (Array.isArray(parsed) && parsed.length === KANBAN_COLUMNS.length) {
-                setColumnsOrder(parsed);
+              if (Array.isArray(parsed)) {
+                setColumnsOrder(ensurePostingColumnsOrder(parsed));
               }
             } catch (e) {}
           }

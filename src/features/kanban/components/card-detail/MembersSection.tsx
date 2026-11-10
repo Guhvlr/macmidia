@@ -84,11 +84,27 @@ export const MembersSection = memo( ({
   ];
 
   const { kanbanCards, moveKanbanCard } = useApp();
+  const canApproveInstitucional = card.column === 'correcao-institucional';
   const canSendToPost =
+    card.column === 'aprovado-institucional' ||
     card.column === 'aprovado-programar' ||
     card.column === 'programar-mais-dias' ||
     card.column === 'postado';
   const [isSendingToPost, setIsSendingToPost] = React.useState(false);
+  const [isApprovingInstitucional, setIsApprovingInstitucional] = React.useState(false);
+
+  const handleApproveInstitucional = async () => {
+    if (isApprovingInstitucional) return;
+    setIsApprovingInstitucional(true);
+    try {
+      await moveKanbanCard(card.id, 'aprovado-institucional');
+      toast.success('Enviado direto para Apro Calendario (Postagem)!');
+    } catch {
+      toast.error('Erro ao enviar para Apro Calendario.');
+    } finally {
+      setIsApprovingInstitucional(false);
+    }
+  };
 
   const handleSendToSocialQueue = async () => {
     if (isSendingToPost) return;
@@ -341,6 +357,18 @@ export const MembersSection = memo( ({
             </Button>
           }
         />
+
+        {canApproveInstitucional && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isApprovingInstitucional}
+            onClick={handleApproveInstitucional}
+            className="h-8 px-3.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-[11px] font-black uppercase tracking-wider text-white rounded-full flex items-center gap-1.5 shadow-md transition-all"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar (Ir p/ Apro Calendario)
+          </Button>
+        )}
 
         {canSendToPost && (
           <Button

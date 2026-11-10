@@ -38,11 +38,33 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
   const [detailOpen, setDetailOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSendingToPost, setIsSendingToPost] = useState(false);
+  const [isApprovingInstitucional, setIsApprovingInstitucional] = useState(false);
+
+  const canApproveInstitucional = card.column === 'correcao-institucional';
 
   const canSendToPost =
+    card.column === 'aprovado-institucional' ||
     card.column === 'aprovado-programar' ||
     card.column === 'programar-mais-dias' ||
     card.column === 'postado';
+
+  const handleApproveInstitucional = useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (isApprovingInstitucional) return;
+    setIsApprovingInstitucional(true);
+    try {
+      await moveKanbanCard(card.id, 'aprovado-institucional');
+      toast.success('Enviado direto para Apro Calendario (Postagem)!');
+    } catch (err) {
+      console.error('Erro ao aprovar card institucional:', err);
+      toast.error('Erro ao enviar para Apro Calendario.');
+    } finally {
+      setIsApprovingInstitucional(false);
+    }
+  }, [card.id, isApprovingInstitucional, moveKanbanCard]);
 
   const handleSendToSocialQueue = useCallback(async (e?: React.MouseEvent) => {
     if (e) {
@@ -359,6 +381,24 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">
+            {canApproveInstitucional && (
+              <button
+                type="button"
+                data-no-dnd="true"
+                onPointerDown={e => e.stopPropagation()}
+                onClick={handleApproveInstitucional}
+                disabled={isApprovingInstitucional}
+                title="Aprovar e enviar direto para Apro Calendario (Postagem)"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-[10px] font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isApprovingInstitucional ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3 h-3" />
+                )}
+                Aprovar
+              </button>
+            )}
             {canSendToPost && (
               <button
                 type="button"

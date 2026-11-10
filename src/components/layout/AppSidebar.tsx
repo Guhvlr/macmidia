@@ -88,7 +88,7 @@ const AppSidebar = ({ collapsed, onToggle, teamOpen, onTeamToggle }: Props) => {
       {/* Navigation */}
       <nav className="flex-1 py-6 px-3 space-y-1.5 overflow-y-auto custom-scrollbar">
         {navItems.map(({ path, icon: Icon, label, isBeta }) => {
-          const allowedForGuest = ['/', '/calendario', '/postagem'];
+          const allowedForGuest = ['/', '/calendario', '/postagem', '/whatsapp', '/instagram'];
           if (loggedUserKanbanLink && loggedUserKanbanLink !== 'none') {
             allowedForGuest.push('/equipe');
           }

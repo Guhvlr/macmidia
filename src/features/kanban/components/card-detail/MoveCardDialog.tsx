@@ -20,6 +20,8 @@ import {
 } from '@/features/kanban/utils/cardOrder';
 
 const EXTRA_POSTING_COLUMNS = [
+  { columnKey: 'correcao-institucional', title: 'Correção Institucional', color: 'bg-info', position: 98 },
+  { columnKey: 'aprovado-institucional', title: 'Apro Calendario', color: 'bg-info', position: 99 },
   { columnKey: 'aprovado-programar', title: 'Aprovado e Programar', color: 'bg-info', position: 100 },
   { columnKey: 'postado', title: 'Postado', color: 'bg-success', position: 101 },
   { columnKey: 'alteracao', title: 'Alteração', color: 'bg-warning', position: 102 },

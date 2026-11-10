@@ -554,42 +554,38 @@ const ClientCalendar = () => {
 
   const getTypeColor = (type: string) => typeColors[type] || typeColors['Outro'];
 
-  // Handler para enviar card do calendário para o Kanban
-  const handleSendToKanban = async () => {
-    if (!editTask || !sendToKanbanEmployeeId) return;
+  // Handler para enviar card do calendário direto para Correção Institucional
+  const handleSendToKanban = async (overrideEmployeeId?: string) => {
+    if (!editTask) return;
+    const chosenEmpId = overrideEmployeeId ?? sendToKanbanEmployeeId ?? editTask.employeeId ?? employees[0]?.id ?? '';
     setIsSendingToKanban(true);
     try {
-      // Find employee's final column key ("aprovado-programar")
-      const empCols = kanbanColumns.filter(c => c.employeeId === sendToKanbanEmployeeId);
-      const targetCol = empCols.find(c => 
-        c.columnKey.includes('aprovado') || 
-        c.columnKey.includes('programar') ||
-        c.title.toLowerCase().includes('aprovado')
-      )?.columnKey || 'aprovado-programar';
+      const targetCol = 'correcao-institucional';
 
       const newCardId = await addKanbanCard({
-        clientName: editTask.clientName || 'Demanda do Calendário',
+        clientName: client?.name || editTask.clientName || 'Demanda do Calendário',
         calendarClientId: editTask.calendarClientId || clientId || undefined,
         calendarClientName: client?.name || undefined,
         description: editTask.content || editTask.description || '',
         images: editTask.images || [],
         imageUrl: editTask.imageUrl || undefined,
+        labels: ['bg-orange-600|INSTITUCIONAL'],
         column: targetCol,
         timeSpent: 0,
         timerRunning: false,
-        employeeId: sendToKanbanEmployeeId,
+        employeeId: chosenEmpId,
         source: 'manual',
         originalMessage: editTask.content || editTask.description || ''
       });
 
       if (newCardId) {
-        // Link new card ID to calendar task & mark status as approved
+        // Link new card ID to calendar task & mark status
         await updateCalendarTask(editTask.id, { 
-          status: 'aprovado-programar',
+          status: 'para correção',
           linked_card_id: newCardId 
         } as any);
 
-        setEditTask(prev => prev ? { ...prev, status: 'aprovado-programar', linked_card_id: newCardId } : null);
+        setEditTask(prev => prev ? { ...prev, status: 'para correção', linked_card_id: newCardId } : null);
 
         // Copy images if needed
         if (editTask.images && editTask.images.length > 0) {
@@ -619,7 +615,7 @@ const ClientCalendar = () => {
           }
         }
 
-        toast.success('Card criado com sucesso no Kanban! → Aprovado e Programar');
+        toast.success('Card enviado direto para Correção Institucional!');
       }
 
       setShowSendToKanban(false);
@@ -2035,8 +2031,18 @@ const ClientCalendar = () => {
                        }} className="w-8 h-8 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-white/5 text-white/60 hover:text-white transition-colors" title="Formato e Redes">
                          <Settings2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                        </button>
-                       <button onClick={() => setShowSendToKanban(true)} className="w-8 h-8 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-white/5 text-emerald-500/80 hover:text-emerald-400 transition-colors" title="Enviar para Kanban">
-                         <Kanban className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                       <button
+                         onClick={() => handleSendToKanban()}
+                         disabled={isSendingToKanban}
+                         className="h-8 md:h-9 px-2.5 shrink-0 flex items-center gap-1.5 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-blue-200 transition-colors text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+                         title="Enviar direto para Correção Institucional"
+                       >
+                         {isSendingToKanban ? (
+                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                         ) : (
+                           <Kanban className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                         )}
+                         <span className="hidden sm:inline">Enviar p/ Correção</span>
                        </button>
 
                        <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />

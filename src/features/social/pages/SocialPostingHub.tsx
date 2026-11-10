@@ -205,7 +205,7 @@ const PostCardMediaPreview: React.FC<{ post: SocialPost }> = ({ post }) => {
 
 const SocialPostingHub: React.FC = () => {
   const navigate = useNavigate();
-  const { calendarClients, kanbanCards } = useApp();
+  const { calendarClients, kanbanCards, loggedUserRole, loggedUserClientLink } = useApp();
   const {
     posts,
     loading,
@@ -292,14 +292,54 @@ const SocialPostingHub: React.FC = () => {
     return map;
   }, [calendarClients]);
 
+  const allowedGuestClientIds = useMemo(
+    () =>
+      loggedUserRole === 'GUEST'
+        ? (loggedUserClientLink || '')
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean)
+        : [],
+    [loggedUserRole, loggedUserClientLink]
+  );
+
+  const visibleClients = useMemo(() => {
+    if (loggedUserRole === 'GUEST') {
+      return calendarClients.filter(c => allowedGuestClientIds.includes(c.id));
+    }
+    return calendarClients;
+  }, [calendarClients, loggedUserRole, allowedGuestClientIds]);
+
+  const visibleKanbanCards = useMemo(() => {
+    if (loggedUserRole === 'GUEST') {
+      return kanbanCards.filter(
+        c => c.calendarClientId && allowedGuestClientIds.includes(c.calendarClientId)
+      );
+    }
+    return kanbanCards;
+  }, [kanbanCards, loggedUserRole, allowedGuestClientIds]);
+
   const filteredPosts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return posts.filter(post => {
-      if (clientFilter !== 'all' && post.calendarClientId !== clientFilter) {
+      // Restrição para Visitantes (GUEST): exibe SOMENTE os cards vinculados aos clientes dele
+      const effectiveClientId =
+        post.calendarClientId ||
+        (post.kanbanCardId
+          ? kanbanCards.find(k => k.id === post.kanbanCardId)?.calendarClientId
+          : undefined);
+
+      if (loggedUserRole === 'GUEST') {
+        if (!effectiveClientId || !allowedGuestClientIds.includes(effectiveClientId)) {
+          return false;
+        }
+      }
+
+      if (clientFilter !== 'all' && effectiveClientId !== clientFilter) {
         return false;
       }
       if (!q) return true;
-      const client = post.calendarClientId ? clientMap.get(post.calendarClientId) : undefined;
+      const client = effectiveClientId ? clientMap.get(effectiveClientId) : undefined;
       return (
         post.title.toLowerCase().includes(q) ||
         post.caption.toLowerCase().includes(q) ||
@@ -307,7 +347,7 @@ const SocialPostingHub: React.FC = () => {
         (client?.instagramUsername?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [posts, clientFilter, searchQuery, clientMap]);
+  }, [posts, clientFilter, searchQuery, clientMap, loggedUserRole, allowedGuestClientIds, kanbanCards]);
 
   const postsByColumn = useMemo(() => {
     const grouped: Record<'para_postar' | 'programado' | 'erro' | 'postado', SocialPost[]> = {
@@ -331,14 +371,21 @@ const SocialPostingHub: React.FC = () => {
   }, [filteredPosts]);
 
   const selectedPost = useMemo(
-    () => posts.find(p => p.id === selectedPostId) || null,
-    [posts, selectedPostId]
+    () => filteredPosts.find(p => p.id === selectedPostId) || null,
+    [filteredPosts, selectedPostId]
   );
 
   const handleCreateStandalonePost = async () => {
+    const defaultClientId =
+      clientFilter !== 'all'
+        ? clientFilter
+        : loggedUserRole === 'GUEST' && allowedGuestClientIds.length > 0
+          ? allowedGuestClientIds[0]
+          : undefined;
+    const defaultClient = defaultClientId ? clientMap.get(defaultClientId) : undefined;
     const created = await createPost({
-      title: 'Nova Postagem',
-      calendarClientId: clientFilter !== 'all' ? clientFilter : undefined,
+      title: defaultClient?.name || 'Nova Postagem',
+      calendarClientId: defaultClientId,
       placement: 'feed',
       media: [],
       caption: '',
@@ -622,8 +669,10 @@ const SocialPostingHub: React.FC = () => {
               <SelectValue placeholder="Filtrar por Cliente" />
             </SelectTrigger>
             <SelectContent className="bg-[#1C1C1E] border-white/10 text-white rounded-xl">
-              <SelectItem value="all">Todos os Clientes</SelectItem>
-              {calendarClients.map(c => (
+              <SelectItem value="all">
+                {loggedUserRole === 'GUEST' ? 'Meus Clientes' : 'Todos os Clientes'}
+              </SelectItem>
+              {visibleClients.map(c => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name} {c.instagramUsername ? `(${c.instagramUsername})` : ''}
                 </SelectItem>
@@ -632,45 +681,49 @@ const SocialPostingHub: React.FC = () => {
           </Select>
 
           <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setApiKeyModalOpen(true)}
-              className={`h-9 px-2.5 rounded-xl border text-xs font-bold ${
-                hasApiKey
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-                  : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-              }`}
-              title={hasApiKey ? 'Chave de API ativa' : 'Configurar chave de API'}
-            >
-              <KeyRound className="w-3.5 h-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">{hasApiKey ? 'API Ativa' : 'Chave API'}</span>
-            </Button>
+            {loggedUserRole !== 'GUEST' && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setApiKeyModalOpen(true)}
+                  className={`h-9 px-2.5 rounded-xl border text-xs font-bold ${
+                    hasApiKey
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                  }`}
+                  title={hasApiKey ? 'Chave de API ativa' : 'Configurar chave de API'}
+                >
+                  <KeyRound className="w-3.5 h-3.5 sm:mr-1.5" />
+                  <span className="hidden sm:inline">{hasApiKey ? 'API Ativa' : 'Chave API'}</span>
+                </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleOpenAudit}
-              className="h-9 px-2.5 rounded-xl border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold"
-              title="Auditar consumo e disparos em /v1/social-post-results"
-            >
-              <Layers className="w-3.5 h-3.5 sm:mr-1.5 text-purple-400" />
-              <span className="hidden sm:inline">Auditoria API</span>
-            </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenAudit}
+                  className="h-9 px-2.5 rounded-xl border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold"
+                  title="Auditar consumo e disparos em /v1/social-post-results"
+                >
+                  <Layers className="w-3.5 h-3.5 sm:mr-1.5 text-purple-400" />
+                  <span className="hidden sm:inline">Auditoria API</span>
+                </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/cofre')}
-              className="h-9 px-2.5 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
-              title="Gerenciar Contas Instagram"
-            >
-              <Folder className="w-3.5 h-3.5 sm:mr-1.5 text-pink-400" />
-              <span className="hidden sm:inline">Contas</span>
-            </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/cofre')}
+                  className="h-9 px-2.5 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold"
+                  title="Gerenciar Contas Instagram"
+                >
+                  <Folder className="w-3.5 h-3.5 sm:mr-1.5 text-pink-400" />
+                  <span className="hidden sm:inline">Contas</span>
+                </Button>
+              </>
+            )}
 
             <Button
               type="button"
@@ -739,7 +792,7 @@ const SocialPostingHub: React.FC = () => {
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-3 md:p-6">
           {/* Visualização de Coluna Selecionada no Celular (md:hidden) */}
           <div className="md:hidden flex-1 overflow-y-auto space-y-3 custom-scrollbar pb-20">
-            {activeMobileCol === 'postado' && postsByColumn.postado.length > 0 && (
+            {loggedUserRole !== 'GUEST' && activeMobileCol === 'postado' && postsByColumn.postado.length > 0 && (
               <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
                 <span>{postsByColumn.postado.length} post(s) concluído(s)</span>
                 <button
@@ -792,7 +845,7 @@ const SocialPostingHub: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {col.key === 'postado' && colPosts.length > 0 && (
+                      {loggedUserRole !== 'GUEST' && col.key === 'postado' && colPosts.length > 0 && (
                         <button
                           type="button"
                           disabled={isClearingPosted}
@@ -850,8 +903,8 @@ const SocialPostingHub: React.FC = () => {
           onOpenChange={open => {
             if (!open) setSelectedPostId(null);
           }}
-          clients={calendarClients}
-          kanbanCards={kanbanCards}
+          clients={visibleClients}
+          kanbanCards={visibleKanbanCards}
           onUpdatePost={updatePost}
           onCreatePost={createPost}
           onDeletePost={deletePost}

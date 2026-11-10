@@ -39,7 +39,10 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSendingToPost, setIsSendingToPost] = useState(false);
 
-  const canSendToPost = card.column === 'aprovado-programar' || card.column === 'programar-mais-dias';
+  const canSendToPost =
+    card.column === 'aprovado-programar' ||
+    card.column === 'programar-mais-dias' ||
+    card.column === 'postado';
 
   const handleSendToSocialQueue = useCallback(async (e?: React.MouseEvent) => {
     if (e) {

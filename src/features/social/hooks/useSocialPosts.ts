@@ -73,43 +73,7 @@ export function useSocialPosts() {
       const dbRows = Array.isArray(data) ? data : [];
       const dbIds = new Set(dbRows.map((r: any) => r.id));
 
-      // Se havia posts salvos no navegador antes de criar a tabela no Supabase,
-      // envia automaticamente para o Supabase na primeira leitura para sincronizar entre navegadores
-      const unsyncedLocals = localItems.filter(l => !dbIds.has(l.id));
-      if (unsyncedLocals.length > 0 && dbRows.length === 0) {
-        const toInsert = unsyncedLocals.map(p => ({
-          id: p.id,
-          kanban_card_id: p.kanbanCardId || null,
-          calendar_client_id: p.calendarClientId || null,
-          title: p.title || 'Post',
-          status: p.status || 'para_postar',
-          placement: p.placement || 'feed',
-          media: p.media || [],
-          feed_media: p.feedMedia || [],
-          stories_media: p.storiesMedia || [],
-          reels_media: p.reelsMedia || [],
-          caption: p.caption || '',
-          scheduled_at: p.scheduledAt || null,
-          published_at: p.publishedAt || null,
-          provider: p.provider || 'postforme',
-          provider_post_id: p.providerPostId || null,
-          permalink: p.permalink || null,
-          error_message: p.errorMessage || null,
-          created_at: p.createdAt || new Date().toISOString(),
-          cover_url: p.coverUrl || null,
-          reels_cover_url: p.reelsCoverUrl || null,
-          repeat_until_date: p.repeatUntilDate || null,
-          repeat_group_id: p.repeatGroupId || null,
-          repeat_index: p.repeatIndex ?? null,
-          repeat_total: p.repeatTotal ?? null,
-        }));
-        await (supabase as any).from('social_posts').upsert(toInsert, { onConflict: 'id' });
-        setPosts(localItems);
-        setLoading(false);
-        return;
-      }
-
-      const mapped: SocialPost[] = dbRows.map((row: any) => {
+      const mappedFromDb: SocialPost[] = dbRows.map((row: any) => {
         const m = mapSocialPost(row);
         const localMatch = localItems.find(l => l.id === m.id);
         return {
@@ -134,8 +98,42 @@ export function useSocialPosts() {
           repeatTotal: m.repeatTotal ?? localMatch?.repeatTotal,
         };
       });
-      setPosts(mapped);
-      writeLocalFallback(mapped);
+
+      // Posts salvos localmente que ainda não constam no Supabase (ex: recém-criados no Kanban)
+      const unsyncedLocals = localItems.filter(l => !dbIds.has(l.id));
+
+      // Sincroniza os cards locais para o Supabase (enviando apenas colunas válidas do banco)
+      if (unsyncedLocals.length > 0) {
+        for (const p of unsyncedLocals) {
+          try {
+            await (supabase as any).from('social_posts').upsert({
+              id: p.id,
+              kanban_card_id: p.kanbanCardId || null,
+              calendar_client_id: p.calendarClientId || null,
+              title: p.title || 'Post',
+              status: p.status || 'para_postar',
+              placement: p.placement || 'feed',
+              media: p.media || [],
+              feed_media: p.feedMedia || [],
+              stories_media: p.storiesMedia || [],
+              caption: p.caption || '',
+              scheduled_at: p.scheduledAt || null,
+              published_at: p.publishedAt || null,
+              provider: p.provider || 'postforme',
+              provider_post_id: p.providerPostId || null,
+              permalink: p.permalink || null,
+              error_message: p.errorMessage || null,
+            }, { onConflict: 'id' });
+          } catch (syncErr) {
+            console.warn('Aviso ao sincronizar card local para o Supabase:', syncErr);
+          }
+        }
+      }
+
+      // Combina os posts do banco + os que foram criados localmente (nunca descarta os novos!)
+      const combined = [...unsyncedLocals, ...mappedFromDb];
+      setPosts(combined);
+      writeLocalFallback(combined);
     } catch (err) {
       console.warn('Usando armazenamento local para Central de Postagem:', err);
       setUsingFallback(true);
@@ -214,7 +212,6 @@ export function useSocialPosts() {
         if (updates.media !== undefined) db.media = updates.media;
         if (updates.feedMedia !== undefined) db.feed_media = updates.feedMedia;
         if (updates.storiesMedia !== undefined) db.stories_media = updates.storiesMedia;
-        if (updates.reelsMedia !== undefined) db.reels_media = updates.reelsMedia;
         if (updates.caption !== undefined) db.caption = updates.caption;
         if ('scheduledAt' in updates) db.scheduled_at = updates.scheduledAt || null;
         if ('publishedAt' in updates) db.published_at = updates.publishedAt || null;
@@ -222,12 +219,6 @@ export function useSocialPosts() {
         if ('errorMessage' in updates) db.error_message = updates.errorMessage || null;
         if ('calendarClientId' in updates) db.calendar_client_id = updates.calendarClientId || null;
         if ('providerPostId' in updates) db.provider_post_id = updates.providerPostId || null;
-        if ('coverUrl' in updates) db.cover_url = updates.coverUrl || null;
-        if ('reelsCoverUrl' in updates) db.reels_cover_url = updates.reelsCoverUrl || null;
-        if ('repeatUntilDate' in updates) db.repeat_until_date = updates.repeatUntilDate || null;
-        if ('repeatGroupId' in updates) db.repeat_group_id = updates.repeatGroupId || null;
-        if ('repeatIndex' in updates) db.repeat_index = updates.repeatIndex ?? null;
-        if ('repeatTotal' in updates) db.repeat_total = updates.repeatTotal ?? null;
 
         const { error } = await (supabase as any).from('social_posts').update(db).eq('id', id);
         if (error && !isMissingTableError(error)) {
@@ -377,16 +368,9 @@ export function useSocialPosts() {
             media: newPost.media,
             feed_media: newPost.feedMedia || null,
             stories_media: newPost.storiesMedia || null,
-            reels_media: newPost.reelsMedia || null,
             caption: newPost.caption,
             scheduled_at: newPost.scheduledAt || null,
             provider: newPost.provider,
-            cover_url: newPost.coverUrl || null,
-            reels_cover_url: newPost.reelsCoverUrl || null,
-            repeat_until_date: newPost.repeatUntilDate || null,
-            repeat_group_id: newPost.repeatGroupId || null,
-            repeat_index: newPost.repeatIndex ?? null,
-            repeat_total: newPost.repeatTotal ?? null,
           })
           .select()
           .maybeSingle();
@@ -957,12 +941,15 @@ export async function sendKanbanCardToSocialQueue(card: KanbanCard): Promise<Soc
         media: newPost.media,
         feed_media: newPost.feedMedia || null,
         stories_media: newPost.storiesMedia || null,
-        reels_media: newPost.reelsMedia || null,
         caption: newPost.caption,
         provider: newPost.provider,
       })
       .select()
       .maybeSingle();
+
+    if (error) {
+      console.warn('Aviso ao inserir social_post no Supabase (salvo localmente):', error);
+    }
 
     if (!error && data) {
       const mapped = mapSocialPost(data);

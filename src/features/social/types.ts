@@ -65,7 +65,9 @@ export function mapSocialPost(row: any): SocialPost {
       : undefined,
     reelsMedia: Array.isArray(row.reels_media)
       ? row.reels_media.filter((m: unknown) => typeof m === 'string')
-      : undefined,
+      : row.placement === 'reels' && Array.isArray(row.media)
+        ? row.media.filter((m: unknown) => typeof m === 'string')
+        : undefined,
     caption: row.caption || '',
     scheduledAt: row.scheduled_at || undefined,
     publishedAt: row.published_at || undefined,

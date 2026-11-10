@@ -84,7 +84,10 @@ export const MembersSection = memo( ({
   ];
 
   const { kanbanCards, moveKanbanCard } = useApp();
-  const canSendToPost = card.column === 'aprovado-programar' || card.column === 'programar-mais-dias';
+  const canSendToPost =
+    card.column === 'aprovado-programar' ||
+    card.column === 'programar-mais-dias' ||
+    card.column === 'postado';
   const [isSendingToPost, setIsSendingToPost] = React.useState(false);
 
   const handleSendToSocialQueue = async () => {

@@ -361,7 +361,7 @@ const Index = () => {
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <div className="lg:col-span-8 space-y-5">
+          <div className="hidden md:block lg:col-span-8 space-y-5">
             {/* Mini Calendar Widget */}
             <div className="glass-card p-6 border-white/5 shadow-2xl h-full">
               <div className="flex items-center justify-between mb-8">

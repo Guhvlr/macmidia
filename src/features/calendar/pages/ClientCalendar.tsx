@@ -144,6 +144,8 @@ const ClientCalendar = () => {
   
   const [adjustmentModalData, setAdjustmentModalData] = useState<{ task: CalendarTask; index: number } | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [feedPreviewTask, setFeedPreviewTask] = useState<CalendarTask | null>(null);
+  const [feedPreviewIndex, setFeedPreviewIndex] = useState<number>(0);
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const [newComment, setNewComment] = useState("");
   const commentsContainerRef = useRef<HTMLDivElement>(null);
@@ -745,40 +747,40 @@ const ClientCalendar = () => {
   };
 
   return (
-    <div className="min-h-screen gradient-bg">
+    <div className="min-h-screen gradient-bg w-full max-w-full overflow-x-hidden touch-pan-y">
       {/* Header */}
-      <div className="page-header sticky top-0 z-50">
-        <div className="flex items-center gap-4 px-6 py-3.5">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary rounded-xl">
+      <div className="page-header sticky top-0 z-50 w-full max-w-full overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 px-3.5 sm:px-6 py-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/calendario')} className="hover:bg-secondary rounded-xl h-10 w-10 shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
              {client.logoUrl ? (
-               <img src={client.logoUrl} className="w-9 h-9 rounded-full object-cover border border-white/10" alt="" />
+               <img src={client.logoUrl} className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" alt="" />
              ) : (
                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs shrink-0">
                  {client.name.substring(0, 2).toUpperCase()}
                </div>
              )}
-             <div>
-               <h1 className="text-lg font-bold text-foreground">{client.name}</h1>
-               <p className="text-[11px] text-muted-foreground">Calendário de conteúdo</p>
+             <div className="min-w-0">
+               <h1 className="text-base sm:text-lg font-bold text-foreground truncate">{client.name}</h1>
+               <p className="text-[11px] text-muted-foreground truncate">Calendário de conteúdo</p>
              </div>
           </div>
           
-          <div className="flex items-center gap-4 border-l border-white/10 pl-4 ml-4">
-             <span className="text-[10px] font-medium text-zinc-500">Pasta:</span>
+          <div className="flex items-center gap-2 sm:gap-3 sm:border-l border-white/10 sm:pl-4 ml-auto sm:ml-2">
+             <span className="hidden sm:inline text-[10px] font-medium text-zinc-500">Pasta:</span>
              <DropdownMenu>
                <DropdownMenuTrigger asChild>
-                 <button className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors group min-w-[160px]">
-                   <Folder className="w-3.5 h-3.5 text-red-500 opacity-80" />
-                   <span className="text-[11px] font-medium text-zinc-300 flex-1 text-left truncate">
+                 <button className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors group max-w-[165px] sm:min-w-[160px]">
+                   <Folder className="w-4 h-4 text-red-500 opacity-80 shrink-0" />
+                   <span className="text-xs font-semibold text-zinc-200 flex-1 text-left truncate">
                      {client.name}
                    </span>
-                   <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                   <ChevronDown className="w-4 h-4 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0" />
                  </button>
                </DropdownMenuTrigger>
-               <DropdownMenuContent align="start" className="w-[220px] bg-[#161618] border-white/10 rounded-xl p-1.5 shadow-2xl max-h-[350px] overflow-y-auto custom-scrollbar">
+               <DropdownMenuContent align="end" className="w-[220px] bg-[#161618] border-white/10 rounded-xl p-1.5 shadow-2xl max-h-[350px] overflow-y-auto custom-scrollbar">
                  <DropdownMenuLabel className="text-[10px] font-semibold text-zinc-500 px-2 py-1.5">Selecionar Pasta</DropdownMenuLabel>
                  <DropdownMenuSeparator className="bg-white/10 my-1" />
                  {[...calendarClients].filter(c => {
@@ -790,18 +792,18 @@ const ClientCalendar = () => {
                    <DropdownMenuItem 
                      key={c.id} 
                      onClick={() => navigate(`/calendario/${c.id}`)}
-                     className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-colors ${client.id === c.id ? 'bg-red-500/10 text-red-500' : 'text-zinc-400 hover:bg-white/10 hover:text-zinc-200'}`}
+                     className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${client.id === c.id ? 'bg-red-500/10 text-red-500' : 'text-zinc-400 hover:bg-white/10 hover:text-zinc-200'}`}
                    >
-                     <Folder className={`w-3.5 h-3.5 ${client.id === c.id ? 'text-red-500' : 'opacity-60'}`} />
-                     <span className="text-[11px] font-medium flex-1 truncate">{c.name}</span>
-                     {client.id === c.id && <Check className="w-3.5 h-3.5 text-red-500" />}
+                     <Folder className={`w-4 h-4 ${client.id === c.id ? 'text-red-500' : 'opacity-60'}`} />
+                     <span className="text-xs font-medium flex-1 truncate">{c.name}</span>
+                     {client.id === c.id && <Check className="w-4 h-4 text-red-500" />}
                    </DropdownMenuItem>
                  ))}
                </DropdownMenuContent>
              </DropdownMenu>
           </div>
 
-          <div className="ml-auto flex items-center gap-3 text-xs">
+          <div className="hidden lg:flex ml-auto items-center gap-3 text-xs">
             {Object.entries(statusCounts as Record<string, number>).map(([status, count]) => (
               <span key={status} className="flex items-center gap-1.5">
                 <span className={`inline-block w-2 h-2 rounded-full ${
@@ -820,59 +822,83 @@ const ClientCalendar = () => {
         </div>
       </div>
 
-      <div className="p-4 md:p-6">
-        {/* View toggle + Month navigation */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+      <div className="p-3 sm:p-4 md:p-6 w-full max-w-full overflow-x-hidden">
+        {/* View toggle + Month navigation (Responsivo e com ícones maiores no celular) */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center justify-between sm:justify-start gap-2 w-full lg:w-auto">
             {(viewMode === 'calendar' || viewMode === 'weekly') && (
-              <>
-                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month - 1))} className="rounded-[1rem] hover:bg-white/5">
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month - 1))} className="h-10 w-10 rounded-xl bg-white/5 hover:bg-white/10">
                   <ChevronLeft className="w-5 h-5" />
                 </Button>
-                <h2 className="text-lg font-semibold min-w-[180px] text-center">{monthNames[month]} {year}</h2>
-                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month + 1))} className="rounded-[1rem] hover:bg-white/5">
+                <h2 className="text-base sm:text-lg font-bold min-w-[145px] sm:min-w-[180px] text-center">{monthNames[month]} {year}</h2>
+                <Button variant="ghost" size="icon" onClick={() => setCurrentDate(new Date(year, month + 1))} className="h-10 w-10 rounded-xl bg-white/5 hover:bg-white/10">
                   <ChevronRight className="w-5 h-5" />
                 </Button>
-              </>
+              </div>
             )}
             {viewMode === 'feed' && (
-              <h2 className="text-lg font-semibold">Feed</h2>
+              <h2 className="text-lg font-bold">Feed do Mês ({monthNames[month]})</h2>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            {viewMode === 'calendar' && (
-              <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())} className="rounded-xl text-xs bg-white/5 border-white/10 hover:bg-white/10">
-                Hoje
-              </Button>
-            )}
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 px-3 text-[10px] uppercase font-bold rounded-lg border-white/10 bg-white/5 hover:bg-white/10 text-white"
-                onClick={() => setShowDuplicateDialog(true)}
-              >
-                <CopyPlus className="w-3.5 h-3.5 mr-1.5" />
-                Duplicar Calendário
-              </Button>
+
+            <div className="flex items-center gap-1.5 ml-auto lg:ml-2">
+              {viewMode === 'calendar' && (
+                <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())} className="h-9 px-3 rounded-xl text-xs bg-white/5 border-white/10 hover:bg-white/10">
+                  Hoje
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
                 disabled={isRefreshing}
-                className="h-7 px-3 text-[10px] uppercase font-bold rounded-lg text-white/50 hover:text-primary hover:bg-white/5"
+                className="h-9 px-3 text-xs font-bold rounded-xl bg-white/5 text-white/80 hover:text-primary hover:bg-white/10"
                 onClick={handleManualRefresh}
+                title="Atualizar"
               >
-                <RefreshCw className={`w-3 h-3 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Atualizar
+                <RefreshCw className={`w-4 h-4 sm:mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Atualizar</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            {/* Alternador Mensal / Semanal / Feed — Botões grandes e fáceis de tocar no celular */}
+            <div className="grid grid-cols-3 sm:flex bg-[#121214] rounded-xl p-1 gap-1 border border-white/10 w-full sm:w-auto">
+              <Button
+                size="sm"
+                variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+                className={`h-9 px-3 text-xs font-bold rounded-lg ${viewMode === 'calendar' ? 'bg-primary text-white shadow-md' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+                onClick={() => setViewMode('calendar')}
+              >
+                <CalendarDays className="w-4 h-4 mr-1.5 shrink-0" />
+                Mensal
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === 'weekly' ? 'default' : 'ghost'}
+                className={`h-9 px-3 text-xs font-bold rounded-lg ${viewMode === 'weekly' ? 'bg-primary text-white shadow-md' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+                onClick={() => setViewMode('weekly')}
+              >
+                <LayoutList className="w-4 h-4 mr-1.5 shrink-0" />
+                Semanal
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === 'feed' ? 'default' : 'ghost'}
+                className={`h-9 px-3 text-xs font-bold rounded-lg ${viewMode === 'feed' ? 'bg-primary text-white shadow-md' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+                onClick={() => setViewMode('feed')}
+              >
+                <Grid3X3 className="w-4 h-4 mr-1.5 shrink-0" />
+                Feed
               </Button>
             </div>
 
             {/* Status Filter Control: All | Overdue/Pending | Completed */}
-            <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/10">
+            <div className="grid grid-cols-3 sm:flex bg-[#121214] rounded-xl p-1 gap-1 border border-white/10 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setStatusFilter('all')}
-                className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all ${
+                className={`h-8 px-2.5 text-[11px] font-bold rounded-lg uppercase tracking-wider transition-all ${
                   statusFilter === 'all' ? 'bg-white/20 text-white shadow-md' : 'text-zinc-400 hover:text-white'
                 }`}
               >
@@ -881,183 +907,330 @@ const ClientCalendar = () => {
               <button
                 type="button"
                 onClick={() => setStatusFilter('pending_overdue')}
-                className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-[11px] font-bold rounded-lg uppercase tracking-wider transition-all flex items-center justify-center gap-1 truncate ${
                   statusFilter === 'pending_overdue' ? 'bg-red-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                🔴 Atrasados/Pendentes
+                🔴 Pendentes
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('completed')}
-                className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-[11px] font-bold rounded-lg uppercase tracking-wider transition-all flex items-center justify-center gap-1 truncate ${
                   statusFilter === 'completed' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
                 }`}
               >
                 🟢 Concluídos
               </button>
             </div>
-            <div className="flex bg-[#121214] rounded-xl p-0.5 gap-0.5 border border-white/10">
+
+            {loggedUserRole !== 'GUEST' && (
               <Button
                 size="sm"
-                variant={viewMode === 'calendar' ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs rounded-lg ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
-                onClick={() => setViewMode('calendar')}
+                variant="outline"
+                className="h-9 px-3 text-xs uppercase font-bold rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white w-full sm:w-auto"
+                onClick={() => setShowDuplicateDialog(true)}
               >
-                <CalendarDays className="w-3.5 h-3.5 mr-1" />
-                Mensal
+                <CopyPlus className="w-4 h-4 mr-1.5" />
+                Duplicar Calendário
               </Button>
-              <Button
-                size="sm"
-                variant={viewMode === 'weekly' ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs rounded-lg ${viewMode === 'weekly' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
-                onClick={() => setViewMode('weekly')}
-              >
-                <LayoutList className="w-3.5 h-3.5 mr-1" />
-                Semanal
-              </Button>
-              <Button
-                size="sm"
-                variant={viewMode === 'feed' ? 'default' : 'ghost'}
-                className={`h-7 px-3 text-xs rounded-lg ${viewMode === 'feed' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
-                onClick={() => setViewMode('feed')}
-              >
-                <Grid3X3 className="w-3.5 h-3.5 mr-1" />
-                Feed
-              </Button>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Calendar grid view */}
         {viewMode === 'calendar' && (
-        <div className="bg-[#0f0f11] p-3 md:p-4 rounded-[2rem] border border-white/5 shadow-2xl backdrop-blur-xl">
-          <div className="grid grid-cols-7 gap-2 mb-2">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-              <div key={d} className="text-center text-[11px] text-white/60 font-medium py-2 uppercase tracking-[0.15em]">{d}</div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-2">
-            {cells.map((cell, i) => {
-              const rawTasks = cell.isCurrentMonth ? getTasksForDate(cell.dateStr) : [];
-              const tasks = rawTasks.filter(task => {
-                const statusInfo = getCalendarTaskStatus(task, kanbanCards);
-                if (statusFilter === 'pending_overdue') {
-                  return statusInfo.statusType === 'overdue' || statusInfo.statusType === 'pending' || statusInfo.statusType === 'in_progress';
-                }
-                if (statusFilter === 'completed') {
-                  return statusInfo.statusType === 'completed';
-                }
-                return true;
-              });
-
-              const isToday = cell.dateStr === todayStr && cell.isCurrentMonth;
-
-              return (
-                <div
-                  key={i}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => handleDayDrop(e, cell.dateStr)}
-                  className={`min-h-[140px] rounded-[1.25rem] p-3 transition-all duration-300 group relative flex flex-col border
-                    ${!cell.isCurrentMonth ? 'bg-transparent border-transparent opacity-30' : 'bg-[#121214] border-white/5 hover:bg-[#161618] hover:border-white/10'}
-                    ${isToday ? 'ring-1 ring-inset ring-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]' : ''}
-                  `}
-                >
-                  <div className="flex items-center justify-between mb-3 pl-1">
-                    <span className={`text-[12px] font-bold flex items-center justify-center
-                      ${isToday ? 'text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-md' : 'text-white/40'}
-                    `}>
-                      {cell.day}
-                    </span>
-                    {cell.isCurrentMonth && (
+          <>
+            {/* VISÃO MOBILE (md:hidden) — Grade compacta travada + Lista de Cards grandes com miniatura */}
+            <div className="md:hidden space-y-4">
+              <div className="bg-[#0f0f11] p-3 rounded-2xl border border-white/10 shadow-xl">
+                <div className="grid grid-cols-7 gap-1 mb-1.5">
+                  {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, idx) => (
+                    <div key={idx} className="text-center text-xs text-white/50 font-bold py-1 uppercase">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {cells.map((cell, i) => {
+                    const dayTasks = cell.isCurrentMonth ? getTasksForDate(cell.dateStr) : [];
+                    const isToday = cell.dateStr === todayStr && cell.isCurrentMonth;
+                    return (
                       <button
-                        onClick={() => openAdd(cell.dateStr)}
-                        className="w-6 h-6 flex items-center justify-center rounded-md bg-white/5 text-white/40 opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10 hover:text-white"
+                        key={i}
+                        type="button"
+                        disabled={!cell.isCurrentMonth}
+                        onClick={() => {
+                          if (!cell.isCurrentMonth) return;
+                          if (dayTasks.length > 0) {
+                            setEditTask(dayTasks[0]);
+                          } else {
+                            openAdd(cell.dateStr);
+                          }
+                        }}
+                        className={`aspect-square rounded-xl flex flex-col items-center justify-center relative border transition-all ${
+                          !cell.isCurrentMonth
+                            ? 'opacity-20 border-transparent'
+                            : isToday
+                              ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 font-black'
+                              : dayTasks.length > 0
+                                ? 'bg-[#1C1C1E] border-primary/40 text-white font-bold'
+                                : 'bg-[#121214] border-white/5 text-white/70'
+                        }`}
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <span className="text-sm leading-none">{cell.day}</span>
+                        {dayTasks.length > 0 && (
+                          <div className="flex items-center gap-0.5 mt-1">
+                            {dayTasks.slice(0, 3).map((t, idx) => {
+                              const st = getCalendarTaskStatus(t, kanbanCards);
+                              return (
+                                <span
+                                  key={idx}
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    st.statusType === 'completed'
+                                      ? 'bg-emerald-400'
+                                      : st.statusType === 'overdue'
+                                        ? 'bg-red-500'
+                                        : st.statusType === 'in_progress'
+                                          ? 'bg-amber-400'
+                                          : 'bg-primary'
+                                  }`}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
                       </button>
-                    )}
+                    );
+                  })}
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-[11px] text-white/50">Toque em um dia para abrir ou criar post</span>
+                  <Button
+                    size="sm"
+                    onClick={() => openAdd(todayStr)}
+                    className="h-8 px-3 rounded-xl bg-primary text-white text-xs font-bold"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Novo Post
+                  </Button>
+                </div>
+              </div>
+
+              {/* Lista de Posts do Mês no Celular (cards largos, ícones grandes e fácil leitura) */}
+              <div className="space-y-2.5 pb-8">
+                <h3 className="text-xs font-black uppercase tracking-wider text-white/60 px-1">
+                  Programação de {monthNames[month]} ({sortedMonthTasks.length})
+                </h3>
+                {sortedMonthTasks.length === 0 ? (
+                  <div className="bg-[#121214] border border-dashed border-white/10 rounded-2xl p-8 text-center">
+                    <CalendarDays className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-white/70">Nenhuma postagem neste mês</p>
+                    <p className="text-xs text-white/40 mt-1">Toque em qualquer dia acima ou no botão Novo Post.</p>
                   </div>
-
-                  <div className="space-y-2 flex-1 pr-1">
-                    {tasks.map(task => {
+                ) : (
+                  sortedMonthTasks
+                    .filter(task => {
                       const statusInfo = getCalendarTaskStatus(task, kanbanCards);
+                      if (statusFilter === 'pending_overdue') {
+                        return (
+                          statusInfo.statusType === 'overdue' ||
+                          statusInfo.statusType === 'pending' ||
+                          statusInfo.statusType === 'in_progress'
+                        );
+                      }
+                      if (statusFilter === 'completed') {
+                        return statusInfo.statusType === 'completed';
+                      }
+                      return true;
+                    })
+                    .map(task => {
+                      const statusInfo = getCalendarTaskStatus(task, kanbanCards);
+                      const [yyyy, mm, dd] = task.date.split('-');
                       return (
-                        <ContextMenu key={task.id}>
-                          <ContextMenuTrigger asChild>
-                            <div
-                              draggable
-                              onDragStart={(e) => e.dataTransfer.setData('taskId', task.id)}
-                              onDragOver={(e) => handleCardDragOver(e, task.id)}
-                              onDragLeave={(e) => { if(e.dataTransfer.types.includes('Files')) setDragOverCardId(null) }}
-                              onDrop={(e) => handleCardDrop(e, task.id)}
-                              className={`relative group/task mb-2 block rounded-xl transition-all ${dragOverCardId === task.id ? 'ring-2 ring-[#8B5CF6] scale-[1.02] z-10' : ''}`}
-                            >
-                              <div
-                                onClick={() => setEditTask(task)}
-                                className={`w-full text-left rounded-xl border transition-all cursor-pointer shadow-lg group/card flex flex-col gap-1.5 relative overflow-hidden p-2.5
-                                  ${dragOverCardId === task.id ? 'ring-2 ring-[#8B5CF6] scale-[1.02] z-10' : ''}
-                                  hover:brightness-125 hover:border-white/20 transition-all
-                                  ${
-                                    statusInfo.statusType === 'completed' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-100' :
-                                    statusInfo.statusType === 'overdue' ? 'bg-red-950/40 border-red-500/60 text-red-100 ring-1 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' :
-                                    statusInfo.statusType === 'in_progress' ? 'bg-amber-500/10 border-amber-500/30 text-amber-100' :
-                                    'bg-[#1C1C1E] border-white/5 text-white/90 hover:bg-[#252528]'
-                                  }
-                                `}
-                              >
-                                {/* Borda lateral colorida baseada no status */}
-                                <div className={`absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl shadow-[2px_0_10px_rgba(0,0,0,0.5)] ${
-                                  statusInfo.statusType === 'completed' ? 'bg-emerald-500' :
-                                  statusInfo.statusType === 'overdue' ? 'bg-red-500 animate-pulse' :
-                                  statusInfo.statusType === 'in_progress' ? 'bg-amber-500' :
-                                  'bg-zinc-600'
-                                }`} />
-
-                                <span className="text-[11px] font-bold truncate leading-tight block uppercase tracking-wide pl-1">{task.clientName}</span>
-                                
-                                <div className="flex items-center justify-between flex-wrap gap-1 pl-1">
-                                  <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded border ${getTypeColor(task.contentType)}`}>
-                                    {task.contentType}
-                                  </span>
-                                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${statusInfo.badgeBg} ${statusInfo.badgeText} border ${statusInfo.badgeBorder}`}>
-                                    {statusInfo.isOverdue ? '🔴 ATRASADO' : statusInfo.statusType === 'completed' ? '🟢 APROVADO' : statusInfo.statusType === 'in_progress' ? '🟡 EM PRODUÇÃO' : '⚪ PENDENTE'}
-                                  </span>
-                                </div>
-                              </div>
-                            <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-[#0f0f11] border border-white/10 rounded-2xl shadow-2xl opacity-0 scale-95 pointer-events-none group-hover/task:opacity-100 group-hover/task:scale-100 transition-all duration-200 origin-bottom flex flex-col overflow-hidden">
-                              {task.imageUrl && (
-                                <div className="h-32 w-full bg-black/50 relative overflow-hidden border-b border-white/5">
-                                  {isVideoUrl(task.imageUrl) ? <video src={task.imageUrl} className="w-full h-full object-cover" controls /> : <img src={task.imageUrl} alt="" className="w-full h-full object-cover" />}
-                                </div>
+                        <div
+                          key={task.id}
+                          onClick={() => setEditTask(task)}
+                          className="bg-[#161618] border border-white/10 rounded-2xl p-3 flex items-center gap-3.5 shadow-lg active:scale-[0.99] transition-all cursor-pointer"
+                        >
+                          {/* Data em destaque ou Miniatura */}
+                          {task.imageUrl ? (
+                            <div className="w-16 h-16 rounded-xl overflow-hidden bg-black/50 border border-white/10 shrink-0 relative">
+                              {isVideoUrl(task.imageUrl) ? (
+                                <video src={task.imageUrl} className="w-full h-full object-cover" muted playsInline />
+                              ) : (
+                                <img src={task.imageUrl} alt="" className="w-full h-full object-cover" />
                               )}
-                              <div className="p-3 bg-gradient-to-b from-[#1C1C1E] to-[#121214]">
-                                <p className="text-white text-[11px] font-bold leading-tight line-clamp-2 uppercase">{task.clientName}</p>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getTypeColor(task.contentType)}`}>{task.contentType}</span>
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ml-auto ${statusColors[task.status?.toLowerCase()] || 'text-white/50'}`}>{task.status || 'Pendente'}</span>
-                                </div>
-                              </div>
+                              <span className="absolute bottom-0 inset-x-0 bg-black/75 text-[10px] font-black text-white text-center py-0.5">
+                                {dd}/{mm}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center shrink-0">
+                              <span className="text-base font-black text-white leading-none">{dd}</span>
+                              <span className="text-[10px] font-bold uppercase text-white/40 mt-0.5">/{mm}</span>
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-white truncate uppercase">{task.clientName}</p>
+                            {task.description && (
+                              <p className="text-xs text-white/50 truncate mt-0.5">{task.description}</p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                              {task.contentType && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getTypeColor(task.contentType)}`}>
+                                  {task.contentType}
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${statusInfo.badgeBg} ${statusInfo.badgeText} border ${statusInfo.badgeBorder}`}>
+                                {statusInfo.isOverdue
+                                  ? '🔴 Atrasado'
+                                  : statusInfo.statusType === 'completed'
+                                    ? '🟢 Aprovado'
+                                    : statusInfo.statusType === 'in_progress'
+                                      ? '🟡 Em Produção'
+                                      : '⚪ Pendente'}
+                              </span>
                             </div>
                           </div>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent className="w-56 bg-[#161618] border-white/5 rounded-xl shadow-2xl p-1">
-                          <ContextMenuItem onClick={() => { setActionDate(task.date); setActionClientId(task.calendarClientId || ''); setActionDialog({ type: 'copy_task', taskId: task.id })}} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><CopyPlus className="w-3.5 h-3.5"/> Duplicar Card</ContextMenuItem>
-                          <ContextMenuItem onClick={() => { setActionDate(task.date); setActionDialog({ type: 'move_date', taskId: task.id })}} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><ArrowRightLeft className="w-3.5 h-3.5"/> Mover para outro dia</ContextMenuItem>
-                          <ContextMenuSeparator className="bg-white/10 my-1" />
-                          <ContextMenuItem onClick={() => setEditTask(task)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><Edit className="w-3.5 h-3.5"/> Editar</ContextMenuItem>
-                          <ContextMenuItem onClick={() => setDeleteConfirm(task.id)} className="gap-2.5 cursor-pointer rounded-lg text-red-500 focus:bg-red-500/20 focus:text-red-500 py-2 text-xs"><Trash2 className="w-3.5 h-3.5"/> Excluir</ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-                    );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+
+                          <ChevronRight className="w-5 h-5 text-white/30 shrink-0" />
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* VISÃO DESKTOP (hidden md:block) — Grade completa de 7 colunas */}
+            <div className="hidden md:block bg-[#0f0f11] p-3 md:p-4 rounded-[2rem] border border-white/5 shadow-2xl backdrop-blur-xl">
+              <div className="grid grid-cols-7 gap-2 mb-2">
+                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
+                  <div key={d} className="text-center text-[11px] text-white/60 font-medium py-2 uppercase tracking-[0.15em]">{d}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-2">
+                {cells.map((cell, i) => {
+                  const rawTasks = cell.isCurrentMonth ? getTasksForDate(cell.dateStr) : [];
+                  const tasks = rawTasks.filter(task => {
+                    const statusInfo = getCalendarTaskStatus(task, kanbanCards);
+                    if (statusFilter === 'pending_overdue') {
+                      return statusInfo.statusType === 'overdue' || statusInfo.statusType === 'pending' || statusInfo.statusType === 'in_progress';
+                    }
+                    if (statusFilter === 'completed') {
+                      return statusInfo.statusType === 'completed';
+                    }
+                    return true;
+                  });
+
+                  const isToday = cell.dateStr === todayStr && cell.isCurrentMonth;
+
+                  return (
+                    <div
+                      key={i}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => handleDayDrop(e, cell.dateStr)}
+                      className={`min-h-[140px] rounded-[1.25rem] p-3 transition-all duration-300 group relative flex flex-col border
+                        ${!cell.isCurrentMonth ? 'bg-transparent border-transparent opacity-30' : 'bg-[#121214] border-white/5 hover:bg-[#161618] hover:border-white/10'}
+                        ${isToday ? 'ring-1 ring-inset ring-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]' : ''}
+                      `}
+                    >
+                      <div className="flex items-center justify-between mb-3 pl-1">
+                        <span className={`text-[12px] font-bold flex items-center justify-center
+                          ${isToday ? 'text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-md' : 'text-white/40'}
+                        `}>
+                          {cell.day}
+                        </span>
+                        {cell.isCurrentMonth && (
+                          <button
+                            onClick={() => openAdd(cell.dateStr)}
+                            className="w-6 h-6 flex items-center justify-center rounded-md bg-white/5 text-white/40 opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10 hover:text-white"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 flex-1 pr-1">
+                        {tasks.map(task => {
+                          const statusInfo = getCalendarTaskStatus(task, kanbanCards);
+                          return (
+                            <ContextMenu key={task.id}>
+                              <ContextMenuTrigger asChild>
+                                <div
+                                  draggable
+                                  onDragStart={(e) => e.dataTransfer.setData('taskId', task.id)}
+                                  onDragOver={(e) => handleCardDragOver(e, task.id)}
+                                  onDragLeave={(e) => { if(e.dataTransfer.types.includes('Files')) setDragOverCardId(null) }}
+                                  onDrop={(e) => handleCardDrop(e, task.id)}
+                                  className={`relative group/task mb-2 block rounded-xl transition-all ${dragOverCardId === task.id ? 'ring-2 ring-[#8B5CF6] scale-[1.02] z-10' : ''}`}
+                                >
+                                  <div
+                                    onClick={() => setEditTask(task)}
+                                    className={`w-full text-left rounded-xl border transition-all cursor-pointer shadow-lg group/card flex flex-col gap-1.5 relative overflow-hidden p-2.5
+                                      ${dragOverCardId === task.id ? 'ring-2 ring-[#8B5CF6] scale-[1.02] z-10' : ''}
+                                      hover:brightness-125 hover:border-white/20 transition-all
+                                      ${
+                                        statusInfo.statusType === 'completed' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-100' :
+                                        statusInfo.statusType === 'overdue' ? 'bg-red-950/40 border-red-500/60 text-red-100 ring-1 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' :
+                                        statusInfo.statusType === 'in_progress' ? 'bg-amber-500/10 border-amber-500/30 text-amber-100' :
+                                        'bg-[#1C1C1E] border-white/5 text-white/90 hover:bg-[#252528]'
+                                      }
+                                    `}
+                                  >
+                                    {/* Borda lateral colorida baseada no status */}
+                                    <div className={`absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl shadow-[2px_0_10px_rgba(0,0,0,0.5)] ${
+                                      statusInfo.statusType === 'completed' ? 'bg-emerald-500' :
+                                      statusInfo.statusType === 'overdue' ? 'bg-red-500 animate-pulse' :
+                                      statusInfo.statusType === 'in_progress' ? 'bg-amber-500' :
+                                      'bg-zinc-600'
+                                    }`} />
+
+                                    <span className="text-[11px] font-bold truncate leading-tight block uppercase tracking-wide pl-1">{task.clientName}</span>
+                                    
+                                    <div className="flex items-center justify-between flex-wrap gap-1 pl-1">
+                                      <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded border ${getTypeColor(task.contentType)}`}>
+                                        {task.contentType}
+                                      </span>
+                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${statusInfo.badgeBg} ${statusInfo.badgeText} border ${statusInfo.badgeBorder}`}>
+                                        {statusInfo.isOverdue ? '🔴 ATRASADO' : statusInfo.statusType === 'completed' ? '🟢 APROVADO' : statusInfo.statusType === 'in_progress' ? '🟡 EM PRODUÇÃO' : '⚪ PENDENTE'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-[#0f0f11] border border-white/10 rounded-2xl shadow-2xl opacity-0 scale-95 pointer-events-none group-hover/task:opacity-100 group-hover/task:scale-100 transition-all duration-200 origin-bottom flex flex-col overflow-hidden">
+                                  {task.imageUrl && (
+                                    <div className="h-32 w-full bg-black/50 relative overflow-hidden border-b border-white/5">
+                                      {isVideoUrl(task.imageUrl) ? <video src={task.imageUrl} className="w-full h-full object-cover" controls /> : <img src={task.imageUrl} alt="" className="w-full h-full object-cover" />}
+                                    </div>
+                                  )}
+                                  <div className="p-3 bg-gradient-to-b from-[#1C1C1E] to-[#121214]">
+                                    <p className="text-white text-[11px] font-bold leading-tight line-clamp-2 uppercase">{task.clientName}</p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getTypeColor(task.contentType)}`}>{task.contentType}</span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ml-auto ${statusColors[task.status?.toLowerCase()] || 'text-white/50'}`}>{task.status || 'Pendente'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="w-56 bg-[#161618] border-white/5 rounded-xl shadow-2xl p-1">
+                              <ContextMenuItem onClick={() => { setActionDate(task.date); setActionClientId(task.calendarClientId || ''); setActionDialog({ type: 'copy_task', taskId: task.id })}} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><CopyPlus className="w-3.5 h-3.5"/> Duplicar Card</ContextMenuItem>
+                              <ContextMenuItem onClick={() => { setActionDate(task.date); setActionDialog({ type: 'move_date', taskId: task.id })}} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><ArrowRightLeft className="w-3.5 h-3.5"/> Mover para outro dia</ContextMenuItem>
+                              <ContextMenuSeparator className="bg-white/10 my-1" />
+                              <ContextMenuItem onClick={() => setEditTask(task)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/10 focus:text-white py-2 text-xs"><Edit className="w-3.5 h-3.5"/> Editar</ContextMenuItem>
+                              <ContextMenuItem onClick={() => setDeleteConfirm(task.id)} className="gap-2.5 cursor-pointer rounded-lg text-red-500 focus:bg-red-500/20 focus:text-red-500 py-2 text-xs"><Trash2 className="w-3.5 h-3.5"/> Excluir</ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
         )}
 
         {/* Weekly Summary View */}
@@ -1150,35 +1323,47 @@ const ClientCalendar = () => {
           }
 
           return (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 w-full pb-10">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full pb-10">
               {feedTasks.map(task => (
                 <div 
                   key={task.id} 
                   className="aspect-[4/5] relative group bg-[#1C1C1E] border border-white/5 rounded-2xl overflow-hidden cursor-pointer shadow-xl hover:ring-2 hover:ring-red-500/50 transition-all duration-300"
-                  onClick={() => setEditTask(task)}
+                  onClick={() => {
+                    setFeedPreviewTask(task);
+                    setFeedPreviewIndex(0);
+                  }}
                 >
-                  <img 
-                    src={task.imageUrl!} 
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                    loading="lazy" 
-                    alt=""
-                  />
+                  {isVideoUrl(task.imageUrl!) ? (
+                    <video
+                      src={task.imageUrl!}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <img 
+                      src={task.imageUrl!} 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                      loading="lazy" 
+                      alt=""
+                    />
+                  )}
                   
-                  {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 backdrop-blur-[1px]">
-                    <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                      <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded-md uppercase tracking-widest mb-2 inline-block">
+                  {/* Info Overlay (always subtly visible at bottom on mobile, hover on desktop) */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5 sm:p-4">
+                    <div className="transform translate-y-0 sm:translate-y-4 sm:group-hover:translate-y-0 transition-transform duration-300">
+                      <span className="text-[9px] sm:text-[10px] font-black bg-red-600 text-white px-1.5 sm:px-2 py-0.5 rounded-md uppercase tracking-widest mb-1 sm:mb-2 inline-block">
                         {task.status || 'Pendente'}
                       </span>
-                      <h3 className="text-sm font-bold text-white uppercase truncate">{task.clientName}</h3>
-                      <p className="text-[10px] text-white/60 font-medium">{task.date.split('-').reverse().join('/')}</p>
+                      <h3 className="text-xs sm:text-sm font-bold text-white uppercase truncate">{task.clientName}</h3>
+                      <p className="text-[10px] text-white/70 font-medium">{task.date.split('-').reverse().join('/')}</p>
                     </div>
                   </div>
 
-                  {/* Icon indicators */}
-                  <div className="absolute top-3 right-3 flex gap-1.5 opacity-60">
-                    <div className="w-6 h-6 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10">
-                      <Grid3X3 className="w-3 h-3 text-white" />
+                  {/* Quick Zoom & Grid Indicators */}
+                  <div className="absolute top-2.5 right-2.5 flex gap-1.5 z-10 pointer-events-none">
+                    <div className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/15 text-white shadow-lg">
+                      <ZoomIn className="w-3.5 h-3.5 text-white" />
                     </div>
                   </div>
                 </div>
@@ -1188,36 +1373,44 @@ const ClientCalendar = () => {
         })()}
       </div>
 
-                        {/* Add Task Dialog */}
+      {/* Add Task Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="bg-transparent border-none text-white max-w-[1300px] w-[95vw] p-0 shadow-none h-[min(800px,85vh)] [&>button.absolute]:hidden">
-          <div className="w-full h-full flex relative min-h-0">
+        <DialogContent className="!flex flex-col bg-transparent border-none text-white w-[94vw] max-w-[94vw] lg:max-w-[1300px] p-0 shadow-none h-[90dvh] lg:h-[min(800px,85vh)] max-h-[90dvh] overflow-hidden [&>button.absolute]:hidden">
+          <div className="w-full max-w-full h-full flex relative min-h-0 min-w-0 overflow-hidden">
             {/* Main Modal wrapper */}
-            <div className="flex w-full h-full bg-[#121214] border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative z-20 min-h-0">
+            <div className="flex flex-col lg:flex-row w-full max-w-full h-full bg-[#121214] border border-white/10 rounded-2xl overflow-y-auto overflow-x-hidden lg:overflow-hidden shadow-2xl relative z-20 min-h-0 min-w-0">
               {/* Left Column - Clean Media Preview */}
-              <div className="w-[480px] bg-[#0c0c0e] border-r border-white/5 flex flex-col p-6 shrink-0 h-full relative min-h-0">
+              <div className="w-full max-w-full lg:w-[480px] bg-[#0c0c0e] border-b lg:border-b-0 lg:border-r border-white/5 flex flex-col p-3.5 sm:p-6 shrink-0 lg:h-full relative min-h-0 min-w-0">
                  {/* Top header on left */}
-                 <div className="flex items-center justify-between mb-4">
-                   <div className="flex items-center gap-3">
-                     <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center text-[10px] font-bold border border-white/10">
+                 <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2 w-full min-w-0">
+                   <div className="flex items-center gap-2 flex-1 min-w-0">
+                     <div className="w-7 h-7 rounded-md bg-white/5 flex items-center justify-center text-[10px] font-bold border border-white/10 shrink-0">
                        {(form.clientName || 'NO').substring(0,2).toUpperCase()}
                      </div>
-                     <span className="font-bold text-[13px] tracking-wider uppercase text-white/90">{form.clientName || 'Novo Post'}</span>
+                     <span className="font-bold text-xs sm:text-[13px] tracking-wider uppercase text-white/90 truncate">{form.clientName || 'Novo Post'}</span>
                    </div>
-                   <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase bg-white/5 px-2.5 py-1.5 rounded-full border border-white/5">
-                     <CalendarDays className="w-3 h-3" />
-                     {new Date(`${addDate}T12:00:00`).toLocaleDateString('pt-BR')}
+                   <div className="flex items-center gap-1.5 shrink-0">
+                     <div className="flex items-center gap-1 text-[10px] font-bold text-white/50 uppercase bg-white/5 px-2 py-1 rounded-full border border-white/5">
+                       <CalendarDays className="w-3 h-3" />
+                       {new Date(`${addDate}T12:00:00`).toLocaleDateString('pt-BR')}
+                     </div>
+                     <button
+                       type="button"
+                       onClick={() => setShowAddDialog(false)}
+                       className="lg:hidden w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
+                     >
+                       <X className="w-4 h-4" />
+                     </button>
                    </div>
                  </div>
 
                  {/* Main Image View */}
-                <div className="w-full flex-1 flex items-center justify-center overflow-hidden">
+                <div className="w-full h-[260px] sm:h-[340px] lg:h-auto lg:flex-1 flex items-center justify-center overflow-hidden min-h-0">
                   {form.imageUrl ? (
-                    <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                    <div className="relative w-full h-full flex items-center justify-center min-h-0">
                       <div 
-                        className="relative max-h-full rounded-2xl overflow-hidden bg-[#161618] border border-white/5 shadow-inner flex items-center justify-center group"
+                        className="relative h-full w-auto max-h-full max-w-full rounded-2xl overflow-hidden bg-[#161618] border border-white/5 shadow-inner flex items-center justify-center group mx-auto"
                         style={{
-                          height: '100%',
                           aspectRatio: (form.contentType?.toLowerCase() || '').includes('stor') || (form.contentType?.toLowerCase() || '').includes('reel') ? '9/16' :
                                        (form.contentType?.toLowerCase() || '').includes('quadrado') ? '1/1' : '4/5'
                         }}
@@ -1252,7 +1445,7 @@ const ClientCalendar = () => {
                             <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center">
                               <img 
                                 src={form.imageUrl!} 
-                                className="w-full h-full"
+                                className="w-full h-full max-w-full max-h-full"
                                 style={{
                                   objectFit: adj.mode === 'fit' ? 'contain' : 'cover',
                                   transform: `translate(${(adj.x || 0) * 100}%, ${(adj.y || 0) * 100}%) scale(${adj.zoom || 1})`
@@ -1271,9 +1464,9 @@ const ClientCalendar = () => {
                           const newCover = newImg[0] || '';
                           setForm(f => ({ ...f, images: newImg, imageUrl: newCover }));
                         }}
-                        className="absolute top-4 right-4 w-10 h-10 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all shadow-xl backdrop-blur-md z-10"
+                        className="absolute top-3 right-3 w-9 h-9 sm:w-10 sm:h-10 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all shadow-xl backdrop-blur-md z-10"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
 
                        {form.images && form.images.length > 1 && (
@@ -1287,7 +1480,7 @@ const ClientCalendar = () => {
                                const newIndex = actualIndex === 0 ? form.images!.length - 1 : actualIndex - 1;
                                setForm({ ...form, imageUrl: form.images![newIndex] });
                              }}
-                             className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                             className="absolute left-2.5 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 shadow-xl z-10"
                            >
                              <ChevronLeft className="w-5 h-5" />
                            </button>
@@ -1300,7 +1493,7 @@ const ClientCalendar = () => {
                                const newIndex = (actualIndex + 1) % form.images!.length;
                                setForm({ ...form, imageUrl: form.images![newIndex] });
                              }}
-                             className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                             className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 shadow-xl z-10"
                            >
                              <ChevronRight className="w-5 h-5" />
                            </button>
@@ -1309,21 +1502,22 @@ const ClientCalendar = () => {
                       </div>
                     </div>
                    ) : (
-                     <div className="text-white/20 flex flex-col items-center justify-center text-center">
-                        <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
+                     <div className="text-white/20 flex flex-col items-center justify-center text-center py-6">
+                        <ImageIcon className="w-10 h-10 sm:w-12 sm:h-12 mb-2.5 opacity-50" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Nenhuma mídia anexada</span>
                      </div>
                    )}
                  </div>
 
                  {/* Interaction Footer on left */}
-                 <div className="mt-4 flex items-center justify-between shrink-0 bg-[#161618] rounded-xl p-2 border border-white/5">
+                 <div className="mt-3 sm:mt-4 flex items-center justify-between shrink-0 bg-[#161618] rounded-xl p-2 border border-white/5">
                     <div className="flex items-center gap-1">
                       <button 
-                        className="w-10 h-10 rounded-lg hover:bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition-colors"
+                        className="h-10 px-3 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-2 text-white/70 hover:text-white transition-colors text-xs font-bold"
                         onClick={(e) => { e.preventDefault(); fileInputRef.current?.click(); }}
                       >
-                        <Upload className="w-5 h-5" />
+                        <Upload className="w-4 h-4" />
+                        <span>Anexar Mídia</span>
                         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'add')} />
                       </button>
                     </div>
@@ -1331,7 +1525,7 @@ const ClientCalendar = () => {
                     <div className="flex gap-2">
                       <button 
                         onClick={(e) => { e.preventDefault(); form.imageUrl && setAdjustmentModalData({ task: { ...form, id: 'temp' } as any, currentImageUrl: form.imageUrl }); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${form.imageUrl ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}
+                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${form.imageUrl ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}
                         disabled={!form.imageUrl}
                       >
                         <Settings className="w-4 h-4" /> Formato e Redes
@@ -1341,36 +1535,36 @@ const ClientCalendar = () => {
               </div>
 
               {/* Right Column - Premium Form */}
-              <div className="flex-1 bg-[#121214] flex flex-col h-full relative min-h-0">
-                 <div className="flex items-center justify-between px-8 py-5 border-b border-white/5 bg-[#121214] shrink-0">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-3">
+              <div className="flex-1 bg-[#121214] flex flex-col lg:h-full relative min-h-0">
+                 <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 border-b border-white/5 bg-[#121214] shrink-0">
+                    <h2 className="text-base sm:text-xl font-bold text-white flex items-center gap-3">
                        <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center border border-red-500/20">
                          <PenTool className="w-4 h-4 text-red-500" />
                        </div>
                        Criar Novo Post
                     </h2>
-                    <button onClick={() => setShowAddDialog(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 text-white transition-colors">
+                    <button onClick={() => setShowAddDialog(false)} className="hidden lg:flex w-8 h-8 rounded-full bg-white/5 items-center justify-center hover:bg-white/10 text-white transition-colors">
                       <X className="w-4 h-4" />
                     </button>
                  </div>
 
-                 <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 custom-scrollbar">
+                 <div className="flex-1 lg:overflow-y-auto px-4 sm:px-8 py-5 sm:py-6 space-y-6 sm:space-y-8 custom-scrollbar">
                    {/* Fields */}
-                   <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-5 sm:space-y-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-white/50 uppercase tracking-wider ml-1">Cliente / Nome</label>
                           <Input 
                             value={form.clientName}
                             onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))}
                             placeholder="Nome do cliente..."
-                            className="h-12 bg-[#1C1C1E] border-white/5 focus-visible:ring-red-500 rounded-xl"
+                            className="h-11 sm:h-12 bg-[#1C1C1E] border-white/5 focus-visible:ring-red-500 rounded-xl"
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-white/50 uppercase tracking-wider ml-1">Formato Principal</label>
                           <Select value={form.contentType} onValueChange={v => setForm(f => ({ ...f, contentType: v }))}>
-                            <SelectTrigger className="h-12 bg-[#1C1C1E] border-white/5 focus:ring-red-500 rounded-xl text-white">
+                            <SelectTrigger className="h-11 sm:h-12 bg-[#1C1C1E] border-white/5 focus:ring-red-500 rounded-xl text-white">
                               <SelectValue placeholder="Selecione..." />
                             </SelectTrigger>
                             <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
@@ -1386,13 +1580,13 @@ const ClientCalendar = () => {
                           value={form.description}
                           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                           placeholder="Escreva a legenda maravilhosa deste post..."
-                          className="min-h-[160px] bg-[#1C1C1E] border-white/5 focus-visible:ring-red-500 rounded-xl resize-none text-[13px] leading-relaxed p-4 text-white"
+                          className="min-h-[130px] sm:min-h-[160px] bg-[#1C1C1E] border-white/5 focus-visible:ring-red-500 rounded-xl resize-none text-[13px] leading-relaxed p-4 text-white"
                         />
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-white/50 uppercase tracking-wider ml-1">Links de Referência</label>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                           {[0, 1, 2].map(i => (
                             <Input 
                               key={i}
@@ -1412,7 +1606,7 @@ const ClientCalendar = () => {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-white/50 uppercase tracking-wider ml-1">Status</label>
                         <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                          <SelectTrigger className="h-12 bg-[#1C1C1E] border-white/5 focus:ring-red-500 rounded-xl text-white">
+                          <SelectTrigger className="h-11 sm:h-12 bg-[#1C1C1E] border-white/5 focus:ring-red-500 rounded-xl text-white">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-[#252528] border-white/10 text-white rounded-xl">
@@ -1427,11 +1621,11 @@ const ClientCalendar = () => {
                  </div>
 
                  {/* Bottom Action bar */}
-                 <div className="p-6 bg-[#161618] border-t border-white/5 shrink-0 flex items-center justify-between">
-                    <Button variant="ghost" onClick={(e) => { e.preventDefault(); setShowAddDialog(false); }} className="rounded-xl hover:bg-white/5 text-white/70">
+                 <div className="p-4 sm:p-6 bg-[#161618] border-t border-white/5 shrink-0 flex items-center justify-between gap-3">
+                    <Button variant="ghost" onClick={(e) => { e.preventDefault(); setShowAddDialog(false); }} className="rounded-xl hover:bg-white/5 text-white/70 h-11">
                       Cancelar
                     </Button>
-                    <Button onClick={handleAdd} className="h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl px-8 font-bold text-sm shadow-xl shadow-red-900/20" disabled={!form.clientName.trim()}>
+                    <Button onClick={handleAdd} className="h-11 sm:h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl px-6 sm:px-8 font-bold text-sm shadow-xl shadow-red-900/20" disabled={!form.clientName.trim()}>
                       Criar Postagem
                     </Button>
                  </div>
@@ -1519,10 +1713,10 @@ const ClientCalendar = () => {
           setShowCommentsPanel(false);
         }
       }}>
-        <DialogContent className="bg-transparent border-none text-white max-w-[1300px] w-[95vw] p-0 shadow-none h-[min(800px,85vh)] [&>button.absolute]:hidden">
+        <DialogContent className="!flex flex-col bg-transparent border-none text-white w-[94vw] max-w-[94vw] lg:max-w-[1300px] p-0 shadow-none h-[90dvh] lg:h-[min(800px,85vh)] max-h-[90dvh] overflow-hidden [&>button.absolute]:hidden">
           {editTask && (
             <div 
-              className="w-full h-full flex relative min-h-0"
+              className="w-full max-w-full h-full flex relative min-h-0 min-w-0 overflow-hidden"
               onDragEnter={(e) => { 
                 if(e.dataTransfer.types.includes('Files')) {
                   e.preventDefault(); 
@@ -1597,33 +1791,43 @@ const ClientCalendar = () => {
               )}
 
               {/* Main Modal wrapper to retain borders and background */}
-              <div className="flex w-full h-full bg-[#121214] border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative z-20 min-h-0 pointer-events-auto">
+              <div className="flex flex-col lg:flex-row w-full max-w-full h-full bg-[#121214] border border-white/10 rounded-2xl overflow-y-auto overflow-x-hidden lg:overflow-hidden shadow-2xl relative z-20 min-h-0 min-w-0 pointer-events-auto">
               {/* Left Column - Clean Media Preview */}
-              <div className="w-[480px] bg-[#0c0c0e] border-r border-white/5 flex flex-col p-6 shrink-0 h-full relative min-h-0">
+              <div className="w-full max-w-full lg:w-[480px] bg-[#0c0c0e] border-b lg:border-b-0 lg:border-r border-white/5 flex flex-col p-3 sm:p-6 shrink-0 lg:h-full relative min-h-0 min-w-0">
                  {/* Top header on left */}
-                 <div className="flex items-center justify-between mb-4">
-                   <div className="flex items-center gap-3">
-                     <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center text-[10px] font-bold border border-white/10">
+                 <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2 w-full min-w-0">
+                   <div className="flex items-center gap-2 flex-1 min-w-0">
+                     <div className="w-7 h-7 rounded-md bg-white/5 flex items-center justify-center text-[10px] font-bold border border-white/10 shrink-0">
                        {(editTask.clientName || 'CL').substring(0,2).toUpperCase()}
                      </div>
-                     <span className="font-bold text-[13px] tracking-wider uppercase text-white/90">{editTask.clientName}</span>
+                     <span className="font-bold text-xs sm:text-[13px] tracking-wider uppercase text-white/90 truncate">{editTask.clientName}</span>
                    </div>
-                   <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase bg-white/5 px-2.5 py-1.5 rounded-full border border-white/5">
-                     <CalendarDays className="w-3 h-3" />
-                     {new Date(`${editTask.date}T12:00:00`).toLocaleDateString('pt-BR')} às {editTask.time || '00:00'}
+                   <div className="flex items-center gap-1.5 shrink-0">
+                     <div className="flex items-center gap-1 text-[10px] font-bold text-white/50 uppercase bg-white/5 px-2 py-1 rounded-full border border-white/5">
+                       <CalendarDays className="w-3 h-3 shrink-0" />
+                       <span>{new Date(`${editTask.date}T12:00:00`).toLocaleDateString('pt-BR')}</span> <span className="hidden sm:inline">às {editTask.time || '00:00'}</span>
+                     </div>
+                     <button
+                       type="button"
+                       onClick={() => {
+                         if (editTask) updateCalendarTask(editTask.id, editTask);
+                         setEditTask(null);
+                       }}
+                       className="lg:hidden w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
+                       title="Fechar"
+                     >
+                       <X className="w-4 h-4" />
+                     </button>
                    </div>
                  </div>
 
-                 {/* Main Image View */}
-                <div className="w-full flex-1 flex items-center justify-center overflow-hidden">
+                 {/* Main Image View (Auto-resizes image to fit mobile & desktop cleanly) */}
+                <div className="w-full h-[280px] sm:h-[360px] lg:h-auto lg:flex-1 flex items-center justify-center overflow-hidden min-h-0">
                   {editTask.imageUrl ? (
-                    <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                    <div className="relative w-full h-full flex items-center justify-center min-h-0">
                       <div 
-                        className="relative max-h-full max-w-full rounded-2xl overflow-hidden bg-[#161618] border border-white/5 shadow-inner flex items-center justify-center group shrink-0"
+                        className="relative h-full w-auto max-h-full max-w-full rounded-2xl overflow-hidden bg-[#161618] border border-white/5 shadow-inner flex items-center justify-center group shrink-0 mx-auto"
                         style={{
-                          height: 'auto',
-                          width: '100%',
-                          maxHeight: '100%',
                           aspectRatio: (editTask.contentType?.toLowerCase() || '').includes('stor') || (editTask.contentType?.toLowerCase() || '').includes('reel') ? '9/16' :
                                        (editTask.contentType?.toLowerCase() || '').includes('quadrado') ? '1/1' : '4/5'
                         }}
@@ -1658,11 +1862,14 @@ const ClientCalendar = () => {
                             {adj.mode === 'fit' && adj.fillType === 'blur' && isVideoUrl(editTask.imageUrl!) && (
                                <video src={editTask.imageUrl!} className="absolute inset-0 w-full h-full object-cover blur-xl opacity-50 scale-110" />
                             )}
-                            <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center">
+                            <div 
+                              className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center cursor-zoom-in"
+                              onClick={() => !isVideoUrl(editTask.imageUrl!) && setPreviewImage(editTask.imageUrl!)}
+                            >
                               {isVideoUrl(editTask.imageUrl!) ? (
                                 <video 
                                   src={editTask.imageUrl!} 
-                                  className="w-full h-full"
+                                  className="w-full h-full max-w-full max-h-full"
                                   controls
                                   style={{
                                     objectFit: adj.mode === 'fit' ? 'contain' : 'cover',
@@ -1672,7 +1879,7 @@ const ClientCalendar = () => {
                               ) : (
                                 <img 
                                   src={editTask.imageUrl!} 
-                                  className="w-full h-full"
+                                  className="w-full h-full max-w-full max-h-full"
                                   style={{
                                     objectFit: adj.mode === 'fit' ? 'contain' : 'cover',
                                     transform: `translate(${(adj.x || 0) * 100}%, ${(adj.y || 0) * 100}%) scale(${adj.zoom || 1})`
@@ -1683,6 +1890,20 @@ const ClientCalendar = () => {
                           </div>
                         );
                       })()}
+
+                      {/* Ampliar Imagem (Zoom) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPreviewImage(editTask.imageUrl!);
+                        }}
+                        className="absolute top-3 left-3 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all shadow-xl backdrop-blur-md z-10 border border-white/10"
+                        title="Ampliar imagem"
+                      >
+                        <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </button>
                       
                       <button 
                         type="button"
@@ -1690,9 +1911,10 @@ const ClientCalendar = () => {
                           e.preventDefault();
                           setDeleteImageConfirm({ url: editTask.imageUrl!, index: -1 });
                         }}
-                        className="absolute top-4 right-4 w-10 h-10 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all shadow-xl backdrop-blur-md z-10"
+                        className="absolute top-3 right-3 w-9 h-9 sm:w-10 sm:h-10 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all shadow-xl backdrop-blur-md z-10"
+                        title="Excluir imagem"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
 
                        {editTask.images && editTask.images.length > 1 && (
@@ -1706,7 +1928,7 @@ const ClientCalendar = () => {
                                const newIndex = (actualIndex - 1 + editTask.images!.length) % editTask.images!.length;
                                setEditTask({ ...editTask, imageUrl: editTask.images![newIndex] });
                              }}
-                             className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                             className="absolute left-2.5 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 shadow-xl z-10"
                            >
                              <ChevronLeft className="w-5 h-5" />
                            </button>
@@ -1719,17 +1941,20 @@ const ClientCalendar = () => {
                                const newIndex = (actualIndex + 1) % editTask.images!.length;
                                setEditTask({ ...editTask, imageUrl: editTask.images![newIndex] });
                              }}
-                             className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                             className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 shadow-xl z-10"
                            >
                              <ChevronRight className="w-5 h-5" />
                            </button>
+                           <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-[10px] font-bold text-white z-10">
+                             {Math.max(1, editTask.images.indexOf(editTask.imageUrl || '') + 1)} / {editTask.images.length}
+                           </div>
                          </>
                        )}
                       </div>
                     </div>
                    ) : (
-                     <div className="text-white/20 flex flex-col items-center justify-center text-center">
-                        <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
+                     <div className="text-white/20 flex flex-col items-center justify-center text-center py-6">
+                        <ImageIcon className="w-10 h-10 sm:w-12 sm:h-12 mb-2.5 opacity-50" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Nenhuma mídia anexada</span>
                      </div>
                    )}
@@ -1737,22 +1962,22 @@ const ClientCalendar = () => {
               </div>
 
               {/* Right Column - Editor */}
-              <div className="flex-1 flex flex-col bg-[#161618] h-full relative min-h-0">
+              <div className="flex-1 w-full max-w-full flex flex-col bg-[#161618] lg:h-full relative min-h-0 min-w-0 pb-24 lg:pb-0">
                  {/* Custom Tabs and Top Actions */}
-                   <div className="flex items-center justify-between mb-6 gap-6 flex-wrap p-8 pb-0">
-                     <div className="flex gap-2 flex-1 min-w-[350px]">
+                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between mb-3 lg:mb-6 gap-2.5 sm:gap-4 p-3.5 sm:p-6 lg:p-8 pb-0 w-full min-w-0">
+                     <div className="grid grid-cols-4 gap-1.5 sm:gap-2 w-full sm:flex-1 min-w-0">
                         {['Tema', 'Conteúdos', 'Mídia', 'Legenda'].map(tab => {
                           const isActive = activeTab === (tab === 'Conteúdos' ? 'Conteúdo' : tab);
                           return (
                             <button
                               key={tab}
                               onClick={() => setActiveTab(tab === 'Conteúdos' ? 'Conteúdo' : tab as any)}
-                              className={`flex-1 relative py-3 px-4 rounded-xl flex flex-col items-center justify-center gap-1 transition-all
+                              className={`relative py-2 px-1 sm:py-3 sm:px-4 rounded-xl flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all min-w-0
                                 ${isActive ? 'bg-[#1C1C1E] text-white' : 'text-white/40 hover:text-white hover:bg-white/5'}
                               `}
                             >
-                              <span className="text-[13px] font-bold tracking-wide">{tab}</span>
-                              <span className={`text-[9px] font-bold uppercase tracking-widest ${editTask.status?.toLowerCase() === 'aprovado' || editTask.status?.toLowerCase() === 'aprovado-programar' ? 'text-emerald-400' : 'text-white/30'}`}>
+                              <span className="text-[11px] sm:text-[13px] font-bold tracking-wide truncate max-w-full">{tab}</span>
+                              <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest truncate max-w-full ${editTask.status?.toLowerCase() === 'aprovado' || editTask.status?.toLowerCase() === 'aprovado-programar' ? 'text-emerald-400' : 'text-white/30'}`}>
                                 {editTask.status?.toLowerCase() === 'aprovado' || editTask.status?.toLowerCase() === 'aprovado-programar' ? 'Aprovado' : 'Pendente'}
                               </span>
                               
@@ -1770,20 +1995,20 @@ const ClientCalendar = () => {
                           }
                           setEditTask(null);
                         }} 
-                        className="h-12 px-6 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all shrink-0 ml-auto"
+                        className="h-10 sm:h-12 px-4 sm:px-6 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all shrink-0 w-full sm:w-auto sm:ml-auto"
                       >
                         <CheckCircle2 className="w-4 h-4 mr-2" /> Salvar e Fechar
                       </Button>
                    </div>
                 
-                <div className="flex-1 p-8 overflow-y-auto custom-scrollbar pb-32 min-h-0">
+                <div className="flex-1 p-3.5 sm:p-6 lg:p-8 lg:overflow-y-auto custom-scrollbar lg:pb-32 min-h-0 min-w-0 w-full">
                     {/* Status Real Banner */}
                     {editTask && (() => {
                       const modalStatus = getCalendarTaskStatus(editTask, kanbanCards);
                       return (
-                        <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 mb-6 ${modalStatus.badgeBg} ${modalStatus.badgeBorder}`}>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-black uppercase tracking-wider ${modalStatus.badgeText}`}>
+                        <div className={`p-3 sm:p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-2.5 mb-5 sm:mb-6 w-full min-w-0 ${modalStatus.badgeBg} ${modalStatus.badgeBorder}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-[11px] sm:text-xs font-black uppercase tracking-wider truncate ${modalStatus.badgeText}`}>
                               Status: {modalStatus.label}
                             </span>
                           </div>
@@ -1794,7 +2019,7 @@ const ClientCalendar = () => {
                                 setEditTask(null);
                                 navigate(`/funcionario/${modalStatus.linkedCard?.employeeId}?cardId=${modalStatus.linkedCard?.id}`);
                               }}
-                              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold gap-1"
+                              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold gap-1 shrink-0"
                             >
                               <Kanban className="w-3.5 h-3.5" /> Ver Card no Kanban
                             </Button>
@@ -1804,20 +2029,20 @@ const ClientCalendar = () => {
                     })()}
 
                    {/* Form Content */}
-                   <div className="space-y-6">
+                   <div className="space-y-6 w-full min-w-0">
                      {activeTab === 'Tema' && (
-                        <div className="space-y-6 animate-in fade-in duration-500">
+                        <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-500">
                            <div>
-                             <label className="text-[13px] font-bold text-white/90 mb-2.5 block tracking-wide">Tema do conteúdo</label>
+                             <label className="text-[13px] font-bold text-white/90 mb-2 block tracking-wide">Tema do conteúdo</label>
                              <Input 
                                value={editTask.clientName} 
                                onChange={e => setEditTask(prev => prev ? { ...prev, clientName: e.target.value } : null)} 
                                onBlur={() => handleEditSave('clientName', editTask.clientName)} 
-                               className="bg-[#121214] border-white/5 rounded-xl h-12 focus-visible:ring-[#8B5CF6] text-white/90 text-sm font-medium shadow-inner" 
+                               className="bg-[#121214] border-white/5 rounded-xl h-11 sm:h-12 focus-visible:ring-[#8B5CF6] text-white/90 text-sm font-medium shadow-inner" 
                              />
                            </div>
                            <div className="space-y-3">
-                             <label className="text-[13px] font-bold text-white/90 mb-2.5 block tracking-wide">Links de Referências</label>
+                             <label className="text-[13px] font-bold text-white/90 mb-2 block tracking-wide">Links de Referências</label>
                              {['Cole o primeiro link de referência...', 'Cole o segundo link de referência...', 'Cole o terceiro link de referência...'].map((placeholder, i) => (
                                <Input 
                                  key={i}
@@ -1829,7 +2054,7 @@ const ClientCalendar = () => {
                                    setEditTask(p => p ? { ...p, reference_links: newLinks } : null);
                                  }} 
                                  onBlur={() => handleEditSave('reference_links', editTask.reference_links || [])}
-                                 className="bg-[#121214] border-white/5 rounded-xl h-12 focus-visible:ring-[#8B5CF6] text-white/90 text-[13px] placeholder:text-white/20 shadow-inner" 
+                                 className="bg-[#121214] border-white/5 rounded-xl h-11 sm:h-12 focus-visible:ring-[#8B5CF6] text-white/90 text-[13px] placeholder:text-white/20 shadow-inner" 
                                />
                              ))}
                            </div>
@@ -1837,57 +2062,57 @@ const ClientCalendar = () => {
                       )}
 
                      {activeTab === 'Conteúdo' && (
-                        <div className="space-y-6 animate-in fade-in duration-500">
+                        <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-500">
                            <div>
-                             <label className="text-[13px] font-bold text-white/90 mb-2.5 block tracking-wide">Tipo de Conteúdo</label>
+                             <label className="text-[13px] font-bold text-white/90 mb-2 block tracking-wide">Tipo de Conteúdo</label>
                              <Select value={editTask.contentType} onValueChange={v => handleEditSave('contentType', v)}>
-                               <SelectTrigger className="bg-[#121214] border-white/5 rounded-xl h-12 focus:ring-[#8B5CF6] text-white/90 text-sm shadow-inner"><SelectValue placeholder="Formato" /></SelectTrigger>
+                               <SelectTrigger className="bg-[#121214] border-white/5 rounded-xl h-11 sm:h-12 focus:ring-[#8B5CF6] text-white/90 text-sm shadow-inner"><SelectValue placeholder="Formato" /></SelectTrigger>
                                <SelectContent className="bg-[#161618] border-white/10 text-white rounded-xl shadow-2xl">
                                  {CONTENT_TYPES.map(t => <SelectItem key={t} value={t} className="focus:bg-white/5 focus:text-white rounded-lg cursor-pointer">{t}</SelectItem>)}
                                </SelectContent>
                              </Select>
                            </div>
                            <div>
-                             <label className="text-[13px] font-bold text-white/90 mb-2.5 block tracking-wide">Descrição do Conteúdo</label>
+                             <label className="text-[13px] font-bold text-white/90 mb-2 block tracking-wide">Descrição do Conteúdo</label>
                              <Textarea 
                                placeholder="Digite o conteúdo aqui..." 
                                value={editTask.content} 
                                onChange={e => setEditTask(p => p ? { ...p, content: e.target.value } : null)} 
                                onBlur={() => handleEditSave('content', editTask.content || '')}
-                               className="bg-[#121214] border-white/5 rounded-xl min-h-[250px] focus-visible:ring-[#8B5CF6] text-white/90 text-[14px] leading-relaxed p-5 shadow-inner resize-none" 
+                               className="bg-[#121214] border-white/5 rounded-xl min-h-[200px] sm:min-h-[250px] focus-visible:ring-[#8B5CF6] text-white/90 text-[14px] leading-relaxed p-4 sm:p-5 shadow-inner resize-none" 
                              />
                            </div>
                         </div>
                       )}
 
                      {activeTab === 'Mídia' && (
-                        <div className="space-y-6 animate-in fade-in duration-500">
-                           <label className="text-[13px] font-bold text-white/90 mb-2.5 block tracking-wide">Arquivos de Mídia ({(editTask.images || []).length})</label>
+                        <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-500">
+                           <label className="text-[13px] font-bold text-white/90 mb-2 block tracking-wide">Arquivos de Mídia ({(editTask.images || []).length})</label>
                            
                            {(editTask.images || []).length > 0 && (
-                             <div className="grid grid-cols-3 gap-4 mb-4">
+                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                                {(editTask.images || []).map((img, idx) => (
                                  <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-white/5 group shadow-lg bg-[#121214]">
                                    {isVideoUrl(img) ? (
                                      <video src={img} className="w-full h-full object-cover" controls />
                                    ) : (
-                                     <img src={img} className="w-full h-full object-cover" />
+                                     <img src={img} className="w-full h-full object-cover" onClick={() => setPreviewImage(img)} />
                                    )}
                                    <button 
                                      type="button" 
                                      onClick={() => {
                                        setDeleteImageConfirm({ url: img, index: idx });
                                      }}
-                                     className="absolute top-2 right-2 w-7 h-7 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all shadow-lg backdrop-blur-md z-10"
+                                     className="absolute top-2 right-2 w-8 h-8 sm:w-7 sm:h-7 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all shadow-lg backdrop-blur-md z-10"
                                    >
-                                     <X className="w-3.5 h-3.5" />
+                                     <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                                    </button>
-                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                      <button onClick={() => setPreviewImage(img)} type="button" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all backdrop-blur-md">
-                                        <ZoomIn className="w-5 h-5 text-white/90" />
+                                   <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent lg:inset-0 lg:bg-black/40 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                      <button onClick={() => setPreviewImage(img)} type="button" className="w-9 h-9 sm:w-10 sm:h-10 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all backdrop-blur-md">
+                                        <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5 text-white/90" />
                                       </button>
-                                      <button type="button" onClick={() => handleDownload(img)} className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all backdrop-blur-md">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/90"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                      <button type="button" onClick={() => handleDownload(img)} className="w-9 h-9 sm:w-10 sm:h-10 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all backdrop-blur-md">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/90"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                                       </button>
                                    </div>
                                  </div>
@@ -1896,12 +2121,12 @@ const ClientCalendar = () => {
                            )}
 
                            <div 
-                             className="border-2 border-dashed border-white/10 rounded-2xl bg-[#121214] p-10 flex flex-col items-center justify-center text-white/50 hover:bg-[#1C1C1E] hover:border-white/20 transition-all cursor-pointer group shadow-inner"
+                             className="border-2 border-dashed border-white/10 rounded-2xl bg-[#121214] p-6 sm:p-10 flex flex-col items-center justify-center text-white/50 hover:bg-[#1C1C1E] hover:border-white/20 transition-all cursor-pointer group shadow-inner"
                              onClick={() => editFileInputRef.current?.click()}
                              onDragOver={(e) => e.preventDefault()}
                              onDrop={(e) => handleDropUpload(e, 'edit')}
                            >
-                             <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4 group-hover:bg-[#8B5CF6]/20 group-hover:text-[#8B5CF6] transition-all">
+                             <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-[#8B5CF6]/20 group-hover:text-[#8B5CF6] transition-all">
                                <Upload className="w-5 h-5" />
                              </div>
                              <span className="text-sm font-bold text-white/90 mb-1">Adicionar mais mídias</span>
@@ -1912,171 +2137,30 @@ const ClientCalendar = () => {
                       )}
 
                      {activeTab === 'Legenda' && (
-                        <div className="space-y-6 animate-in fade-in duration-500">
+                        <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-500">
                            <div>
-                             <label className="text-[13px] font-bold text-white/90 mb-2.5 block tracking-wide">Legenda do Post</label>
+                             <label className="text-[13px] font-bold text-white/90 mb-2 block tracking-wide">Legenda do Post</label>
                              <Textarea 
                                placeholder="Escreva a legenda incrível aqui..." 
                                value={editTask.description} 
                                onChange={e => setEditTask(p => p ? { ...p, description: e.target.value } : null)} 
                                onBlur={() => handleEditSave('description', editTask.description || '')}
-                               className="bg-[#121214] border-white/5 rounded-xl min-h-[300px] focus-visible:ring-[#8B5CF6] text-white/90 text-[14px] leading-relaxed p-5 shadow-inner resize-none" 
+                               className="bg-[#121214] border-white/5 rounded-xl min-h-[220px] sm:min-h-[300px] focus-visible:ring-[#8B5CF6] text-white/90 text-[14px] leading-relaxed p-4 sm:p-5 shadow-inner resize-none" 
                              />
                            </div>
                         </div>
                       )}
                    </div>
                 </div>
-
-                {/* Floating Capsule Footer */}
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw]">
-                  <div className="bg-[#1a1a1c]/95 backdrop-blur-3xl border border-white/10 rounded-full p-2 flex items-center justify-center shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-x-auto custom-scrollbar flex-nowrap">
-                    {/* Botão Anterior */}
-                    <Button 
-                      variant="ghost" 
-                      onClick={handlePrevTask}
-                      disabled={sortedMonthTasks.findIndex(t => t.id === editTask.id) <= 0}
-                      className="rounded-full h-10 px-3 md:px-4 text-white/60 hover:text-white hover:bg-white/5 font-bold text-xs shrink-0"
-                    >
-                      <ChevronLeft className="w-4 h-4 mr-1" /> <span className="hidden md:inline">Anterior</span>
-                    </Button>
-
-                    <div className="flex items-center gap-1 md:gap-1.5 px-2 shrink-0">
-                       {/* Seletor de Status Customizado com Portal (escape de overflow) */}
-                       <div className="relative">
-                         <button
-                           ref={statusBtnRef}
-                           type="button"
-                           onClick={() => {
-                             if (statusBtnRef.current) {
-                               const rect = statusBtnRef.current.getBoundingClientRect();
-                               setStatusMenuPos({ top: rect.top - 8, left: rect.left });
-                             }
-                             setShowStatusMenu(p => !p);
-                           }}
-                           className="h-9 border border-white/5 bg-white/5 hover:bg-white/10 rounded-full font-bold text-[10px] md:text-[11px] uppercase tracking-wider focus:ring-0 shadow-none px-3 md:px-4 text-white flex items-center gap-1.5 cursor-pointer"
-                         >
-                           <span>
-                             {normalizeStatusValue(editTask.status) === 'aprovado' && '🟢 Aprovado'}
-                             {normalizeStatusValue(editTask.status) === 'em produção' && '🟡 Aprovado MAC'}
-                             {normalizeStatusValue(editTask.status) === 'alteração' && '🟠 Alteração'}
-                             {normalizeStatusValue(editTask.status) === 'publicado' && '🔵 Aprovação Cliente'}
-                             {normalizeStatusValue(editTask.status) === 'para correção' && '🔴 Para Correção'}
-                             {normalizeStatusValue(editTask.status) === 'reprovado' && '💔 Reprovado'}
-                             {normalizeStatusValue(editTask.status) === 'pendente' && '⚫ Pendente'}
-                             {!['aprovado', 'em produção', 'alteração', 'publicado', 'para correção', 'reprovado', 'pendente'].includes(normalizeStatusValue(editTask.status)) && 'STATUS'}
-                           </span>
-                           <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                         </button>
-
-                         {showStatusMenu && statusMenuPos && createPortal(
-                           <>
-                             <div className="fixed inset-0 z-[99998]" onClick={() => setShowStatusMenu(false)} />
-                             <div 
-                               style={{ top: statusMenuPos.top, left: statusMenuPos.left, transform: 'translateY(-100%)' }}
-                               className="fixed z-[99999] min-w-[200px] bg-[#1C1C1E] border border-white/10 text-white rounded-xl shadow-2xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 pointer-events-auto"
-                               onPointerDown={(e) => e.stopPropagation()}
-                               onMouseDown={(e) => e.stopPropagation()}
-                             >
-                               {[
-                                 { value: 'aprovado', label: '🟢 Aprovado', color: 'text-emerald-400' },
-                                 { value: 'em produção', label: '🟡 Aprovado MAC', color: 'text-yellow-500' },
-                                 { value: 'alteração', label: '🟠 Alteração', color: 'text-orange-500' },
-                                 { value: 'publicado', label: '🔵 Aprovação Cliente', color: 'text-blue-400' },
-                                 { value: 'para correção', label: '🔴 Para Correção', color: 'text-red-500' },
-                                 { value: 'reprovado', label: '💔 Reprovado', color: 'text-rose-500' },
-                                 { value: 'pendente', label: '⚫ Pendente', color: 'text-zinc-400' },
-                               ].map(item => (
-                                 <button
-                                   key={item.value}
-                                   type="button"
-                                   onPointerDown={(e) => e.stopPropagation()}
-                                   onMouseDown={(e) => e.stopPropagation()}
-                                   onClick={(e) => {
-                                     e.preventDefault();
-                                     e.stopPropagation();
-                                     handleEditSave('status', item.value);
-                                     setShowStatusMenu(false);
-                                   }}
-                                   className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-between hover:bg-white/5 pointer-events-auto ${item.color} ${normalizeStatusValue(editTask.status) === item.value ? 'bg-white/10' : ''}`}
-                                 >
-                                   <span>{item.label}</span>
-                                   {normalizeStatusValue(editTask.status) === item.value && <Check className="w-3.5 h-3.5 text-white" />}
-                                 </button>
-                               ))}
-                             </div>
-                           </>,
-                           document.body
-                         )}
-                       </div>
-
-                       <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />
-
-                       {/* Actions */}
-                       <button onClick={() => setShowCommentsPanel(p => !p)} className={`relative w-8 h-8 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-full transition-colors ${showCommentsPanel ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white/60 hover:text-white'}`} title="Comentários">
-                         <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                         {(!editTask.comments || editTask.comments.length === 0 || editTask.comments.length <= (readComments[editTask.id] || 0)) ? null : (
-                            <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                            </span>
-                         )}
-                       </button>
-                       <button onClick={() => { setActionDate(editTask.date); setActionClientId(editTask.calendarClientId || ''); setActionDialog({ type: 'copy_task', taskId: editTask.id }) }} className="w-8 h-8 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-white/5 text-white/60 hover:text-white transition-colors" title="Duplicar">
-                         <Copy className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       </button>
-                       <button onClick={() => {
-                          const idx = editTask.images?.indexOf(editTask.imageUrl || '') || 0;
-                          setAdjustmentModalData({ task: editTask, index: idx === -1 ? 0 : idx });
-                       }} className="w-8 h-8 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-white/5 text-white/60 hover:text-white transition-colors" title="Formato e Redes">
-                         <Settings2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       </button>
-                       <button
-                         onClick={() => handleSendToKanban()}
-                         disabled={isSendingToKanban}
-                         className="h-8 md:h-9 px-2.5 shrink-0 flex items-center gap-1.5 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-blue-200 transition-colors text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-                         title="Enviar direto para Correção Institucional"
-                       >
-                         {isSendingToKanban ? (
-                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                         ) : (
-                           <Kanban className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                         )}
-                         <span className="hidden sm:inline">Enviar p/ Correção</span>
-                       </button>
-
-                       <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />
-
-                       {/* Excluir */}
-                       <button 
-                         onClick={() => setDeleteConfirm(editTask.id)}
-                         className="w-8 h-8 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-red-500/10 text-red-500/80 hover:text-red-500 transition-colors" 
-                         title="Excluir"
-                       >
-                         <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       </button>
-                    </div>
-
-                    {/* Botão Próximo */}
-                    <Button 
-                      variant="ghost" 
-                      onClick={handleNextTask}
-                      disabled={sortedMonthTasks.findIndex(t => t.id === editTask.id) >= sortedMonthTasks.length - 1}
-                      className="rounded-full h-10 px-3 md:px-4 text-white/60 hover:text-white hover:bg-white/5 font-bold text-xs shrink-0"
-                    >
-                      <span className="hidden md:inline">Próximo</span> <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
               </div>
               
               {/* Sliding Comments Panel */}
-              <div className={`absolute top-0 bottom-0 right-0 w-[400px] bg-[#161618] border-l border-white/5 shadow-2xl flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] z-50 ${showCommentsPanel ? 'translate-x-0' : 'translate-x-full'}`}>
-                <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className={`absolute top-0 bottom-0 right-0 w-full sm:w-[400px] bg-[#161618] border-l border-white/5 shadow-2xl flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] z-50 ${showCommentsPanel ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="p-5 sm:p-6 border-b border-white/5 flex items-center justify-between">
                   <h3 className="text-white font-bold tracking-wide">Comentários</h3>
-                  <button onClick={() => setShowCommentsPanel(false)} className="text-white/50 hover:text-white"><X className="w-5 h-5"/></button>
+                  <button onClick={() => setShowCommentsPanel(false)} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/70 hover:text-white"><X className="w-5 h-5"/></button>
                 </div>
-                <div ref={commentsContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div ref={commentsContainerRef} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
                   {(!editTask.comments || editTask.comments.length === 0) ? (
                     <div className="text-center text-white/40 text-[13px] py-10">Nenhum comentário ainda.</div>
                   ) : (
@@ -2123,6 +2207,147 @@ const ClientCalendar = () => {
                 </div>
               </div>
               </div>
+
+              {/* Floating Capsule Footer (Pinned at bottom, fits 100% of mobile width without cutoff) */}
+              <div className="absolute bottom-2.5 lg:bottom-6 inset-x-2 lg:inset-x-auto lg:left-[calc(50%+240px)] lg:-translate-x-1/2 z-[100] flex justify-center pointer-events-none">
+                <div className="pointer-events-auto bg-[#1a1a1c]/95 backdrop-blur-3xl border border-white/15 rounded-full p-1 sm:p-2 flex items-center justify-between sm:justify-center shadow-[0_20px_60px_rgba(0,0,0,0.75)] w-full sm:w-auto max-w-full">
+                  {/* Botão Anterior */}
+                  <Button 
+                    variant="ghost" 
+                    onClick={handlePrevTask}
+                    disabled={sortedMonthTasks.findIndex(t => t.id === editTask.id) <= 0}
+                    className="rounded-full h-8 w-8 sm:h-10 sm:w-auto p-0 sm:px-3 md:px-4 text-white/70 hover:text-white hover:bg-white/5 font-bold text-xs shrink-0"
+                  >
+                    <ChevronLeft className="w-4 h-4 sm:mr-1" /> <span className="hidden md:inline">Anterior</span>
+                  </Button>
+
+                  <div className="flex items-center justify-center gap-0.5 sm:gap-1.5 px-0.5 sm:px-2 min-w-0 flex-1 sm:flex-initial">
+                     {/* Seletor de Status Customizado com Portal (escape de overflow) */}
+                     <div className="relative min-w-0">
+                       <button
+                         ref={statusBtnRef}
+                         type="button"
+                         onClick={() => {
+                           if (statusBtnRef.current) {
+                             const rect = statusBtnRef.current.getBoundingClientRect();
+                             setStatusMenuPos({ top: rect.top - 8, left: Math.max(12, Math.min(rect.left, window.innerWidth - 220)) });
+                           }
+                           setShowStatusMenu(p => !p);
+                         }}
+                         className="h-8 sm:h-9 border border-white/10 bg-white/5 hover:bg-white/10 rounded-full font-bold text-[9px] sm:text-[10px] md:text-[11px] uppercase tracking-wider focus:ring-0 shadow-none px-2 sm:px-3 md:px-4 text-white flex items-center gap-1 cursor-pointer max-w-[105px] sm:max-w-none"
+                       >
+                         <span className="truncate">
+                           {normalizeStatusValue(editTask.status) === 'aprovado' && '🟢 Aprovado'}
+                           {normalizeStatusValue(editTask.status) === 'em produção' && '🟡 Aprovado MAC'}
+                           {normalizeStatusValue(editTask.status) === 'alteração' && '🟠 Alteração'}
+                           {normalizeStatusValue(editTask.status) === 'publicado' && '🔵 Aprovação Cliente'}
+                           {normalizeStatusValue(editTask.status) === 'para correção' && '🔴 Para Correção'}
+                           {normalizeStatusValue(editTask.status) === 'reprovado' && '💔 Reprovado'}
+                           {normalizeStatusValue(editTask.status) === 'pendente' && '⚫ Pendente'}
+                           {!['aprovado', 'em produção', 'alteração', 'publicado', 'para correção', 'reprovado', 'pendente'].includes(normalizeStatusValue(editTask.status)) && 'STATUS'}
+                         </span>
+                         <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+                       </button>
+
+                       {showStatusMenu && statusMenuPos && createPortal(
+                         <>
+                           <div className="fixed inset-0 z-[99998]" onClick={() => setShowStatusMenu(false)} />
+                           <div 
+                             style={{ top: statusMenuPos.top, left: statusMenuPos.left, transform: 'translateY(-100%)' }}
+                             className="fixed z-[99999] min-w-[200px] bg-[#1C1C1E] border border-white/10 text-white rounded-xl shadow-2xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 pointer-events-auto"
+                             onPointerDown={(e) => e.stopPropagation()}
+                             onMouseDown={(e) => e.stopPropagation()}
+                           >
+                             {[
+                               { value: 'aprovado', label: '🟢 Aprovado', color: 'text-emerald-400' },
+                               { value: 'em produção', label: '🟡 Aprovado MAC', color: 'text-yellow-500' },
+                               { value: 'alteração', label: '🟠 Alteração', color: 'text-orange-500' },
+                               { value: 'publicado', label: '🔵 Aprovação Cliente', color: 'text-blue-400' },
+                               { value: 'para correção', label: '🔴 Para Correção', color: 'text-red-500' },
+                               { value: 'reprovado', label: '💔 Reprovado', color: 'text-rose-500' },
+                               { value: 'pendente', label: '⚫ Pendente', color: 'text-zinc-400' },
+                             ].map(item => (
+                               <button
+                                 key={item.value}
+                                 type="button"
+                                 onPointerDown={(e) => e.stopPropagation()}
+                                 onMouseDown={(e) => e.stopPropagation()}
+                                 onClick={(e) => {
+                                   e.preventDefault();
+                                   e.stopPropagation();
+                                   handleEditSave('status', item.value);
+                                   setShowStatusMenu(false);
+                                 }}
+                                 className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-between hover:bg-white/5 pointer-events-auto ${item.color} ${normalizeStatusValue(editTask.status) === item.value ? 'bg-white/10' : ''}`}
+                               >
+                                 <span>{item.label}</span>
+                                 {normalizeStatusValue(editTask.status) === item.value && <Check className="w-3.5 h-3.5 text-white" />}
+                               </button>
+                             ))}
+                           </div>
+                         </>,
+                         document.body
+                       )}
+                     </div>
+
+                     <div className="w-px h-4 sm:h-5 bg-white/10 mx-0.5 shrink-0" />
+
+                     {/* Actions */}
+                     <button onClick={() => setShowCommentsPanel(p => !p)} className={`relative w-7 h-7 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center rounded-full transition-colors ${showCommentsPanel ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white/70 hover:text-white'}`} title="Comentários">
+                       <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                       {(!editTask.comments || editTask.comments.length === 0 || editTask.comments.length <= (readComments[editTask.id] || 0)) ? null : (
+                          <span className="absolute top-0.5 right-0.5 flex h-2 w-2 sm:h-2.5 sm:w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                          </span>
+                       )}
+                     </button>
+                     <button onClick={() => { setActionDate(editTask.date); setActionClientId(editTask.calendarClientId || ''); setActionDialog({ type: 'copy_task', taskId: editTask.id }) }} className="w-7 h-7 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-colors" title="Duplicar">
+                       <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                     </button>
+                     <button onClick={() => {
+                        const idx = editTask.images?.indexOf(editTask.imageUrl || '') || 0;
+                        setAdjustmentModalData({ task: editTask, index: idx === -1 ? 0 : idx });
+                     }} className="w-7 h-7 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-white/5 text-white/70 hover:text-white transition-colors" title="Formato e Redes">
+                       <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                     </button>
+                     <button
+                       onClick={() => handleSendToKanban()}
+                       disabled={isSendingToKanban}
+                       className="h-7 w-7 sm:w-auto sm:h-9 sm:px-2.5 shrink-0 flex items-center justify-center gap-1.5 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-blue-200 transition-colors text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+                       title="Enviar direto para Correção Institucional"
+                     >
+                       {isSendingToKanban ? (
+                         <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+                       ) : (
+                         <Kanban className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                       )}
+                       <span className="hidden sm:inline">Enviar p/ Correção</span>
+                     </button>
+
+                     <div className="w-px h-4 sm:h-5 bg-white/10 mx-0.5 shrink-0" />
+
+                     {/* Excluir */}
+                     <button 
+                       onClick={() => setDeleteConfirm(editTask.id)}
+                       className="w-7 h-7 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-red-500/10 text-red-500/80 hover:text-red-500 transition-colors" 
+                       title="Excluir"
+                     >
+                       <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                     </button>
+                  </div>
+
+                  {/* Botão Próximo */}
+                  <Button 
+                    variant="ghost" 
+                    onClick={handleNextTask}
+                    disabled={sortedMonthTasks.findIndex(t => t.id === editTask.id) >= sortedMonthTasks.length - 1}
+                    className="rounded-full h-8 w-8 sm:h-10 sm:w-auto p-0 sm:px-3 md:px-4 text-white/70 hover:text-white hover:bg-white/5 font-bold text-xs shrink-0"
+                  >
+                    <span className="hidden md:inline">Próximo</span> <ChevronRight className="w-4 h-4 sm:ml-1" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -2130,7 +2355,7 @@ const ClientCalendar = () => {
 
       {/* Action Prompt Dialog (Move/Copy) */}
       <Dialog open={!!actionDialog} onOpenChange={(open) => !open && setActionDialog(null)}>
-        <DialogContent className="bg-[#121214] border-white/5 text-white sm:max-w-md rounded-2xl shadow-2xl">
+        <DialogContent className="bg-[#121214] border-white/5 text-white w-[92vw] sm:max-w-md rounded-2xl shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">
               {actionDialog?.type === 'move_date' ? 'Mover para Data' : 'Duplicar Card'}
@@ -2185,12 +2410,143 @@ const ClientCalendar = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Feed Clean Image Viewer Modal */}
+      <Dialog open={!!feedPreviewTask} onOpenChange={(open) => !open && setFeedPreviewTask(null)}>
+        <DialogContent className="!flex flex-col bg-[#0c0c0e]/98 backdrop-blur-2xl border border-white/10 text-white w-[94vw] max-w-[94vw] sm:max-w-lg p-0 shadow-2xl rounded-3xl overflow-hidden [&>button.absolute]:hidden">
+          {feedPreviewTask && (() => {
+            const mediaList = feedPreviewTask.images && feedPreviewTask.images.length > 0
+              ? feedPreviewTask.images
+              : (feedPreviewTask.imageUrl ? [feedPreviewTask.imageUrl] : []);
+            const currentMedia = mediaList[feedPreviewIndex] || feedPreviewTask.imageUrl || '';
+
+            return (
+              <div className="flex flex-col w-full max-w-full overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/10 bg-[#121214]">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-red-600/15 border border-red-500/30 flex items-center justify-center text-[11px] font-black text-red-400 shrink-0">
+                      {(feedPreviewTask.clientName || 'PO').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-xs sm:text-sm font-black uppercase text-white truncate">
+                        {feedPreviewTask.clientName}
+                      </h3>
+                      <p className="text-[10px] font-bold text-white/50">
+                        {new Date(`${feedPreviewTask.date}T12:00:00`).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-[9px] font-black bg-red-600/20 text-red-400 border border-red-500/30 px-2 py-1 rounded-lg uppercase tracking-wider shrink-0">
+                    {feedPreviewTask.status || 'Pendente'}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setFeedPreviewTask(null)}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
+                    title="Fechar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Image / Video Container */}
+                <div className="relative w-full bg-black flex items-center justify-center min-h-[260px] max-h-[68dvh] sm:max-h-[72vh] overflow-hidden p-2">
+                  {currentMedia && (
+                    isVideoUrl(currentMedia) ? (
+                      <video
+                        src={currentMedia}
+                        className="w-auto h-auto max-w-full max-h-[64dvh] sm:max-h-[68vh] object-contain rounded-xl mx-auto"
+                        controls
+                        autoPlay
+                      />
+                    ) : (
+                      <img
+                        src={currentMedia}
+                        alt={feedPreviewTask.clientName}
+                        className="w-auto h-auto max-w-full max-h-[64dvh] sm:max-h-[68vh] object-contain rounded-xl mx-auto shadow-2xl"
+                      />
+                    )
+                  )}
+
+                  {mediaList.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setFeedPreviewIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/70 hover:bg-black/90 border border-white/15 flex items-center justify-center text-white shadow-xl"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFeedPreviewIndex((prev) => (prev + 1) % mediaList.length)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/70 hover:bg-black/90 border border-white/15 flex items-center justify-center text-white shadow-xl"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-[10px] font-bold text-white">
+                        {feedPreviewIndex + 1} / {mediaList.length}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Footer with optional caption & edit button */}
+                <div className="px-4 py-3 bg-[#121214] border-t border-white/10 flex flex-col gap-2.5">
+                  {feedPreviewTask.description && (
+                    <p className="text-xs text-white/75 leading-relaxed max-h-20 overflow-y-auto custom-scrollbar whitespace-pre-wrap">
+                      {feedPreviewTask.description}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const taskToEdit = feedPreviewTask;
+                        setFeedPreviewTask(null);
+                        setEditTask(taskToEdit);
+                      }}
+                      className="h-9 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold gap-1.5"
+                    >
+                      <Edit className="w-3.5 h-3.5" /> Editar Card
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setFeedPreviewTask(null)}
+                      className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold"
+                    >
+                      Fechar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* Image preview modal */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="bg-[#121214]/90 backdrop-blur-xl border-white/10 max-w-4xl p-2 shadow-2xl rounded-2xl border-none">
+        <DialogContent className="!flex flex-col bg-[#121214]/95 backdrop-blur-xl border border-white/10 w-[94vw] max-w-[94vw] sm:max-w-4xl p-2 sm:p-4 shadow-2xl rounded-2xl overflow-hidden [&>button.absolute]:hidden">
           {previewImage && (
-            <div className="relative flex items-center justify-center group">
-              {isVideoUrl(previewImage) ? <video src={previewImage} className="w-full h-auto max-h-[85vh] object-contain rounded-xl" controls /> : <img src={previewImage} alt="" className="w-full h-auto max-h-[85vh] object-contain rounded-xl" />}
+            <div className="relative flex items-center justify-center group w-full min-h-[240px]">
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-2 right-2 z-20 w-10 h-10 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center text-white border border-white/15 shadow-xl"
+                title="Fechar visualização"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {isVideoUrl(previewImage) ? (
+                <video src={previewImage} className="w-auto h-auto max-w-full max-h-[82dvh] sm:max-h-[85vh] object-contain rounded-xl mx-auto" controls />
+              ) : (
+                <img src={previewImage} alt="" className="w-auto h-auto max-w-full max-h-[82dvh] sm:max-h-[85vh] object-contain rounded-xl mx-auto" />
+              )}
               
               {editTask?.images && editTask.images.length > 1 && (
                 <>
@@ -2203,9 +2559,9 @@ const ClientCalendar = () => {
                       const newIndex = (currentIndex - 1 + editTask.images!.length) % editTask.images!.length;
                       setPreviewImage(editTask.images![newIndex]);
                     }} 
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-black/65 hover:bg-black/85 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shadow-xl border border-white/10"
                   >
-                    <ChevronLeft className="w-6 h-6" />
+                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                   <button 
                     type="button"
@@ -2216,9 +2572,9 @@ const ClientCalendar = () => {
                       const newIndex = (currentIndex + 1) % editTask.images!.length;
                       setPreviewImage(editTask.images![newIndex]);
                     }} 
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-black/65 hover:bg-black/85 rounded-full flex items-center justify-center text-white backdrop-blur-sm transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shadow-xl border border-white/10"
                   >
-                    <ChevronRight className="w-6 h-6" />
+                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 </>
               )}

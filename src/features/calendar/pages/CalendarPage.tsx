@@ -117,76 +117,76 @@ const CalendarPage = () => {
   };
 
   return (
-    <div className="min-h-screen gradient-bg">
-      <header className="page-header">
-        <div className="flex items-center gap-4 px-6 py-3.5">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl">
+    <div className="min-h-screen gradient-bg w-full max-w-full overflow-x-hidden touch-pan-y">
+      <header className="page-header w-full max-w-full overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3.5">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="hover:bg-secondary rounded-xl h-10 w-10 shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-primary/8">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2.5 rounded-xl bg-primary/10 shrink-0">
               <Calendar className="w-5 h-5 text-primary" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold gradient-text">Calendários</h1>
-              <p className="text-[11px] text-muted-foreground">Planejamento de conteúdo por cliente</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold gradient-text truncate">Calendários</h1>
+              <p className="text-[11px] text-muted-foreground truncate">Planejamento de conteúdo por cliente</p>
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             <Button 
               variant="outline" 
               size="sm" 
               onClick={handleManualRefresh}
               disabled={isRefreshing}
-              className="rounded-xl text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/70 h-9"
+              className="rounded-xl text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/80 h-10 px-3"
             >
-              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Atualizar
+              <RefreshCw className={`w-4 h-4 sm:mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Atualizar</span>
             </Button>
             
             {loggedUserRole !== 'GUEST' && (
-              <Button size="sm" className="btn-primary-glow rounded-xl text-xs h-9" onClick={() => setShowAdd(true)}>
-                <Plus className="w-3.5 h-3.5 mr-1" /> Novo Cliente
+              <Button size="sm" className="btn-primary-glow rounded-xl text-xs h-10 px-3.5 font-bold" onClick={() => setShowAdd(true)}>
+                <Plus className="w-4 h-4 mr-1" /> Novo Cliente
               </Button>
             )}
           </div>
         </div>
       </header>
 
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-          {/* Barra Lateral Esquerda — Filtro por Equipe (Bolinhas dos Funcionários) */}
+      <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full overflow-x-hidden">
+        <div className="flex flex-col md:flex-row gap-5 md:gap-6 items-start w-full">
+          {/* Barra Lateral Esquerda — Filtro por Equipe (Travado sem scroll lateral no celular) */}
           {loggedUserRole !== 'GUEST' && employees.length > 0 && (
-            <aside className="w-full md:w-64 flex-shrink-0 glass-card p-4 border-white/10">
-              <div className="flex items-center gap-2 mb-3 px-1">
+            <aside className="w-full md:w-64 flex-shrink-0 glass-card p-4 border-white/10 overflow-hidden">
+              <div className="flex items-center gap-2 mb-2 px-1">
                 <Users className="w-4 h-4 text-primary" />
-                <span className="text-xs font-bold uppercase tracking-wider text-white/80">Equipe</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-white/90">Equipe</span>
               </div>
-              <p className="text-[11px] text-white/40 mb-3 px-1">
-                Clique na pessoa para filtrar os clientes vinculados a ela.
+              <p className="text-xs text-white/50 mb-3 px-1">
+                Toque na pessoa para filtrar os clientes vinculados a ela.
               </p>
 
-              <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-col gap-2.5 w-full">
                 {/* Botão TODOS */}
                 <button
                   onClick={() => setSelectedEmployeeId('ALL')}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all flex-shrink-0 ${
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all w-full min-w-0 ${
                     selectedEmployeeId === 'ALL'
                       ? 'bg-primary/20 border border-primary/40 text-white shadow-lg'
-                      : 'bg-white/5 border border-transparent hover:bg-white/10 text-white/70'
+                      : 'bg-white/5 border border-white/5 hover:bg-white/10 text-white/80'
                   }`}
                 >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs border ${
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border shrink-0 ${
                     selectedEmployeeId === 'ALL'
                       ? 'bg-primary text-white border-primary'
-                      : 'bg-white/10 text-white/70 border-white/10'
+                      : 'bg-white/10 text-white/80 border-white/10'
                   }`}>
                     ALL
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold truncate">Todos os Clientes</p>
-                    <p className="text-[10px] text-white/40">{accessibleClients.length} clientes</p>
+                    <p className="text-xs font-bold truncate">Todos</p>
+                    <p className="text-[11px] text-white/50 truncate">{accessibleClients.length} clientes</p>
                   </div>
                 </button>
 
@@ -198,14 +198,14 @@ const CalendarPage = () => {
                     <button
                       key={emp.id}
                       onClick={() => setSelectedEmployeeId(isSelected ? 'ALL' : emp.id)}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all flex-shrink-0 ${
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all w-full min-w-0 ${
                         isSelected
                           ? 'bg-primary/20 border border-primary/40 text-white shadow-lg'
-                          : 'bg-white/5 border border-transparent hover:bg-white/10 text-white/70'
+                          : 'bg-white/5 border border-white/5 hover:bg-white/10 text-white/80'
                       }`}
                     >
-                      <div className={`w-9 h-9 rounded-full overflow-hidden flex items-center justify-center font-bold text-sm border-2 flex-shrink-0 ${
-                        isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-white/15 bg-white/10'
+                      <div className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-bold text-sm border-2 flex-shrink-0 ${
+                        isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-white/20 bg-white/10'
                       }`}>
                         {emp.photoUrl ? (
                           <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
@@ -215,13 +215,13 @@ const CalendarPage = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold truncate">{emp.name}</p>
-                        <p className="text-[10px] text-white/40">
+                        <p className="text-[11px] text-white/50 truncate">
                           {empClientCount} {empClientCount === 1 ? 'cliente' : 'clientes'}
                         </p>
                       </div>
                       {empClientCount > 0 && (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isSelected ? 'bg-primary text-white' : 'bg-white/10 text-white/60'
+                        <span className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          isSelected ? 'bg-primary text-white' : 'bg-white/10 text-white/70'
                         }`}>
                           {empClientCount}
                         </span>
@@ -236,30 +236,30 @@ const CalendarPage = () => {
           {/* Área Principal de Clientes */}
           <div className="flex-1 w-full min-w-0">
             {selectedEmployee && (
-              <div className="mb-4 flex items-center justify-between glass-card px-4 py-3 border-primary/30 bg-primary/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-primary flex items-center justify-center bg-white/10 text-xs font-bold">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 glass-card px-4 py-3 border-primary/30 bg-primary/5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full overflow-hidden border border-primary flex items-center justify-center bg-white/10 text-xs font-bold shrink-0">
                     {selectedEmployee.photoUrl ? (
                       <img src={selectedEmployee.photoUrl} alt={selectedEmployee.name} className="w-full h-full object-cover" />
                     ) : (
                       <span>{selectedEmployee.avatar || selectedEmployee.name.substring(0, 2).toUpperCase()}</span>
                     )}
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">
-                      Clientes vinculados a <span className="text-primary">{selectedEmployee.name}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm font-bold text-white truncate">
+                      Clientes de <span className="text-primary">{selectedEmployee.name}</span>
                     </p>
-                    <p className="text-[10px] text-white/50">
+                    <p className="text-[11px] text-white/50">
                       Mostrando {filteredClients.length} de {accessibleClients.length} clientes
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => navigate(`/funcionario/${selectedEmployee.id}`)}
-                    className="h-8 text-xs rounded-xl bg-white/5 border-white/10 hover:bg-white/10 text-white"
+                    className="h-9 text-xs rounded-xl bg-white/5 border-white/10 hover:bg-white/10 text-white flex-1 sm:flex-initial"
                   >
                     Abrir Quadro de {selectedEmployee.name}
                   </Button>
@@ -267,7 +267,7 @@ const CalendarPage = () => {
                     size="sm"
                     variant="ghost"
                     onClick={() => setSelectedEmployeeId('ALL')}
-                    className="h-8 text-xs rounded-xl text-white/60 hover:text-white"
+                    className="h-9 text-xs rounded-xl text-white/70 hover:text-white"
                   >
                     Ver todos
                   </Button>
@@ -276,7 +276,7 @@ const CalendarPage = () => {
             )}
 
             {filteredClients.length === 0 && (
-              <div className="glass-card p-16 text-center max-w-lg mx-auto animate-fade-in border-dashed border-white/10">
+              <div className="glass-card p-10 sm:p-16 text-center max-w-lg mx-auto animate-fade-in border-dashed border-white/10">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Calendar className="w-10 h-10 text-white/20" />
                 </div>
@@ -285,22 +285,22 @@ const CalendarPage = () => {
                 </p>
                 <p className="text-white/40 text-sm mt-2 max-w-[280px] mx-auto">
                   {selectedEmployee
-                    ? 'Vincule clientes a este membro da equipe clicando no botão de equipe em cada card de cliente.'
+                    ? 'Vincule clientes a este membro da equipe tocando no botão Equipe em cada card de cliente.'
                     : 'Cada cliente possui seu próprio calendário organizado de posts.'}
                 </p>
                 {selectedEmployee ? (
-                  <Button className="mt-6 rounded-xl" variant="outline" onClick={() => setSelectedEmployeeId('ALL')}>
+                  <Button className="mt-6 rounded-xl h-10" variant="outline" onClick={() => setSelectedEmployeeId('ALL')}>
                     Mostrar todos os clientes para vincular
                   </Button>
                 ) : (
-                  <Button className="mt-8 rounded-xl btn-primary-glow" onClick={() => setShowAdd(true)}>
+                  <Button className="mt-8 rounded-xl btn-primary-glow h-10" onClick={() => setShowAdd(true)}>
                     Criar meu primeiro calendário
                   </Button>
                 )}
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
               {filteredClients.map((client, i) => {
                 const linkedEmpIds = getClientEmployees(client.id);
                 const linkedEmps = employees.filter(e => linkedEmpIds.includes(e.id));
@@ -308,26 +308,26 @@ const CalendarPage = () => {
                 return (
                   <div
                     key={client.id}
-                    className="glass-card p-0 group flex flex-col transition-all duration-300 hover:border-primary/30 relative overflow-hidden h-[255px] shadow-xl animate-scale-in"
+                    className="glass-card p-0 group flex flex-col transition-all duration-300 hover:border-primary/30 relative overflow-hidden min-h-[260px] shadow-xl animate-scale-in"
                     style={{ animationDelay: `${i * 0.05}s` }}
                   >
-                    {/* Botão Rápido de Vincular Equipe (Canto Superior Esquerdo) */}
+                    {/* Botão Rápido de Vincular Equipe (Canto Superior Esquerdo — maior no celular) */}
                     {loggedUserRole !== 'GUEST' && (
-                      <div className="absolute top-3 left-3 z-10 flex items-center gap-1">
+                      <div className="absolute top-3.5 left-3.5 z-10 flex items-center gap-1">
                         <Popover>
                           <PopoverTrigger asChild>
                             <button
                               type="button"
                               onClick={(e) => e.stopPropagation()}
                               title="Vincular pessoa da equipe a este cliente"
-                              className="flex items-center gap-1 h-8 px-2 rounded-full bg-black/50 backdrop-blur-md border border-white/15 hover:border-primary/50 hover:bg-black/70 text-white shadow-lg transition-all"
+                              className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-black/60 backdrop-blur-md border border-white/20 hover:border-primary/50 hover:bg-black/80 text-white shadow-lg transition-all"
                             >
                               {linkedEmps.length > 0 ? (
                                 <div className="flex -space-x-1.5 items-center">
                                   {linkedEmps.slice(0, 3).map(emp => (
                                     <div
                                       key={emp.id}
-                                      className="w-5 h-5 rounded-full overflow-hidden border border-black bg-zinc-800 flex items-center justify-center text-[9px] font-bold"
+                                      className="w-6 h-6 rounded-full overflow-hidden border border-black bg-zinc-800 flex items-center justify-center text-[10px] font-bold"
                                       title={emp.name}
                                     >
                                       {emp.photoUrl ? (
@@ -338,29 +338,29 @@ const CalendarPage = () => {
                                     </div>
                                   ))}
                                   {linkedEmps.length > 3 && (
-                                    <span className="text-[9px] font-bold pl-2 pr-0.5 text-white/80">
+                                    <span className="text-[10px] font-bold pl-2 pr-0.5 text-white/90">
                                       +{linkedEmps.length - 3}
                                     </span>
                                   )}
                                 </div>
                               ) : (
                                 <>
-                                  <UserPlus className="w-3.5 h-3.5 text-white/70" />
-                                  <span className="text-[10px] font-semibold text-white/70">Equipe</span>
+                                  <UserPlus className="w-4 h-4 text-white/80" />
+                                  <span className="text-xs font-semibold text-white/80">Equipe</span>
                                 </>
                               )}
                             </button>
                           </PopoverTrigger>
                           <PopoverContent
                             align="start"
-                            className="w-60 bg-[#1C1C1E] border-white/10 text-white p-2 rounded-xl shadow-2xl z-50"
+                            className="w-64 bg-[#1C1C1E] border-white/10 text-white p-2.5 rounded-xl shadow-2xl z-50"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="px-2 py-1.5 border-b border-white/10 mb-1">
+                            <div className="px-2 py-1.5 border-b border-white/10 mb-1.5">
                               <p className="text-xs font-bold text-white">Vincular à Equipe</p>
-                              <p className="text-[10px] text-white/50 truncate">{client.name}</p>
+                              <p className="text-[11px] text-white/50 truncate">{client.name}</p>
                             </div>
-                            <div className="space-y-1 max-h-56 overflow-y-auto py-1">
+                            <div className="space-y-1 max-h-60 overflow-y-auto py-1">
                               {employees.map(emp => {
                                 const isLinked = linkedEmpIds.includes(emp.id);
                                 return (
@@ -375,11 +375,11 @@ const CalendarPage = () => {
                                           : `${client.name} vinculado a ${emp.name}!`
                                       );
                                     }}
-                                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                                      isLinked ? 'bg-primary/20 text-white font-semibold' : 'hover:bg-white/5 text-white/70'
+                                    className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-xs transition-colors ${
+                                      isLinked ? 'bg-primary/20 text-white font-semibold' : 'hover:bg-white/5 text-white/80'
                                     }`}
                                   >
-                                    <div className="w-6 h-6 rounded-full overflow-hidden border border-white/20 bg-white/10 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                    <div className="w-7 h-7 rounded-full overflow-hidden border border-white/20 bg-white/10 flex items-center justify-center text-xs font-bold flex-shrink-0">
                                       {emp.photoUrl ? (
                                         <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                                       ) : (
@@ -387,7 +387,7 @@ const CalendarPage = () => {
                                       )}
                                     </div>
                                     <span className="flex-1 text-left truncate">{emp.name}</span>
-                                    {isLinked && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
+                                    {isLinked && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
                                   </button>
                                 );
                               })}
@@ -397,21 +397,21 @@ const CalendarPage = () => {
                       </div>
                     )}
 
-                    {/* Client Menu - Only for non-guests */}
+                    {/* Client Menu - Visível sempre no celular, hover no desktop */}
                     {loggedUserRole !== 'GUEST' && (
-                      <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-3.5 right-3.5 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 hover:bg-black/60 text-white shadow-lg">
+                            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-black/60 backdrop-blur-md border border-white/15 hover:bg-black/80 text-white shadow-lg">
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-[#1C1C1E] border-white/10 text-white rounded-xl p-1 shadow-2xl min-w-[140px]">
-                            <DropdownMenuItem onClick={() => openEdit(client)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/5 py-2 text-xs">
-                              <Edit2 className="w-3.5 h-3.5" /> Editar Cliente
+                          <DropdownMenuContent align="end" className="bg-[#1C1C1E] border-white/10 text-white rounded-xl p-1.5 shadow-2xl min-w-[160px]">
+                            <DropdownMenuItem onClick={() => openEdit(client)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-white/5 py-2.5 text-xs">
+                              <Edit2 className="w-4 h-4" /> Editar Cliente
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => deleteCalendarClient(client.id)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-red-500/20 text-red-400 focus:text-red-400 py-2 text-xs">
-                              <Trash2 className="w-3.5 h-3.5" /> Excluir permanentemente
+                            <DropdownMenuItem onClick={() => deleteCalendarClient(client.id)} className="gap-2.5 cursor-pointer rounded-lg focus:bg-red-500/20 text-red-400 focus:text-red-400 py-2.5 text-xs">
+                              <Trash2 className="w-4 h-4" /> Excluir permanentemente
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -421,11 +421,11 @@ const CalendarPage = () => {
                     {/* Main Content Area */}
                     <button
                       onClick={() => navigate(`/calendario/${client.id}`)}
-                      className="flex-1 flex flex-col items-center justify-center p-6 text-center group/btn relative"
+                      className="flex-1 flex flex-col items-center justify-center p-6 pt-12 sm:pt-6 text-center group/btn relative"
                     >
                       {/* Logo or Initial circle */}
-                      <div className="relative mb-3">
-                        <div className={`w-20 h-20 rounded-full border-2 border-white/10 shadow-2xl flex items-center justify-center overflow-hidden transition-transform duration-500 group-hover/btn:scale-110 group-hover/btn:border-primary/50
+                      <div className="relative mb-3.5">
+                        <div className={`w-24 h-24 sm:w-20 sm:h-20 rounded-full border-2 border-white/15 shadow-2xl flex items-center justify-center overflow-hidden transition-transform duration-500 group-hover/btn:scale-110 group-hover/btn:border-primary/50
                           ${!client.logoUrl ? 'bg-gradient-to-br from-red-600 to-rose-700' : 'bg-black/40'}
                         `}>
                           {client.logoUrl ? (
@@ -434,17 +434,17 @@ const CalendarPage = () => {
                             <span className="text-2xl font-bold text-white uppercase">{client.name.substring(0, 2)}</span>
                           )}
                         </div>
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary rounded-full border-2 border-[#0a0a0c] flex items-center justify-center shadow-lg opacity-0 group-hover/btn:opacity-100 transition-opacity">
-                          <ArrowRight className="w-3 h-3 text-white" />
+                        <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-primary rounded-full border-2 border-[#0a0a0c] flex items-center justify-center shadow-lg opacity-100 sm:opacity-0 sm:group-hover/btn:opacity-100 transition-opacity">
+                          <ArrowRight className="w-3.5 h-3.5 text-white" />
                         </div>
                       </div>
 
                       <h3 className="font-bold text-white text-lg tracking-tight group-hover/btn:text-primary transition-colors truncate w-full px-4">{client.name}</h3>
-                      <p className="text-xs text-white/40 mt-1 uppercase tracking-widest font-semibold flex items-center gap-2">
-                        <Calendar className="w-3 h-3" /> PLANEJAMENTO
+                      <p className="text-xs text-white/50 mt-1 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-primary" /> PLANEJAMENTO
                       </p>
                       {linkedEmps.length > 0 && (
-                        <p className="text-[10px] text-primary/90 font-medium mt-1.5 truncate max-w-full px-3">
+                        <p className="text-xs text-primary/90 font-semibold mt-1.5 truncate max-w-full px-3">
                           Resp: {linkedEmps.map(e => e.name).join(', ')}
                         </p>
                       )}

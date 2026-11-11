@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import type { CalendarTask } from '@/contexts/app-types';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, LayoutList, Copy, ArrowRightLeft, CopyPlus, Edit, CheckCircle2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, RefreshCw, Kanban, Folder, Check, ChevronDown, Crop, Settings2, Settings, PenTool } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Upload, X, ZoomIn, Image as ImageIcon, Grid3X3, CalendarDays, LayoutList, Copy, ArrowRightLeft, CopyPlus, Edit, CheckCircle2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, RefreshCw, Kanban, Folder, Check, ChevronDown, Crop, Settings2, Settings, PenTool, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { compressImage } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ImageAdjustmentModal } from '../components/ImageAdjustmentModal';
+import { ClientMetricsModal } from '../components/ClientMetricsModal';
 import { applyImageAdjustment } from '@/lib/imageProcessor';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -284,6 +285,9 @@ const ClientCalendar = () => {
   const [showSendToKanban, setShowSendToKanban] = useState(false);
   const [sendToKanbanEmployeeId, setSendToKanbanEmployeeId] = useState('');
   const [isSendingToKanban, setIsSendingToKanban] = useState(false);
+
+  // Estado para o modal de Relatório de Métricas / PDF (estilo Reportei)
+  const [showMetricsModal, setShowMetricsModal] = useState(false);
 
   const client = calendarClients.find(c => c.id === clientId);
 
@@ -923,6 +927,15 @@ const ClientCalendar = () => {
                 🟢 Concluídos
               </button>
             </div>
+
+            <Button
+              size="sm"
+              className="h-9 px-3.5 text-xs uppercase font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20 w-full sm:w-auto"
+              onClick={() => setShowMetricsModal(true)}
+            >
+              <BarChart3 className="w-4 h-4 mr-1.5" />
+              Puxar Métricas / PDF
+            </Button>
 
             {loggedUserRole !== 'GUEST' && (
               <Button
@@ -2702,6 +2715,15 @@ const ClientCalendar = () => {
           onSave={handleSaveAdjustments}
         />
       )}
+
+      <ClientMetricsModal
+        open={showMetricsModal}
+        onOpenChange={setShowMetricsModal}
+        client={client}
+        currentDate={currentDate}
+        calendarTasks={calendarTasks}
+        kanbanCards={kanbanCards}
+      />
     </div>
   );
 };

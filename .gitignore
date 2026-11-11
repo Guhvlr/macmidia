@@ -39,3 +39,4 @@ scripts/*.js
 
 # Temp files
 tmp/
+*.tsbuildinfo

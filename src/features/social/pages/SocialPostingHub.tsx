@@ -32,6 +32,16 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -224,6 +234,9 @@ const SocialPostingHub: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearingPosted, setIsClearingPosted] = useState(false);
+  const [showClearPostedDialog, setShowClearPostedDialog] = useState(false);
+  const [postToDelete, setPostToDelete] = useState<SocialPost | null>(null);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -497,22 +510,9 @@ const SocialPostingHub: React.FC = () => {
 
               <button
                 type="button"
-                onClick={async e => {
+                onClick={e => {
                   e.stopPropagation();
-                  if (
-                    confirm(
-                      post.status === 'programado'
-                        ? 'Deseja cancelar o agendamento no Post for Me e excluir este post?'
-                        : 'Deseja excluir este post da Central de Postagem?'
-                    )
-                  ) {
-                    await deletePost(post.id);
-                    toast.success(
-                      post.status === 'programado'
-                        ? 'Agendamento cancelado no Post for Me!'
-                        : 'Post excluído com sucesso!'
-                    );
-                  }
+                  setPostToDelete(post);
                 }}
                 className="w-7 h-7 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 flex items-center justify-center transition-colors shrink-0"
                 title="Excluir Post"
@@ -798,20 +798,7 @@ const SocialPostingHub: React.FC = () => {
                 <button
                   type="button"
                   disabled={isClearingPosted}
-                  onClick={async () => {
-                    if (
-                      confirm(
-                        `Deseja limpar todos os ${postsByColumn.postado.length} cards da coluna "Postado"?`
-                      )
-                    ) {
-                      setIsClearingPosted(true);
-                      try {
-                        await clearPostedPosts();
-                      } finally {
-                        setIsClearingPosted(false);
-                      }
-                    }
-                  }}
+                  onClick={() => setShowClearPostedDialog(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 text-xs font-bold"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -849,20 +836,9 @@ const SocialPostingHub: React.FC = () => {
                         <button
                           type="button"
                           disabled={isClearingPosted}
-                          onClick={async e => {
+                          onClick={e => {
                             e.stopPropagation();
-                            if (
-                              confirm(
-                                `Deseja limpar todos os ${colPosts.length} cards da coluna "Postado"?\n\nIsso remove os posts concluídos da Central de Postagem para manter sua tela limpa e organizada.`
-                              )
-                            ) {
-                              setIsClearingPosted(true);
-                              try {
-                                await clearPostedPosts();
-                              } finally {
-                                setIsClearingPosted(false);
-                              }
-                            }
+                            setShowClearPostedDialog(true);
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 text-[10px] font-bold transition-all shadow-sm"
                           title="Limpar todos os cards postados"
@@ -1074,6 +1050,137 @@ const SocialPostingHub: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de Confirmação para Excluir Post */}
+      <AlertDialog
+        open={!!postToDelete}
+        onOpenChange={open => {
+          if (!open && !isDeletingPost) setPostToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="bg-[#18181B] border border-white/10 text-white max-w-md rounded-2xl shadow-2xl p-6">
+          <AlertDialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <AlertDialogTitle className="text-base font-bold text-white">
+              {postToDelete?.status === 'programado'
+                ? 'Cancelar agendamento e excluir?'
+                : 'Excluir post da Central?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-white/60 leading-relaxed">
+              {postToDelete?.status === 'programado'
+                ? 'Este post está agendado no Post for Me. Ao confirmar, o agendamento remoto será cancelado e o post será excluído permanentemente da Central de Postagem.'
+                : 'Deseja excluir permanentemente este post da Central de Postagem? Esta ação não pode ser desfeita.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 flex flex-row items-center justify-end gap-2.5">
+            <AlertDialogCancel
+              disabled={isDeletingPost}
+              className="bg-white/5 hover:bg-white/10 border-white/10 text-white text-xs font-bold rounded-xl h-10 px-4 mt-0"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingPost}
+              onClick={async e => {
+                e.preventDefault();
+                if (!postToDelete) return;
+                setIsDeletingPost(true);
+                try {
+                  const wasScheduled = postToDelete.status === 'programado';
+                  await deletePost(postToDelete.id);
+                  toast.success(
+                    wasScheduled
+                      ? 'Agendamento cancelado no Post for Me!'
+                      : 'Post excluído com sucesso!'
+                  );
+                  setPostToDelete(null);
+                } catch (err: any) {
+                  toast.error(`Erro ao excluir post: ${err?.message || 'Falha desconhecida'}`);
+                } finally {
+                  setIsDeletingPost(false);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl h-10 px-4 transition-colors flex items-center gap-1.5"
+            >
+              {isDeletingPost ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Excluindo...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    {postToDelete?.status === 'programado'
+                      ? 'Sim, Cancelar e Excluir'
+                      : 'Sim, Excluir Post'}
+                  </span>
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de Confirmação para Limpar Coluna Postado */}
+      <AlertDialog
+        open={showClearPostedDialog}
+        onOpenChange={open => {
+          if (!open && !isClearingPosted) setShowClearPostedDialog(false);
+        }}
+      >
+        <AlertDialogContent className="bg-[#18181B] border border-white/10 text-white max-w-md rounded-2xl shadow-2xl p-6">
+          <AlertDialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-2">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <AlertDialogTitle className="text-base font-bold text-white">
+              Limpar coluna "Postado"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-white/60 leading-relaxed">
+              Deseja remover todos os {postsByColumn.postado.length} cards concluídos da coluna "Postado"? Isso remove os posts finalizados para manter sua tela limpa e organizada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 flex flex-row items-center justify-end gap-2.5">
+            <AlertDialogCancel
+              disabled={isClearingPosted}
+              className="bg-white/5 hover:bg-white/10 border-white/10 text-white text-xs font-bold rounded-xl h-10 px-4 mt-0"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isClearingPosted}
+              onClick={async e => {
+                e.preventDefault();
+                setIsClearingPosted(true);
+                try {
+                  await clearPostedPosts();
+                  setShowClearPostedDialog(false);
+                } catch (err: any) {
+                  toast.error(`Erro ao limpar coluna: ${err?.message || 'Falha desconhecida'}`);
+                } finally {
+                  setIsClearingPosted(false);
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl h-10 px-4 transition-colors flex items-center gap-1.5"
+            >
+              {isClearingPosted ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Limpando...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Limpar Coluna ({postsByColumn.postado.length})</span>
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

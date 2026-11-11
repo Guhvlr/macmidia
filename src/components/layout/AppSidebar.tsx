@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/useApp';
 import { getStuckCards } from '@/features/kanban/utils/stuckCards';
+import { getStoredEmployeeOrder, saveStoredEmployeeOrder, sortEmployeesByCustomOrder } from '@/utils/employeeOrder';
 import { 
   LayoutDashboard, 
   Users, 
@@ -16,6 +17,10 @@ import {
   LogOut, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronUp,
+  ChevronDown,
+  ChevronsUp,
+  ArrowUpDown, 
   LucideIcon,
   Zap,
   FileText,
@@ -56,6 +61,50 @@ const AppSidebar = ({ collapsed, onToggle, teamOpen, onTeamToggle }: Props) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, dashboardLogo, loggedUserRole, loggedUserKanbanLink, employees, kanbanCards = [] } = useApp();
+
+  const [employeeOrder, setEmployeeOrder] = useState<string[]>(() => getStoredEmployeeOrder());
+  const [isReordering, setIsReordering] = useState(false);
+
+  useEffect(() => {
+    const handleOrderChange = () => {
+      setEmployeeOrder(getStoredEmployeeOrder());
+    };
+    window.addEventListener('employee-order-changed', handleOrderChange);
+    return () => window.removeEventListener('employee-order-changed', handleOrderChange);
+  }, []);
+
+  const sortedEmployees = useMemo(() => {
+    const visible = employees.filter(
+      emp => loggedUserRole !== 'GUEST' || (loggedUserKanbanLink && loggedUserKanbanLink.split(',').includes(emp.id))
+    );
+    return sortEmployeesByCustomOrder(visible, employeeOrder);
+  }, [employees, loggedUserRole, loggedUserKanbanLink, employeeOrder]);
+
+  const handleMoveEmployee = (empId: string, direction: 'top' | 'up' | 'down') => {
+    const currentIds = sortedEmployees.map(e => e.id);
+    const currentIndex = currentIds.indexOf(empId);
+    if (currentIndex === -1) return;
+
+    const newIds = [...currentIds];
+    if (direction === 'top') {
+      if (currentIndex === 0) return;
+      const [item] = newIds.splice(currentIndex, 1);
+      newIds.unshift(item);
+    } else if (direction === 'up') {
+      if (currentIndex === 0) return;
+      const temp = newIds[currentIndex];
+      newIds[currentIndex] = newIds[currentIndex - 1];
+      newIds[currentIndex - 1] = temp;
+    } else if (direction === 'down') {
+      if (currentIndex === newIds.length - 1) return;
+      const temp = newIds[currentIndex];
+      newIds[currentIndex] = newIds[currentIndex + 1];
+      newIds[currentIndex + 1] = temp;
+    }
+
+    setEmployeeOrder(newIds);
+    saveStoredEmployeeOrder(newIds);
+  };
 
   const stuckCount = useMemo(() => getStuckCards(kanbanCards, 24).length, [kanbanCards]);
 
@@ -123,22 +172,107 @@ const AppSidebar = ({ collapsed, onToggle, teamOpen, onTeamToggle }: Props) => {
                   )}
                 </button>
                 {teamOpen && !collapsed && (
-                  <div className="pl-11 pr-2 space-y-1 py-1 animate-in slide-in-from-top-2 fade-in duration-200">
-                    {employees
-                      .filter(emp => loggedUserRole !== 'GUEST' || (loggedUserKanbanLink && loggedUserKanbanLink.split(',').includes(emp.id)))
-                      .map(emp => (
-                        <button
+                  <div className="pl-4 pr-1.5 space-y-1 py-1.5 animate-in slide-in-from-top-2 fade-in duration-200">
+                    {/* Header com contagem e alternador de modo ordenar */}
+                    <div className="flex items-center justify-between px-2 pb-1 text-[8px] font-black tracking-widest uppercase text-white/30 border-b border-white/[0.04] mb-1">
+                      <span>Membros ({sortedEmployees.length})</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsReordering(prev => !prev);
+                        }}
+                        className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded transition-all flex items-center gap-1 ${
+                          isReordering
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-white/40 hover:text-white hover:bg-white/10'
+                        }`}
+                        title="Ativar/desativar modo de organização da equipe"
+                      >
+                        <ArrowUpDown className="w-2.5 h-2.5" />
+                        <span>{isReordering ? 'Concluir' : 'Ordenar'}</span>
+                      </button>
+                    </div>
+
+                    {sortedEmployees.map((emp, index) => {
+                      const isSelected = location.pathname === `/funcionario/${emp.id}`;
+                      return (
+                        <div
                           key={emp.id}
-                          onClick={() => navigate(`/funcionario/${emp.id}`)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-all duration-200 truncate ${
-                            location.pathname === `/funcionario/${emp.id}`
-                              ? 'text-primary bg-primary/10 border border-primary/20'
-                              : 'text-white/50 hover:text-white hover:bg-white/5'
+                          className={`group/emp flex items-center justify-between rounded-lg px-2 py-1.5 transition-all duration-200 ${
+                            isSelected
+                              ? 'text-primary bg-primary/10 border border-primary/25 shadow-sm'
+                              : 'text-white/60 hover:text-white hover:bg-white/5'
                           }`}
                         >
-                          {emp.name}
-                        </button>
-                      ))}
+                          {/* Botão de navegação com Fotinha / Avatar + Nome */}
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/funcionario/${emp.id}`)}
+                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                            title={`Abrir Kanban de ${emp.name}`}
+                          >
+                            {emp.photoUrl ? (
+                              <img
+                                src={emp.photoUrl}
+                                alt={emp.name}
+                                className="w-5 h-5 rounded-full object-cover flex-shrink-0 ring-1 ring-white/15"
+                              />
+                            ) : (
+                              <span className="w-5 h-5 rounded-full bg-white/10 text-[9px] font-black text-white/80 flex items-center justify-center flex-shrink-0">
+                                {emp.avatar || emp.name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            <span className="truncate text-[9.5px] font-extrabold uppercase tracking-wider">
+                              {emp.name}
+                            </span>
+                          </button>
+
+                          {/* Controles de reordenação: Mover ao Topo / Subir / Descer */}
+                          <div className={`items-center gap-0.5 flex-shrink-0 ${isReordering ? 'flex' : 'hidden group-hover/emp:flex'}`}>
+                            {index > 0 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMoveEmployee(emp.id, 'top');
+                                  }}
+                                  className="p-1 rounded hover:bg-white/15 text-white/40 hover:text-primary transition-colors"
+                                  title="Mover para o topo da lista"
+                                >
+                                  <ChevronsUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMoveEmployee(emp.id, 'up');
+                                  }}
+                                  className="p-1 rounded hover:bg-white/15 text-white/40 hover:text-white transition-colors"
+                                  title="Subir uma posição"
+                                >
+                                  <ChevronUp className="w-3 h-3" />
+                                </button>
+                              </>
+                            )}
+                            {index < sortedEmployees.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveEmployee(emp.id, 'down');
+                                }}
+                                className="p-1 rounded hover:bg-white/15 text-white/40 hover:text-white transition-colors"
+                                title="Descer uma posição"
+                              >
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

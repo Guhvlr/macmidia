@@ -16,6 +16,7 @@ import type {
 } from './app-types';
 import { DEFAULT_COLUMNS, slugify } from './app-types';
 import { getTopPositionIndex, normalizeColumnKey } from '@/features/kanban/utils/cardOrder';
+import { sortEmployeesByCustomOrder } from '@/utils/employeeOrder';
 
 export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export interface QueuedTask {
@@ -273,6 +274,14 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
 
   const [employees, setEmployees] = useState<Employee[]>([]);
+
+  useEffect(() => {
+    const handleOrderChange = () => {
+      setEmployees(prev => sortEmployeesByCustomOrder([...prev]));
+    };
+    window.addEventListener('employee-order-changed', handleOrderChange);
+    return () => window.removeEventListener('employee-order-changed', handleOrderChange);
+  }, []);
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
   const [kanbanColumns, setKanbanColumns] = useState<KanbanColumnDef[]>([]);
   const [calendarTasks, setCalendarTasks] = useState<CalendarTask[]>([]);
@@ -351,7 +360,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
       const tableNames = ['Funcionários', 'Cards', 'Colunas', 'Calendário', 'Credenciais', 'Clientes'];
       const setters = [
-        (d: any[]) => setEmployees(d.map(mapEmployee)),
+        (d: any[]) => setEmployees(sortEmployeesByCustomOrder(d.map(mapEmployee))),
         (d: any[]) => setKanbanCards(d.map(mapKanbanCard)),
         (d: any[]) => setKanbanColumns(d.map(mapKanbanColumn)),
         (d: any[]) => setCalendarTasks(d.map(mapCalendarTask)),

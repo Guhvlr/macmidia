@@ -14,9 +14,26 @@ export interface LoadoutChecklistItem {
   createdAt: string;
 }
 
+export interface LoadoutFolderClient {
+  id: string;
+  name: string;
+  clientId?: string;
+  completed: boolean;
+  completedAt?: string;
+}
+
+export interface LoadoutFolder {
+  id: string;
+  title: string; // Ex: "Dia Nacional do Café", "Consciência Negra"
+  date?: string; // YYYY-MM-DD
+  clients: LoadoutFolderClient[];
+  createdAt: string;
+}
+
 export interface EmployeeCalendarLoadout {
   notes: string;
   items: LoadoutChecklistItem[];
+  folders: LoadoutFolder[];
   updatedAt?: string;
 }
 
@@ -163,9 +180,18 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
   const [loadout, setLoadout] = useState<EmployeeCalendarLoadout>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : { notes: '', items: [] };
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          notes: parsed.notes || '',
+          items: Array.isArray(parsed.items) ? parsed.items : [],
+          folders: Array.isArray(parsed.folders) ? parsed.folders : [],
+          updatedAt: parsed.updatedAt,
+        };
+      }
+      return { notes: '', items: [], folders: [] };
     } catch {
-      return { notes: '', items: [] };
+      return { notes: '', items: [], folders: [] };
     }
   });
 
@@ -175,12 +201,18 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
-        setLoadout(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        setLoadout({
+          notes: parsed.notes || '',
+          items: Array.isArray(parsed.items) ? parsed.items : [],
+          folders: Array.isArray(parsed.folders) ? parsed.folders : [],
+          updatedAt: parsed.updatedAt,
+        });
       } else {
-        setLoadout({ notes: '', items: [] });
+        setLoadout({ notes: '', items: [], folders: [] });
       }
     } catch {
-      setLoadout({ notes: '', items: [] });
+      setLoadout({ notes: '', items: [], folders: [] });
     }
 
     let mounted = true;
@@ -197,6 +229,7 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
             setLoadout({
               notes: parsed.notes || '',
               items: Array.isArray(parsed.items) ? parsed.items : [],
+              folders: Array.isArray(parsed.folders) ? parsed.folders : [],
               updatedAt: parsed.updatedAt,
             });
             localStorage.setItem(storageKey, JSON.stringify(parsed));
@@ -226,6 +259,7 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
                 setLoadout({
                   notes: parsed.notes || '',
                   items: Array.isArray(parsed.items) ? parsed.items : [],
+                  folders: Array.isArray(parsed.folders) ? parsed.folders : [],
                   updatedAt: parsed.updatedAt,
                 });
                 localStorage.setItem(storageKey, JSON.stringify(parsed));
@@ -337,6 +371,138 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
     [loadout, persistLoadout]
   );
 
+  const addFolder = useCallback(
+    (title: string, date?: string) => {
+      if (!title.trim()) return;
+      const newFolder: LoadoutFolder = {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        date: date || undefined,
+        clients: [],
+        createdAt: new Date().toISOString(),
+      };
+      persistLoadout({
+        ...loadout,
+        folders: [newFolder, ...(loadout.folders || [])],
+      });
+    },
+    [loadout, persistLoadout]
+  );
+
+  const removeFolder = useCallback(
+    (folderId: string) => {
+      const nextFolders = (loadout.folders || []).filter(f => f.id !== folderId);
+      persistLoadout({
+        ...loadout,
+        folders: nextFolders,
+      });
+    },
+    [loadout, persistLoadout]
+  );
+
+  const addClientToFolder = useCallback(
+    (folderId: string, clientName: string, clientId?: string) => {
+      if (!clientName.trim()) return;
+      const nextFolders = (loadout.folders || []).map(f => {
+        if (f.id !== folderId) return f;
+        const exists = f.clients.some(
+          c =>
+            (clientId && c.clientId === clientId) ||
+            c.name.toLowerCase() === clientName.trim().toLowerCase()
+        );
+        if (exists) return f;
+        const newClient: LoadoutFolderClient = {
+          id: crypto.randomUUID(),
+          name: clientName.trim(),
+          clientId: clientId || undefined,
+          completed: false,
+        };
+        return {
+          ...f,
+          clients: [...f.clients, newClient],
+        };
+      });
+      persistLoadout({
+        ...loadout,
+        folders: nextFolders,
+      });
+    },
+    [loadout, persistLoadout]
+  );
+
+  const addMultipleClientsToFolder = useCallback(
+    (folderId: string, clientsToAdd: { id?: string; name: string }[]) => {
+      const nextFolders = (loadout.folders || []).map(f => {
+        if (f.id !== folderId) return f;
+        const existingNames = new Set(f.clients.map(c => c.name.toLowerCase()));
+        const existingIds = new Set(f.clients.map(c => c.clientId).filter(Boolean));
+        const newEntries: LoadoutFolderClient[] = [];
+        for (const item of clientsToAdd) {
+          if (!item.name.trim()) continue;
+          if (existingNames.has(item.name.toLowerCase())) continue;
+          if (item.id && existingIds.has(item.id)) continue;
+          newEntries.push({
+            id: crypto.randomUUID(),
+            name: item.name.trim(),
+            clientId: item.id || undefined,
+            completed: false,
+          });
+        }
+        return {
+          ...f,
+          clients: [...f.clients, ...newEntries],
+        };
+      });
+      persistLoadout({
+        ...loadout,
+        folders: nextFolders,
+      });
+    },
+    [loadout, persistLoadout]
+  );
+
+  const toggleClientInFolder = useCallback(
+    (folderId: string, clientFolderId: string) => {
+      const nextFolders = (loadout.folders || []).map(f => {
+        if (f.id !== folderId) return f;
+        return {
+          ...f,
+          clients: f.clients.map(c =>
+            c.id === clientFolderId
+              ? {
+                  ...c,
+                  completed: !c.completed,
+                  completedAt: !c.completed ? new Date().toISOString() : undefined,
+                }
+              : c
+          ),
+        };
+      });
+      persistLoadout({
+        ...loadout,
+        folders: nextFolders,
+      });
+    },
+    [loadout, persistLoadout]
+  );
+
+  const removeClientFromFolder = useCallback(
+    (folderId: string, clientFolderId: string) => {
+      const nextFolders = (loadout.folders || []).map(f => {
+        if (f.id !== folderId) return f;
+        return {
+          ...f,
+          clients: f.clients.filter(c => c.id !== clientFolderId),
+        };
+      });
+      persistLoadout({
+        ...loadout,
+        folders: nextFolders,
+      });
+    },
+    [loadout, persistLoadout]
+  );
+
   return {
     loadout,
     addChecklistItem,
@@ -345,5 +511,11 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
     removeChecklistItem,
     clearCompletedItems,
     updateNotes,
+    addFolder,
+    removeFolder,
+    addClientToFolder,
+    addMultipleClientsToFolder,
+    toggleClientInFolder,
+    removeClientFromFolder,
   };
 }

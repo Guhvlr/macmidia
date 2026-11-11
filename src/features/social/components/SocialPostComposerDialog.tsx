@@ -29,6 +29,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -153,6 +163,8 @@ export const SocialPostComposerDialog: React.FC<SocialPostComposerDialogProps> =
   const [postOnInstagram, setPostOnInstagram] = useState(true);
   const [postOnFacebook, setPostOnFacebook] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [failedMediaUrls, setFailedMediaUrls] = useState<Record<string, boolean>>({});
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
@@ -1634,15 +1646,7 @@ Gere o JSON com as 3 opções ("ofertas", "calmo", "curto") seguindo rigorosamen
             <Button
               type="button"
               variant="ghost"
-              onClick={async () => {
-                await onDeletePost(post.id);
-                toast.success(
-                  post.status === 'programado'
-                    ? 'Agendamento cancelado no Post for Me e removido da fila!'
-                    : 'Card removido da Central de Postagem.'
-                );
-                onOpenChange(false);
-              }}
+              onClick={() => setShowDeleteConfirm(true)}
               className="h-10 px-3 rounded-xl text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20"
             >
               <Trash2 className="w-4 h-4 mr-1.5" />
@@ -1711,6 +1715,79 @@ Gere o JSON com as 3 opções ("ofertas", "calmo", "curto") seguindo rigorosamen
             </Button>
           </div>
         </div>
+
+        {/* Dialog de Confirmação para Excluir Post */}
+        <AlertDialog
+          open={showDeleteConfirm}
+          onOpenChange={open => {
+            if (!open && !isDeleting) setShowDeleteConfirm(false);
+          }}
+        >
+          <AlertDialogContent className="bg-[#18181B] border border-white/10 text-white max-w-md rounded-2xl shadow-2xl p-6">
+            <AlertDialogHeader>
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <AlertDialogTitle className="text-base font-bold text-white">
+                {post.status === 'programado'
+                  ? 'Cancelar agendamento e excluir?'
+                  : 'Excluir post da Central?'}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-white/60 leading-relaxed">
+                {post.status === 'programado'
+                  ? 'Este post está agendado no Post for Me. Ao confirmar, o agendamento remoto será cancelado e o post será excluído permanentemente da fila.'
+                  : 'Deseja excluir permanentemente este post da Central de Postagem? Esta ação não pode ser desfeita.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-5 flex flex-row items-center justify-end gap-2.5">
+              <AlertDialogCancel
+                disabled={isDeleting}
+                className="bg-white/5 hover:bg-white/10 border-white/10 text-white text-xs font-bold rounded-xl h-10 px-4 mt-0"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={async e => {
+                  e.preventDefault();
+                  setIsDeleting(true);
+                  try {
+                    const wasScheduled = post.status === 'programado';
+                    await onDeletePost(post.id);
+                    toast.success(
+                      wasScheduled
+                        ? 'Agendamento cancelado no Post for Me!'
+                        : 'Card removido da Central de Postagem.'
+                    );
+                    setShowDeleteConfirm(false);
+                    onOpenChange(false);
+                  } catch (err: any) {
+                    toast.error(`Erro ao excluir: ${err?.message || 'Falha desconhecida'}`);
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl h-10 px-4 transition-colors flex items-center gap-1.5"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>
+                      {post.status === 'programado'
+                        ? 'Sim, Cancelar e Excluir'
+                        : 'Sim, Excluir Post'}
+                    </span>
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

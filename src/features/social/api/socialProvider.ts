@@ -117,6 +117,19 @@ async function directPostForMeRequest<T = any>(
       });
     }
 
+    // Se bater no limite temporário de requisições (429 Rate Limit), aguarda 2.5s e tenta de novo automaticamente
+    if (res.status === 429) {
+      await new Promise(r => setTimeout(r, 2500));
+      res = await fetch(`${POSTFORME_PROXY_URL}${path}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+    }
+
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       const detailStr =
@@ -793,6 +806,20 @@ async function call<T = Record<string, unknown>>(
       await new Promise(r => setTimeout(r, 4000));
       const check = await checkProviderPostStatus(providerPostId);
       if (check.status === 'erro') {
+        const msg = (check.errorMessage || '').toLowerCase();
+        // Se a checagem falhou por limite de requisições da Meta/Post for Me, o post já foi aceito e enviado
+        if (msg.includes('rate limit')) {
+          return {
+            ok: true,
+            data: {
+              id: providerPostId,
+              status: 'postado',
+              warning:
+                'Publicação enviada! A confirmação de status retornou aviso de limite de consultas da Meta, mas a postagem já foi recebida pela rede.',
+              resolvedAccountId: targetAccountIds[0],
+            } as unknown as T,
+          };
+        }
         return {
           ok: false,
           message: check.errorMessage || 'A rede social recusou a publicação.',

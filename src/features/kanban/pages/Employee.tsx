@@ -62,15 +62,10 @@ const Employee = () => {
   const { ref: scrollRef, onMouseDown } = useDraggableScroll();
   const isMobile = useIsMobile();
 
-  // Vínculo de clientes do calendário + Loadout (Checklist & Rascunho sempre visível)
+  // Vínculo de clientes do calendário + Loadout (Subpastas & Rascunho sempre visível)
   const { links, toggleClientEmployee, getEmployeeClients } = useCalendarTeamLinks();
   const {
     loadout,
-    addChecklistItem,
-    toggleChecklistItem,
-    updateChecklistItemDate,
-    removeChecklistItem,
-    clearCompletedItems,
     updateNotes,
     addFolder,
     removeFolder,
@@ -100,12 +95,7 @@ const Employee = () => {
   const [showNewFolderForm, setShowNewFolderForm] = useState(false);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   const [clientInputPerFolder, setClientInputPerFolder] = useState<Record<string, string>>({});
-  const [showLooseTasks, setShowLooseTasks] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<{ id: string; title: string } | null>(null);
-
-  const [newTaskText, setNewTaskText] = useState('');
-  const [newTaskDate, setNewTaskDate] = useState('');
-  const [newTaskClientId, setNewTaskClientId] = useState<string>('NONE');
 
   const linkedClients = useMemo(() => {
     if (!id) return [];
@@ -113,14 +103,13 @@ const Employee = () => {
     return calendarClients.filter(c => clientIds.includes(c.id));
   }, [id, getEmployeeClients, calendarClients, links]);
 
+  // Contagem de pendências dentro das subpastas e temas
   const pendingTasksCount = useMemo(() => {
-    const loosePending = (loadout.items || []).filter(item => !item.completed).length;
-    const foldersPending = (loadout.folders || []).reduce((acc, folder) => {
+    return (loadout.folders || []).reduce((acc, folder) => {
       const pendingInFolder = folder.clients.filter(c => !c.completed).length;
       return acc + pendingInFolder;
     }, 0);
-    return loosePending + foldersPending;
-  }, [loadout.items, loadout.folders]);
+  }, [loadout.folders]);
 
   const toggleFolderOpen = (folderId: string) => {
     setOpenFolders(prev => ({
@@ -142,22 +131,6 @@ const Employee = () => {
     if (!clientName.trim()) return;
     addClientToFolder(folderId, clientName.trim(), clientId);
     setClientInputPerFolder(prev => ({ ...prev, [folderId]: '' }));
-  };
-
-  const handleAddLoadoutTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskText.trim()) return;
-    const selectedClient =
-      newTaskClientId && newTaskClientId !== 'NONE'
-        ? calendarClients.find(c => c.id === newTaskClientId)
-        : undefined;
-    addChecklistItem({
-      text: newTaskText.trim(),
-      date: newTaskDate || undefined,
-      clientId: selectedClient?.id,
-      clientName: selectedClient?.name,
-    });
-    setNewTaskText('');
   };
 
   useEffect(() => {
@@ -724,75 +697,7 @@ const Employee = () => {
           </div>
         </div>
 
-        {/* Lembretes Avulsos Opcionais (Preserva itens criados anteriormente) */}
-        {(loadout.items || []).length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-border/40">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setShowLooseTasks(prev => !prev)}
-                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 hover:text-foreground transition-colors"
-              >
-                <CheckSquare className="w-3.5 h-3.5 text-primary" />
-                Lembretes Avulsos ({(loadout.items || []).filter(i => !i.completed).length} pendentes)
-                {showLooseTasks ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              </button>
-              {(loadout.items || []).some(i => i.completed) && (
-                <button
-                  type="button"
-                  onClick={clearCompletedItems}
-                  className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  Limpar feitos
-                </button>
-              )}
-            </div>
-
-            {showLooseTasks && (
-              <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-0.5 custom-scrollbar">
-                {(loadout.items || []).map(item => (
-                  <div
-                    key={item.id}
-                    className={`group flex items-start gap-2 p-2 rounded-xl border transition-all ${
-                      item.completed
-                        ? 'bg-secondary/20 border-border/20 opacity-60'
-                        : 'bg-secondary/40 border-border/50 hover:border-primary/40'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleChecklistItem(item.id)}
-                      className="mt-0.5 flex-shrink-0 text-primary hover:scale-110 transition-transform"
-                    >
-                      {item.completed ? (
-                        <CheckSquare className="w-4 h-4 text-emerald-500" />
-                      ) : (
-                        <Square className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                      )}
-                    </button>
-                    <p
-                      onClick={() => toggleChecklistItem(item.id)}
-                      className={`text-xs font-medium cursor-pointer break-words flex-1 min-w-0 ${
-                        item.completed ? 'line-through text-muted-foreground' : 'text-foreground'
-                      }`}
-                    >
-                      {item.text}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => removeChecklistItem(item.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-opacity"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 3. RASCUNHO / ANOTAÇÕES LIVRES */}
+        {/* 2. RASCUNHO / ANOTAÇÕES LIVRES */}
         <div className="space-y-2 pt-2 border-t border-border/40">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">

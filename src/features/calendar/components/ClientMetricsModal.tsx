@@ -60,6 +60,7 @@ import {
   saveCachedMetaAssets,
   MetaPageAsset,
   MetaAdAccountAsset,
+  formatMetaErrorMessage,
 } from '../services/clientMetricsService';
 
 interface ClientMetricsModalProps {
@@ -497,12 +498,12 @@ export const ClientMetricsModal: React.FC<ClientMetricsModalProps> = ({
       } else {
         toast.error(
           res.bizErrorMessage
-            ? `Erro da Meta: ${res.bizErrorMessage}`
+            ? formatMetaErrorMessage(res.bizErrorMessage)
             : 'Nenhuma conta encontrada com este token. Verifique o token no Explorador da Meta.'
         );
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Erro ao buscar contas na Meta Graph API.');
+      toast.error(formatMetaErrorMessage(err));
     } finally {
       setLoadingMetaAssets(false);
     }
@@ -555,7 +556,7 @@ export const ClientMetricsModal: React.FC<ClientMetricsModalProps> = ({
       saveStoredClientMetrics(client.id, cacheKey, res.report);
       toast.success(`Meta API sincronizada! ${res.summaryText}`, { id: toastId });
     } catch (err: any) {
-      toast.error(err?.message || 'Erro ao sincronizar com a Meta Graph API', { id: toastId });
+      toast.error(formatMetaErrorMessage(err), { id: toastId });
     } finally {
       setLoadingFullMetaSync(false);
     }
@@ -587,7 +588,7 @@ export const ClientMetricsModal: React.FC<ClientMetricsModalProps> = ({
       }));
       toast.success('Dados reais do Meta Ads importados com sucesso!');
     } catch (err: any) {
-      toast.error(err?.message || 'Erro ao consultar Meta Marketing API');
+      toast.error(formatMetaErrorMessage(err));
     } finally {
       setLoadingAdsApi(false);
     }

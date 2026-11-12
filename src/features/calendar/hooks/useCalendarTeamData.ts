@@ -55,17 +55,42 @@ export function useCalendarTeamLinks() {
     let mounted = true;
     const fetchLinks = async () => {
       try {
-        const { data } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', LINKS_SETTINGS_KEY)
+        // 1. Tenta buscar em social_posts (onde membros e visitantes têm permissão completa de leitura)
+        const { data: postRow } = await (supabase as any)
+          .from('social_posts')
+          .select('caption')
+          .eq('provider', 'system_team_links')
+          .eq('title', LINKS_SETTINGS_KEY)
           .maybeSingle();
-        if (mounted && data?.value) {
-          const parsed = JSON.parse(data.value);
-          if (parsed && typeof parsed === 'object') {
-            setLinks(parsed);
-            localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(parsed));
+
+        let parsed: any = null;
+        if (postRow?.caption) {
+          try {
+            parsed = JSON.parse(postRow.caption);
+          } catch {
+            // ignore
           }
+        }
+
+        // 2. Fallback para settings (legado)
+        if (!parsed) {
+          const { data } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', LINKS_SETTINGS_KEY)
+            .maybeSingle();
+          if (data?.value) {
+            try {
+              parsed = JSON.parse(data.value);
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        if (mounted && parsed && typeof parsed === 'object') {
+          setLinks(parsed);
+          localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(parsed));
         }
       } catch {
         // fallback local
@@ -73,6 +98,7 @@ export function useCalendarTeamLinks() {
     };
     fetchLinks();
 
+    // Sincroniza em tempo real via tabela social_posts (aberta para toda a equipe)
     const channel = supabase
       .channel('calendar_team_links_sync')
       .on(
@@ -80,13 +106,14 @@ export function useCalendarTeamLinks() {
         {
           event: '*',
           schema: 'public',
-          table: 'settings',
-          filter: `key=eq.${LINKS_SETTINGS_KEY}`,
+          table: 'social_posts',
+          filter: `title=eq.${LINKS_SETTINGS_KEY}`,
         },
         payload => {
-          if (payload.new && (payload.new as any).value) {
+          const newRow = payload.new as any;
+          if (newRow && newRow.provider === 'system_team_links' && newRow.caption) {
             try {
-              const parsed = JSON.parse((payload.new as any).value);
+              const parsed = JSON.parse(newRow.caption);
               if (parsed && typeof parsed === 'object') {
                 setLinks(parsed);
                 localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(parsed));
@@ -108,13 +135,47 @@ export function useCalendarTeamLinks() {
   const saveLinks = useCallback(async (next: Record<string, string[]>) => {
     setLinks(next);
     localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(next));
+
+    // Salva em social_posts (aberto para todos os papéis: ADMIN, USER, GUEST)
+    try {
+      const { data: existing } = await (supabase as any)
+        .from('social_posts')
+        .select('id')
+        .eq('provider', 'system_team_links')
+        .eq('title', LINKS_SETTINGS_KEY)
+        .maybeSingle();
+
+      if (existing?.id) {
+        await (supabase as any)
+          .from('social_posts')
+          .update({
+            caption: JSON.stringify(next),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+      } else {
+        await (supabase as any)
+          .from('social_posts')
+          .insert({
+            provider: 'system_team_links',
+            title: LINKS_SETTINGS_KEY,
+            caption: JSON.stringify(next),
+            status: 'para_postar',
+            placement: 'feed',
+          });
+      }
+    } catch (err) {
+      console.warn('Erro ao salvar vínculos no social_posts:', err);
+    }
+
+    // Backup silencioso em settings (se admin)
     try {
       await supabase.from('settings').upsert({
         key: LINKS_SETTINGS_KEY,
         value: JSON.stringify(next),
       });
-    } catch (err) {
-      console.warn('Erro ao salvar vínculo de equipe no Supabase:', err);
+    } catch {
+      // Ignora erro de permissão para não-admins
     }
   }, []);
 
@@ -218,29 +279,84 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
     let mounted = true;
     const fetchRemote = async () => {
       try {
-        const { data } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', settingsKey)
+        // 1. Tenta carregar de social_posts (onde todos os membros e visitantes têm permissão garantida)
+        const { data: postRow } = await (supabase as any)
+          .from('social_posts')
+          .select('caption')
+          .eq('provider', 'system_loadout')
+          .eq('title', settingsKey)
           .maybeSingle();
-        if (mounted && data?.value) {
-          const parsed = JSON.parse(data.value);
-          if (parsed && typeof parsed === 'object') {
-            setLoadout({
-              notes: parsed.notes || '',
-              items: Array.isArray(parsed.items) ? parsed.items : [],
-              folders: Array.isArray(parsed.folders) ? parsed.folders : [],
-              updatedAt: parsed.updatedAt,
-            });
-            localStorage.setItem(storageKey, JSON.stringify(parsed));
+
+        let parsed: any = null;
+        if (postRow?.caption) {
+          try {
+            parsed = JSON.parse(postRow.caption);
+          } catch {
+            // ignore
           }
         }
-      } catch {
-        // fallback local
+
+        // 2. Se não encontrou em social_posts, tenta fallback em settings (legado)
+        if (!parsed) {
+          const { data: settingsRow } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', settingsKey)
+            .maybeSingle();
+          if (settingsRow?.value) {
+            try {
+              parsed = JSON.parse(settingsRow.value);
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        // Verifica se há dados locais salvos previamente
+        const localRaw = localStorage.getItem(storageKey);
+        let localData: any = null;
+        if (localRaw) {
+          try {
+            localData = JSON.parse(localRaw);
+          } catch {
+            // ignore
+          }
+        }
+        const hasLocalData =
+          localData &&
+          ((Array.isArray(localData.folders) && localData.folders.length > 0) ||
+            (Array.isArray(localData.items) && localData.items.length > 0) ||
+            Boolean(localData.notes));
+
+        const hasRemoteData =
+          parsed &&
+          ((Array.isArray(parsed.folders) && parsed.folders.length > 0) ||
+            (Array.isArray(parsed.items) && parsed.items.length > 0) ||
+            Boolean(parsed.notes));
+
+        // Se o banco remoto ainda estiver vazio mas o usuário tem dados locais, sobe para o banco
+        if (!hasRemoteData && hasLocalData) {
+          persistLoadout(localData);
+          return;
+        }
+
+        if (mounted && parsed && typeof parsed === 'object') {
+          const remoteData: EmployeeCalendarLoadout = {
+            notes: parsed.notes || '',
+            items: Array.isArray(parsed.items) ? parsed.items : [],
+            folders: Array.isArray(parsed.folders) ? parsed.folders : [],
+            updatedAt: parsed.updatedAt,
+          };
+          setLoadout(remoteData);
+          localStorage.setItem(storageKey, JSON.stringify(remoteData));
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar loadout remoto:', err);
       }
     };
     fetchRemote();
 
+    // Sincronização em tempo real via tabela social_posts (aberta para toda a equipe)
     const channel = supabase
       .channel(`emp_loadout_${employeeId}`)
       .on(
@@ -248,13 +364,14 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
         {
           event: '*',
           schema: 'public',
-          table: 'settings',
-          filter: `key=eq.${settingsKey}`,
+          table: 'social_posts',
+          filter: `title=eq.${settingsKey}`,
         },
         payload => {
-          if (payload.new && (payload.new as any).value) {
+          const newRow = payload.new as any;
+          if (newRow && newRow.provider === 'system_loadout' && newRow.caption) {
             try {
-              const parsed = JSON.parse((payload.new as any).value);
+              const parsed = JSON.parse(newRow.caption);
               if (parsed && typeof parsed === 'object') {
                 setLoadout({
                   notes: parsed.notes || '',
@@ -284,13 +401,47 @@ export function useEmployeeCalendarLoadout(employeeId?: string) {
       setLoadout(withTime);
       localStorage.setItem(storageKey, JSON.stringify(withTime));
       if (!employeeId) return;
+
+      // 1. Salva em social_posts (onde membros USER e GUEST têm permissão total de INSERT/UPDATE)
+      try {
+        const { data: existing } = await (supabase as any)
+          .from('social_posts')
+          .select('id')
+          .eq('provider', 'system_loadout')
+          .eq('title', settingsKey)
+          .maybeSingle();
+
+        if (existing?.id) {
+          await (supabase as any)
+            .from('social_posts')
+            .update({
+              caption: JSON.stringify(withTime),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+        } else {
+          await (supabase as any)
+            .from('social_posts')
+            .insert({
+              provider: 'system_loadout',
+              title: settingsKey,
+              caption: JSON.stringify(withTime),
+              status: 'para_postar',
+              placement: 'feed',
+            });
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar loadout em social_posts:', err);
+      }
+
+      // 2. Backup secundário em settings (se admin)
       try {
         await supabase.from('settings').upsert({
           key: settingsKey,
           value: JSON.stringify(withTime),
         });
-      } catch (err) {
-        console.warn('Erro ao salvar loadout no Supabase:', err);
+      } catch {
+        // Ignora erro de RLS para não-admins
       }
     },
     [employeeId, settingsKey, storageKey]

@@ -56,6 +56,7 @@ export function useSocialPosts() {
       const { data, error } = await (supabase as any)
         .from('social_posts')
         .select('*')
+        .not('provider', 'in', '("system_loadout","system_team_links")')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -70,7 +71,11 @@ export function useSocialPosts() {
 
       setUsingFallback(false);
       const localItems = readLocalFallback();
-      const dbRows = Array.isArray(data) ? data : [];
+      const rawRows = Array.isArray(data) ? data : [];
+      // Garante que registros de sistema não entrem na Central de Postagem
+      const dbRows = rawRows.filter(
+        (r: any) => r.provider !== 'system_loadout' && r.provider !== 'system_team_links'
+      );
       const dbIds = new Set(dbRows.map((r: any) => r.id));
 
       const mappedFromDb: SocialPost[] = dbRows.map((row: any) => {
@@ -158,7 +163,18 @@ export function useSocialPosts() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'social_posts' },
-        () => {
+        (payload: any) => {
+          // Ignora atualizações de registros de sistema para não disparar recarregamento desnecessário
+          const provNew = payload.new?.provider;
+          const provOld = payload.old?.provider;
+          if (
+            provNew === 'system_loadout' ||
+            provNew === 'system_team_links' ||
+            provOld === 'system_loadout' ||
+            provOld === 'system_team_links'
+          ) {
+            return;
+          }
           fetchPosts();
         }
       )
@@ -245,8 +261,15 @@ export function useSocialPosts() {
           p.scheduledAt &&
           new Date(p.scheduledAt).getTime() <= now;
 
+        // Stories no Instagram não possuem link permanente (permalink) público;
+        // portanto, só busca permalink para posts de Feed e Reels (evita chamadas excessivas que estouram rate limit)
+        const isStoriesOnly =
+          p.placement === 'stories' ||
+          (Boolean(p.storiesMedia?.length) && !p.feedMedia?.length && !p.reelsMedia?.length);
+
         const isRecentlyPublishedWithoutPermalink =
           p.status === 'postado' &&
+          !isStoriesOnly &&
           p.providerPostId &&
           !p.permalink &&
           p.publishedAt &&
@@ -257,6 +280,11 @@ export function useSocialPosts() {
             const check = await socialProvider.checkPostStatus(p.providerPostId);
             if (check.ok && check.data) {
               if (check.data.status === 'erro') {
+                const msg = (check.data.errorMessage || '').toLowerCase();
+                // Limite de taxa na checagem não invalida um post que está sendo processado
+                if (msg.includes('rate limit')) {
+                  continue;
+                }
                 await updatePost(p.id, {
                   status: 'erro',
                   errorMessage: check.data.errorMessage || 'Falha ao publicar no Instagram.',
@@ -284,6 +312,11 @@ export function useSocialPosts() {
           const check = await socialProvider.checkPostStatus(p.providerPostId);
           if (check.ok && check.data) {
             if (check.data.status === 'erro') {
+              const msg = (check.data.errorMessage || '').toLowerCase();
+              // Se foi apenas rate limit na consulta do link, NÃO rebaixa um post já publicado para erro
+              if (msg.includes('rate limit')) {
+                continue;
+              }
               await updatePost(p.id, {
                 status: 'erro',
                 errorMessage:
@@ -601,7 +634,12 @@ export function useSocialPosts() {
         const warnings: string[] = [];
 
         // Uma falha NÃO interrompe os outros formatos (ex: erro no Feed não impede o Stories)
-        for (const job of jobs) {
+        for (let i = 0; i < jobs.length; i++) {
+          const job = jobs[i];
+          if (i > 0) {
+            // Pausa de 1s entre formatos diferentes (ex: Feed e Stories) para evitar colisão de rate limit na Meta
+            await new Promise(r => setTimeout(r, 1000));
+          }
           try {
             const jobRes = await socialProvider.publishDirect({
               socialAccountId: options?.socialAccountId || '',

@@ -1841,7 +1841,7 @@ export async function fetchMetaAccessibleAssets(accessToken: string): Promise<{
           )}&limit=100&access_token=${encodeURIComponent(cleanToken)}`
         );
         const fbJson = await fbRes.json();
-        if (fbJson?.error) throw new Error(fbJson.error.message);
+        if (fbJson?.error) throw new Error(formatMetaErrorMessage(fbJson.error));
         if (Array.isArray(fbJson?.data)) fbJson.data.forEach((p: any) => parsePageNode(p));
         nextPagesUrl = fbJson?.paging?.next || null;
         continue;
@@ -3161,4 +3161,21 @@ export async function fetchFullClientMetricsFromMetaGraphApi(params: {
     report: nextData,
     summaryText: parts.length > 0 ? parts.join(' • ') : 'Dados sincronizados da Meta API!',
   };
+}
+
+export function formatMetaErrorMessage(err: any): string {
+  const msg = typeof err === 'string' ? err : err?.message || '';
+  if (
+    msg.includes('Session has expired') ||
+    msg.includes('Error validating access token') ||
+    msg.includes('The access token could not be decrypted') ||
+    msg.includes('Malformed access token') ||
+    err?.code === 190
+  ) {
+    return 'O Token da Meta EXPIROU! O token temporário do Explorador dura de 1 a 2 horas. Gere um novo token no Explorador da Graph API e cole aqui.';
+  }
+  if (msg.includes('Permissions error') || msg.includes('Requires') || err?.code === 200) {
+    return 'Permissão insuficiente no Token da Meta. Verifique se as permissões read_insights, pages_show_list, ads_read e business_management estão marcadas.';
+  }
+  return msg || 'Erro ao comunicar com a Meta Graph API.';
 }

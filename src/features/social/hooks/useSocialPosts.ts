@@ -13,13 +13,38 @@ import { NOT_CONFIGURED_MESSAGE, socialProvider } from '../api/socialProvider';
 import type { KanbanCard } from '@/contexts/app-types';
 
 const LOCAL_STORAGE_FALLBACK_KEY = 'macmidia_social_posts_fallback_v1';
+const DELETED_POSTS_STORAGE_KEY = 'macmidia_deleted_post_ids_v1';
+
+function getDeletedPostIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_POSTS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markPostAsDeleted(id: string) {
+  try {
+    const set = getDeletedPostIds();
+    set.add(id);
+    // Limita o histórico de IDs excluídos aos últimos 500 para economizar espaço
+    const arr = Array.from(set).slice(-500);
+    localStorage.setItem(DELETED_POSTS_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // ignore
+  }
+}
 
 function readLocalFallback(): SocialPost[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_FALLBACK_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const deleted = getDeletedPostIds();
+    return Array.isArray(parsed) ? parsed.filter(p => !deleted.has(p.id)) : [];
   } catch {
     return [];
   }
@@ -27,7 +52,9 @@ function readLocalFallback(): SocialPost[] {
 
 function writeLocalFallback(posts: SocialPost[]) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_FALLBACK_KEY, JSON.stringify(posts));
+    const deleted = getDeletedPostIds();
+    const clean = posts.filter(p => !deleted.has(p.id));
+    localStorage.setItem(LOCAL_STORAGE_FALLBACK_KEY, JSON.stringify(clean));
     window.dispatchEvent(new CustomEvent('macmidia:social-posts-updated'));
   } catch {
     // ignore storage quota errors
@@ -70,11 +97,15 @@ export function useSocialPosts() {
       }
 
       setUsingFallback(false);
+      const deletedIds = getDeletedPostIds();
       const localItems = readLocalFallback();
       const rawRows = Array.isArray(data) ? data : [];
-      // Garante que registros de sistema não entrem na Central de Postagem
+      // Garante que registros de sistema e posts já excluídos não entrem na Central de Postagem
       const dbRows = rawRows.filter(
-        (r: any) => r.provider !== 'system_loadout' && r.provider !== 'system_team_links'
+        (r: any) =>
+          r.provider !== 'system_loadout' &&
+          r.provider !== 'system_team_links' &&
+          !deletedIds.has(r.id)
       );
       const dbIds = new Set(dbRows.map((r: any) => r.id));
 
@@ -104,12 +135,19 @@ export function useSocialPosts() {
         };
       });
 
-      // Posts salvos localmente que ainda não constam no Supabase (apenas novos rascunhos vindos do Kanban)
+      // Apenas rascunhos criados offline que explicitamente ainda aguardam primeiro envio ao banco.
+      // Posts normais já salvos anteriormente NUNCA são ressuscitados se não estão no banco (pois foram deletados).
+      const now = Date.now();
       const unsyncedLocals = localItems.filter(
-        l => !dbIds.has(l.id) && l.status === 'para_postar' && !l.providerPostId
+        l =>
+          (l as any)._pendingSync === true &&
+          (l as any)._pendingSyncAt &&
+          now - Number((l as any)._pendingSyncAt) < 15 * 60 * 1000 &&
+          !deletedIds.has(l.id) &&
+          !dbIds.has(l.id)
       );
 
-      // Sincroniza os cards locais para o Supabase (enviando apenas colunas válidas do banco)
+      // Sincroniza rascunhos locais offline para o Supabase
       if (unsyncedLocals.length > 0) {
         for (const p of unsyncedLocals) {
           try {
@@ -131,13 +169,15 @@ export function useSocialPosts() {
               permalink: p.permalink || null,
               error_message: p.errorMessage || null,
             }, { onConflict: 'id' });
+            delete (p as any)._pendingSync;
+            delete (p as any)._pendingSyncAt;
           } catch (syncErr) {
             console.warn('Aviso ao sincronizar card local para o Supabase:', syncErr);
           }
         }
       }
 
-      // Combina os posts do banco + os que foram criados localmente (nunca descarta os novos!)
+      // Supabase é a fonte da verdade da equipe: atualiza a lista e o cache local
       const combined = [...unsyncedLocals, ...mappedFromDb];
       setPosts(combined);
       writeLocalFallback(combined);
@@ -164,6 +204,17 @@ export function useSocialPosts() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'social_posts' },
         (payload: any) => {
+          // Se for evento de exclusão vindo de outro dispositivo/aba, remove imediatamente da memória e localStorage
+          if (payload.eventType === 'DELETE' && payload.old?.id) {
+            markPostAsDeleted(payload.old.id);
+            setPosts(prev => {
+              const next = prev.filter(p => p.id !== payload.old.id);
+              writeLocalFallback(next);
+              return next;
+            });
+            return;
+          }
+
           // Ignora atualizações de registros de sistema para não disparar recarregamento desnecessário
           const provNew = payload.new?.provider;
           const provOld = payload.old?.provider;
@@ -415,6 +466,10 @@ export function useSocialPosts() {
             setUsingFallback(true);
             return newPost;
           }
+          (newPost as any)._pendingSync = true;
+          (newPost as any)._pendingSyncAt = Date.now();
+          const cur = readLocalFallback();
+          writeLocalFallback([newPost, ...cur.filter(p => p.id !== newPost.id)]);
           console.error('Erro ao criar social_post no Supabase:', error);
           toast.error('Erro ao criar item na fila de postagem.');
           return null;
@@ -438,17 +493,20 @@ export function useSocialPosts() {
 
   const deletePost = useCallback(
     async (id: string) => {
+      // 1. Marca imediatamente no conjunto de IDs deletados para nunca ser ressuscitado por nenhum cache
+      markPostAsDeleted(id);
+
       const existing = readLocalFallback().find(p => p.id === id) || posts.find(p => p.id === id);
       let providerPostId = existing?.providerPostId;
 
-      // 1. Remove imediatamente da memória e do localStorage do navegador
+      // 2. Remove imediatamente da memória e do localStorage do navegador
       setPosts(prev => {
         const next = prev.filter(p => p.id !== id);
         writeLocalFallback(next);
         return next;
       });
 
-      // 2. Se não encontrou providerPostId em memória, busca diretamente no Supabase antes de deletar
+      // 3. Se não encontrou providerPostId em memória, busca diretamente no Supabase antes de deletar
       if (!providerPostId && !usingFallback) {
         try {
           const { data } = await (supabase as any)
@@ -464,7 +522,7 @@ export function useSocialPosts() {
         }
       }
 
-      // 3. Remove imediatamente do Supabase
+      // 4. Remove imediatamente do Supabase
       if (!usingFallback) {
         try {
           const { error } = await (supabase as any).from('social_posts').delete().eq('id', id);
@@ -477,7 +535,7 @@ export function useSocialPosts() {
         }
       }
 
-      // 4. Se o post foi enviado para o Post for Me e não está postado no feed, cancela e exclui lá também
+      // 5. Se o post foi enviado para o Post for Me e não está postado no feed, cancela e exclui lá também
       if (providerPostId && existing?.status !== 'postado') {
         try {
           const delRes = await socialProvider.deleteRemotePost(providerPostId);
@@ -505,6 +563,7 @@ export function useSocialPosts() {
     }
 
     const idsToDelete = postedList.map(p => p.id);
+    idsToDelete.forEach(id => markPostAsDeleted(id));
 
     setPosts(prev => {
       const next = prev.filter(p => p.status !== 'postado');
@@ -999,6 +1058,10 @@ export async function sendKanbanCardToSocialQueue(card: KanbanCard): Promise<Soc
 
     if (error) {
       console.warn('Aviso ao inserir social_post no Supabase (salvo localmente):', error);
+      (newPost as any)._pendingSync = true;
+      (newPost as any)._pendingSyncAt = Date.now();
+      const updatedLocal = readLocalFallback().map(p => (p.id === newPost.id ? newPost : p));
+      writeLocalFallback(updatedLocal);
     }
 
     if (!error && data) {

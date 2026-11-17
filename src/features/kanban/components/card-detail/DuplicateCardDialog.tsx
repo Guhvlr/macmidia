@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/useApp';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { KanbanCard as KanbanCardType } from '@/contexts/app-types';
 
@@ -23,7 +24,7 @@ export const DuplicateCardDialog = memo(({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: DuplicateCardDialogProps) => {
-  const { employees, getColumnsForEmployee, addKanbanCard, loggedUserRole, loggedUserKanbanLink } = useApp();
+  const { employees, getColumnsForEmployee, addKanbanCard, updateKanbanCard, loggedUserRole, loggedUserKanbanLink } = useApp();
   
   // Visitantes só podem ver os quadros vinculados a eles
   const visibleEmployees = useMemo(() => {
@@ -72,7 +73,7 @@ export const DuplicateCardDialog = memo(({
     try {
       const { id, history, position_index, archivedAt, timerRunning, timerStart, timeSpent, aiStatus, aiReport, ...cardData } = card as any;
 
-      await addKanbanCard({
+      const newCardId = await addKanbanCard({
         ...cardData,
         employeeId: selectedEmployee,
         column: selectedColumn,
@@ -90,6 +91,48 @@ export const DuplicateCardDialog = memo(({
         comments: [],
         history: [],
       });
+
+      // Se o card original tinha imagens no storage, faz cópia física para a pasta do novo card.
+      // Assim, cada card passa a ter arquivos 100% independentes e nunca perde a capa se o outro for excluído!
+      if (newCardId && Array.isArray(card.images) && card.images.length > 0) {
+        try {
+          const newImages: string[] = [];
+          let newCover = card.coverImage;
+
+          for (const imgUrl of card.images) {
+            if (typeof imgUrl === 'string' && imgUrl.includes('/kanban_assets/')) {
+              const urlParts = imgUrl.split('/kanban_assets/');
+              if (urlParts.length > 1) {
+                const oldPath = urlParts[1].split('?')[0];
+                const fileName = oldPath.split('/').pop() || 'image.png';
+                const newPath = `${newCardId}/${Date.now()}-${fileName}`;
+                const { error: copyErr } = await supabase.storage.from('kanban_assets').copy(oldPath, newPath);
+                if (!copyErr) {
+                  const { data: pubData } = supabase.storage.from('kanban_assets').getPublicUrl(newPath);
+                  const publicUrl = pubData?.publicUrl;
+                  if (publicUrl) {
+                    newImages.push(publicUrl);
+                    if (card.coverImage === imgUrl) {
+                      newCover = publicUrl;
+                    }
+                    continue;
+                  }
+                }
+              }
+            }
+            newImages.push(imgUrl);
+          }
+
+          if (newImages.length > 0) {
+            await updateKanbanCard(newCardId, {
+              images: newImages,
+              coverImage: newCover || newImages[0]
+            });
+          }
+        } catch (copyError) {
+          console.warn('Aviso ao copiar arquivos físicos na duplicação:', copyError);
+        }
+      }
 
       const targetEmp = employees.find(e => e.id === selectedEmployee);
       const targetCol = columns.find(c => c.columnKey === selectedColumn);

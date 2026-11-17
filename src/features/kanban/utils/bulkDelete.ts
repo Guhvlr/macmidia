@@ -73,19 +73,8 @@ export async function executeBulkDelete(cardsData: any[]) {
        }
    });
 
-   // 2. Apagar os arquivos do Storage em lotes de 100
-   const BATCH_SIZE = 100;
-   const uniquePaths = Array.from(new Set(pathsToDelete)); // Remover duplicatas se houver
-   
-   for (let i = 0; i < uniquePaths.length; i += BATCH_SIZE) {
-       const batch = uniquePaths.slice(i, i + BATCH_SIZE);
-       if (batch.length > 0) {
-           const { error } = await supabase.storage.from('kanban_assets').remove(batch);
-           if (error) {
-               console.error('Erro ao deletar batch de storage', error);
-           }
-       }
-   }
+   // 2. Preservar os arquivos do Storage para não afetar cards ativos duplicados ou históricos
+   // Os arquivos permanecem íntegros para evitar erros 404 em cards que usam mídias compartilhadas.
 
    // 3. Apagar as linhas do banco de dados em lotes de 100
    const cardIds = cardsData.map(c => c.id);

@@ -755,15 +755,26 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
   }, [createHistoryAction, debouncedRefetchCards]);
 
   const deleteKanbanCard = useCallback(async (id: string) => {
+    // 1. Remove automaticamente e de forma limpa qualquer post vinculado da fila de postagens ("Para Postar")
     try {
-      const { data: files } = await supabase.storage.from('kanban_assets').list(id);
-      if (files && files.length > 0) {
-        const pathsToDelete = files.map(f => `${id}/${f.name}`);
-        await supabase.storage.from('kanban_assets').remove(pathsToDelete);
-      }
-    } catch (err) {
-      console.warn('Falha ao limpar arquivos do storage:', err);
+      await supabase.from('social_posts').delete().eq('kanban_card_id', id);
+      try {
+        const raw = localStorage.getItem('macmidia_social_posts_fallback_v1');
+        if (raw) {
+          const posts = JSON.parse(raw);
+          if (Array.isArray(posts)) {
+            const remaining = posts.filter((p: any) => p.kanbanCardId !== id && p.kanban_card_id !== id);
+            localStorage.setItem('macmidia_social_posts_fallback_v1', JSON.stringify(remaining));
+          }
+        }
+      } catch {}
+      window.dispatchEvent(new CustomEvent('macmidia:social-posts-updated'));
+    } catch (socialErr) {
+      console.warn('Aviso ao sincronizar exclusão com a Central de Postagem:', socialErr);
     }
+
+    // 2. Não apagar arquivos do storage físico aqui para garantir que cards duplicados
+    // ou que compartilham mídias não fiquem com a capa quebrada (404 Not Found).
 
     const oldCards = [...kanbanCardsRef.current];
     setKanbanCards(prev => prev.filter(c => c.id !== id));
@@ -1121,15 +1132,7 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
 
   const deleteCalendarTask = useCallback(async (id: string) => {
     await monitoring.trackPerformance('DELETE_CALENDAR_TASK', async () => {
-      try {
-        const { data: files } = await supabase.storage.from('kanban_assets').list(`calendar/${id}`);
-        if (files && files.length > 0) {
-          const pathsToDelete = files.map(f => `calendar/${id}/${f.name}`);
-          await supabase.storage.from('kanban_assets').remove(pathsToDelete);
-        }
-      } catch (err) {
-        console.warn('Falha ao limpar arquivos do calendário no storage:', err);
-      }
+      // Preserva arquivos físicos no storage para não afetar clientes duplicados ou cards kanban vinculados
       await supabase.from('calendar_tasks').delete().eq('id', id);
     });
   }, []);

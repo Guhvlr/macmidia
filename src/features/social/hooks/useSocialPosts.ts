@@ -768,9 +768,17 @@ export function useSocialPosts() {
           return { ok: true };
         }
 
+        const formatJobError = (f: { label: string; message: string }) => {
+          const lower = (f.message || '').toLowerCase();
+          if (lower.includes('rate limit')) {
+            return `Erro no ${f.label}: Limite temporário da Meta (o post pode já estar no perfil, confira antes de reenviar ou aguarde alguns minutos)`;
+          }
+          return `Erro no ${f.label}: ${f.message}`;
+        };
+
         // Tudo falhou
         if (okLabels.length === 0) {
-          const msg = failedJobs.map(f => `Erro no ${f.label}: ${f.message}`).join(' | ');
+          const msg = failedJobs.map(formatJobError).join(' | ');
           await updatePost(postId, {
             status: 'erro',
             errorMessage: msg,
@@ -786,7 +794,7 @@ export function useSocialPosts() {
           const failedPlacements = new Set(failedJobs.map(f => f.placement));
           const msg =
             `Enviado com sucesso: ${okLabels.join(' + ')}. ` +
-            failedJobs.map(f => `Erro no ${f.label}: ${f.message}`).join(' | ') +
+            failedJobs.map(formatJobError).join(' | ') +
             ` — Ao tentar de novo, só ${failedJobs.map(f => f.label).join(' + ')} será reenviado.`;
           await updatePost(postId, {
             status: 'erro',
@@ -1008,6 +1016,18 @@ export async function sendKanbanCardToSocialQueue(card: KanbanCard): Promise<Soc
       : card.imageUrl
         ? [card.imageUrl]
         : [];
+
+  if (rawImages.length === 0) {
+    toast.error('Este card não possui fotos ou vídeos anexados para postar.');
+    throw new Error('Nenhuma mídia encontrada no card.');
+  }
+
+  // Se houver mídias temporárias (blob: ou data:), bloqueia para evitar links quebrados
+  const hasPendingUpload = rawImages.some(u => typeof u === 'string' && (u.startsWith('blob:') || u.startsWith('data:')));
+  if (hasPendingUpload) {
+    toast.warning('O upload de mídias ainda está sendo processado. Aguarde alguns segundos antes de postar.');
+    throw new Error('Upload de mídias ainda em andamento.');
+  }
 
   const media = rawImages.filter(isPostableMediaUrl);
   const finalMedia = media.length > 0 ? media : rawImages;

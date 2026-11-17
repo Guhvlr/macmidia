@@ -1,4 +1,4 @@
-import { useState, useCallback, lazy, Suspense, memo } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, memo } from 'react';
 import type { KanbanCard as KanbanCardType, Employee, SystemUser } from '@/contexts/app-types';
 import type { QueuedTask } from '@/contexts/KanbanContext';
 import Timer from './Timer';
@@ -130,6 +130,11 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
     coverImage = images.find(img => isImageUrl(img)) || null;
   }
 
+  const [coverFailed, setCoverFailed] = useState(false);
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [coverImage]);
+
   const safeChecklists = Array.isArray(card.checklists) ? card.checklists : [];
   const safeComments = Array.isArray(card.comments) ? card.comments : [];
   const safeAssignees = Array.isArray(card.assignedUsers) ? (card.assignedUsers as SystemUser[]) : [];
@@ -255,7 +260,7 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
           </div>
         )}
 
-        {coverImage && (
+        {coverImage && !coverFailed && (
           <div className="relative overflow-hidden rounded-lg -mx-1 -mt-1 min-h-[120px] max-h-[260px] bg-black/40 group/img flex items-center justify-center">
             {coverImage.match(/\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i) || coverImage.startsWith('data:video') ? (
               <video
@@ -263,6 +268,7 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
                 muted
                 playsInline
                 preload="metadata"
+                onError={() => setCoverFailed(true)}
                 className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5 pointer-events-none select-none"
               />
             ) : (
@@ -272,9 +278,17 @@ const KanbanCardInner = ({ card, employee, mainTask, updateKanbanCard, moveKanba
                 loading="lazy"
                 decoding="async"
                 draggable="false"
+                onError={() => setCoverFailed(true)}
                 className="relative w-full h-auto max-h-[260px] object-contain transition-transform duration-500 group-hover/img:scale-105 p-0.5 pointer-events-none select-none"
               />
             )}
+          </div>
+        )}
+
+        {coverImage && coverFailed && (
+          <div className="rounded-lg -mx-1 -mt-1 py-3 px-2 bg-amber-500/10 border border-amber-500/20 text-center flex flex-col items-center justify-center gap-1 text-[11px] text-amber-300/80">
+            <ImageIcon className="w-4 h-4 text-amber-400/70" />
+            <span>Mídia indisponível (clique para reanexar)</span>
           </div>
         )}
 
